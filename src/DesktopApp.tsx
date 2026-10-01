@@ -26,14 +26,11 @@ import MonitoringPanel from "./components/MonitoringPanel";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { CommandPalette } from "./components/CommandPalette";
+import { useProfileVault } from "./hooks/useProfileVault";
+import { useSessionManager, Session } from "./hooks/useSessionManager";
+import { useWallManager, WallItem, SessionTerm } from "./hooks/useWallManager";
 
 const appWindow = getCurrentWindow();
-
-// Sessions can be either DB-backed (saved node, `serverId > 0`) or quick
-// connect (one-shot, `serverId === 0` and `quickAuth` populated). SessionView
-// forwards `quickAuth` to `initiate_connection` which uses it instead of
-// looking up the DB row.
-type Session = { id: string; serverId: number; serverName: string; mirrors?: string; runOnConnect?: string; quickAuth?: QuickAuth | null; initialTool?: 'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null };
 
 const hexToRgb = (hex: string) => {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -43,93 +40,107 @@ const hexToRgb = (hex: string) => {
 };
 
 function DesktopApp() {
-  const [loading, setLoading] = useState(true);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  // Multi-exec broadcast state lives in a shared provider (see App.tsx) so
-  // TerminalView instances across every tab can read `enabled` + `targets`
-  // without prop-drilling. The pill in the tab strip is the toggle + picker.
   const broadcast = useBroadcast();
   const [broadcastMenuOpen, setBroadcastMenuOpen] = useState(false);
-  // `activeProfile` is the name the user picked + unlocked. Stays null
-  // until ProfileSelectPage's onUnlocked fires, at which point the app
-  // flips straight into the main view — no intermediate state.
-  const [activeProfile, setActiveProfile] = useState<string | null>(null);
-  // Per-entity cloud sync of the OPEN profile (the new Last-Write-Wins model).
-  // `cloudSyncing` gates the sidebar button; `lastSyncLabel` feeds its tooltip.
-  const [cloudSyncing, setCloudSyncing] = useState(false);
-  const [lastSyncLabel, setLastSyncLabel] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<string>("nodes");
-  const [sessions, setSessions] = useState<Session[]>([]);
-  // Tracks the live status of each open session ('connecting' | 'connected'
-  // | 'failed' | 'disconnected'). Updated via the callback every SessionView
-  // fires on its own status change — single source of truth for the dot
-  // colour on each tab. Cleared when a session is closed.
-  const [sessionStatuses, setSessionStatuses] = useState<Record<string, string>>({});
-  // Right-click menu pinned to a session tab. Closed by any click outside or
-  // by choosing one of the menu items.
-  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
-  // Sessions merged into the current session-view canvas. When a session
-  // tab is being viewed and this set is non-empty, its SessionView renders
-  // side-by-side with each merged partner instead of full-width. Used by
-  // the "Merge with…" context action on session tabs so users don't need
-  // a separate Compare page to see two servers together.
-  const [mergedSessionIds, setMergedSessionIds] = useState<string[]>([]);
-  // "Wall" pinboard — a permanent tab at the end of the session strip
-  // that hosts a user-controlled grid of individual terminals. Each
-  // pin is a (sessionId, terminalId) pair; the tile mounts its OWN
-  // TerminalView with `attachOnly=true`, hitching onto the same PTY
-  // as the primary xterm in the session tab. That means the session
-  // still owns the PTY lifecycle (open on tab creation, close on tab
-  // close) and the Wall tile is a live mirror — it receives every
-  // byte the PTY writes and can also send input into it. Trade-off:
-  // scrollback in the Wall tile only accumulates from the moment of
-  // pin (the primary xterm holds the full pre-pin history), and the
-  // two xterms may fight briefly over resize_terminal on view switch,
-  // which reflows correctly once one settles.
-  type WallItem = { id: string; sessionId: string; terminalId: string };
-  const [wallItems, setWallItems] = useState<WallItem[]>([]);
-  // User-controlled grid density. Higher = smaller tiles, tighter row
-  // packing. Clamped at 1..6 which covers phone-portrait (1) through
-  // wide-monitor (6) comfortably; anything past 6 makes xterm columns
-  // useless.
-  const [wallCols, setWallCols] = useState<number>(2);
-  const [wallPickerOpen, setWallPickerOpen] = useState(false);
-  // Per-session terminals + active terminal id, bubbled up from each
-  // SessionView via onTerminalsChange. Sourced here so the Wall picker
-  // and pin/unpin helpers can enumerate terminals without duplicating
-  // SessionView's state.
-  type SessionTerm = { id: string; title: string; container?: { name: string; useSudo: boolean } };
-  const [sessionTerminals, setSessionTerminals] = useState<Record<string, SessionTerm[]>>({});
-  const [sessionActiveTerm, setSessionActiveTerm] = useState<Record<string, string>>({});
-  const handleTerminalsChange = useCallback((sid: string, terms: SessionTerm[], activeTermId: string) => {
-    setSessionTerminals(prev => {
-      const cur = prev[sid];
-      if (cur && cur.length === terms.length && cur.every((t, i) => t.id === terms[i].id && t.title === terms[i].title)) {
-        return prev;
-      }
-      return { ...prev, [sid]: terms };
+
+  const confirm = useConfirm();
+  const textPrompt = useTextPrompt();
+
+  const [appSettings, setAppSettings] = useState({
+    primaryColor: localStorage.getItem('submarine-primary-color') || '#60a5fa',
+    backgroundColor: localStorage.getItem('submarine-bg-color') || '#0a0a0c',
+    terminalFontSize: parseInt(localStorage.getItem('submarine-terminal-font-size') || '14'),
+    autoSync: localStorage.getItem('submarine-auto-sync') !== 'off',
+    syncIntervalMin: Math.max(1, parseInt(localStorage.getItem('submarine-sync-interval-min') || '5', 10) || 5),
+  });
+
+  const wallManager = useWallManager();
+  const {
+    wallItems, setWallItems, wallCols, setWallCols,
+    wallPickerOpen, setWallPickerOpen,
+    sessionTerminals, sessionActiveTerm,
+    handleTerminalsChange, wallHasTerminal,
+    pinTerminalToWall, unpinTerminalFromWall, unpinSessionFromWall,
+  } = wallManager;
+
+  const vaultRef = useRef<any>(null);
+
+  const sessionManager = useSessionManager({
+    onSessionClosed: (sid) => {
+      broadcast.removeSession(sid);
+      unpinSessionFromWall(sid);
+    },
+    onAddLog: (msg, type) => vaultRef.current?.addLog(msg, type),
+    onQuickNodeSaved: () => {
+      vaultRef.current?.refreshServers();
+      vaultRef.current?.bumpSync();
+    },
+  });
+
+  const {
+    sessions, setSessions,
+    activeView, setActiveView,
+    sessionStatuses, setSessionStatuses,
+    handleSessionStatus,
+    tabMenu, setTabMenu,
+    mergedSessionIds, setMergedSessionIds,
+    mobileSessionPickerOpen, setMobileSessionPickerOpen,
+    getCloseHandler, closeSession,
+    openServer, openMultipleServers, openQuickConnect,
+  } = sessionManager;
+
+  const vault = useProfileVault({
+    settings: {
+      autoSync: appSettings.autoSync,
+      syncIntervalMin: appSettings.syncIntervalMin,
+    },
+    onAutostartSessions: (toStart) => {
+      const newSessions: Session[] = toStart.map((s) => ({
+        id: `session-${s.id}`,
+        serverId: s.id,
+        serverName: s.name,
+        mirrors: s.mirrors,
+      }));
+      setSessions((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const fresh = newSessions.filter((n) => !seen.has(n.id));
+        return [...prev, ...fresh];
+      });
+      setActiveView(newSessions[0].id);
+    },
+    onLoggedOut: () => {
+      setSessions([]);
+      setActiveView("nodes");
+    },
+  });
+
+  const {
+    loading, isUnlocked, setIsUnlocked, activeProfile, setActiveProfile,
+    cloudSyncing, lastSyncLabel,
+    servers, setServers, credentials, setCredentials,
+    sshKeys, setSshKeys, folders, setFolders,
+    commands, setCommands, notes, setNotes,
+    logs, setLogs, addLog,
+    refreshServers, refreshCredentials, refreshSshKeys,
+    refreshFolders, refreshCommands, refreshNotes, refreshAll,
+    handleCloudSync, bumpSync,
+    removeServer, removeFolder, renameFolder,
+    handleProfileUnlocked, handleLogout: vaultLogout,
+  } = vault;
+
+  vaultRef.current = vault;
+
+  const handleLogout = () => vaultLogout(sessions, confirm, () => {
+    setSessions([]);
+    setActiveView("nodes");
+  });
+
+  const handleOpenMultipleServers = (serversToOpen: any[]) => {
+    openMultipleServers(serversToOpen, (newIds) => {
+      broadcast.selectAll(newIds);
+      addLog(`Fleet: Launched ${newIds.length} sessions with broadcast enabled`, "success");
     });
-    setSessionActiveTerm(prev => (prev[sid] === activeTermId ? prev : { ...prev, [sid]: activeTermId }));
-  }, []);
-  const wallHasTerminal = (terminalId: string) => wallItems.some(i => i.terminalId === terminalId);
-  const pinTerminalToWall = (sid: string, terminalId: string) => {
-    if (wallHasTerminal(terminalId)) return;
-    setWallItems(prev => [...prev, { id: `wall-${terminalId}`, sessionId: sid, terminalId }]);
   };
-  const unpinTerminalFromWall = (terminalId: string) => {
-    setWallItems(prev => prev.filter(i => i.terminalId !== terminalId));
-  };
-  const unpinSessionFromWall = (sid: string) => {
-    setWallItems(prev => prev.filter(i => i.sessionId !== sid));
-  };
-  // Mobile-only session picker toggle. Horizontally-scrolling tabs eat
-  // the whole title row on a 400 px phone; replacing them with a compact
-  // dropdown gives the tab strip predictable width and matches iOS/
-  // Android convention of "current context on top, tap to switch".
-  const [mobileSessionPickerOpen, setMobileSessionPickerOpen] = useState(false);
-  const handleSessionStatus = useCallback((sessionId: string, status: string) => {
-    setSessionStatuses((prev) => (prev[sessionId] === status ? prev : { ...prev, [sessionId]: status }));
-  }, []);
 
   // Maximize state mirrored from the OS window so the title-bar button can
   // swap its icon (single square = maximize, overlapping squares = restore)
@@ -159,16 +170,9 @@ function DesktopApp() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [servers, setServers] = useState<any[]>([]);
-  const [credentials, setCredentials] = useState<any[]>([]);
-  const [sshKeys, setSshKeys] = useState<any[]>([]);
-  const [folders, setFolders] = useState<any[]>([]);
-  const [commands, setCommands] = useState<any[]>([]);
-  const [logs, setLogs] = useState<{ msg: string, type: string, time: string }[]>([]);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
   const [editCommandData, setEditCommandData] = useState<{ id: number | null, title: string, content: string }>({ id: null, title: "", content: "" });
 
-  const [notes, setNotes] = useState<any[]>([]);
   const [isNotePanelOpen, setIsNotePanelOpen] = useState(false);
   const [editNoteData, setEditNoteData] = useState<{ id: number | null, title: string, body: string }>({ id: null, title: "", body: "" });
   // Shared query across Library sub-tabs. Persisting the string across a
@@ -225,17 +229,6 @@ function DesktopApp() {
   const isMobile = useIsNarrow();
 
   const [newNode, setNewNode] = useState(defaultNode);
-  const [appSettings, setAppSettings] = useState({
-    primaryColor: localStorage.getItem('submarine-primary-color') || '#60a5fa',
-    backgroundColor: localStorage.getItem('submarine-bg-color') || '#0a0a0c',
-    terminalFontSize: parseInt(localStorage.getItem('submarine-terminal-font-size') || '14'),
-    // Auto-sync defaults ON. Per-device (localStorage), like the other prefs.
-    autoSync: localStorage.getItem('submarine-auto-sync') !== 'off',
-    // Background pull cadence in minutes (min 1). Only gates the periodic
-    // "pull collaborators' changes" timer — your own edits still push ~6s after
-    // you stop typing regardless of this.
-    syncIntervalMin: Math.max(1, parseInt(localStorage.getItem('submarine-sync-interval-min') || '5', 10) || 5),
-  });
 
   useEffect(() => {
     const rgb = hexToRgb(appSettings.primaryColor);
@@ -253,76 +246,6 @@ function DesktopApp() {
     window.dispatchEvent(new CustomEvent('submarine-settings-changed'));
   }, [appSettings]);
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        // Restore window size
-        const savedW = localStorage.getItem('submarine-window-width');
-        const savedH = localStorage.getItem('submarine-window-height');
-        if (savedW && savedH) {
-          try {
-            await appWindow.setSize(new LogicalSize(parseInt(savedW), parseInt(savedH)));
-          } catch(e) { console.error("Window resize failed", e); }
-        }
-
-        // Listen for resize (only for persistence, not for mobile detection)
-        await appWindow.onResized(async () => {
-          const size = await appWindow.innerSize();
-          const logical = size.toLogical(await appWindow.scaleFactor());
-          localStorage.setItem('submarine-window-width', logical.width.toString());
-          localStorage.setItem('submarine-window-height', logical.height.toString());
-        });
-
-        // `isMobile` is now driven by `useIsNarrow()` (live viewport hook)
-        // — no one-shot UA detection here anymore.
-
-        // Profile picker comes first now — we no longer probe a single
-        // global vault file. `dbExists` is set inside `handleProfileSelected`
-        // when the user picks a profile.
-      } catch (e) {
-        console.error("Initialization error", e);
-        addLog(`INIT_EXCEPTION: ${e}`, "error"); 
-      } finally { 
-        setLoading(false); 
-      }
-    };
-    init();
-  }, []);
-
-  // Stable per-session close handler. Allocated once per (sess.id) pair so
-  // SessionView's memo comparison stays cheap and the prop reference doesn't
-  // change just because some other session re-rendered. The closure reads
-  // setters which are themselves stable via useState.
-  const closeHandlersRef = useRef<Map<string, () => void>>(new Map());
-  const getCloseHandler = useCallback((sessId: string) => {
-    let h = closeHandlersRef.current.get(sessId);
-    if (!h) {
-      h = () => {
-        setSessions(prev => prev.filter(s => s.id !== sessId));
-        setSessionStatuses(prev => { const { [sessId]: _, ...rest } = prev; return rest; });
-        setActiveView(prev => (prev === sessId ? "nodes" : prev));
-        // Purge the closing session from broadcast state so a stale id doesn't
-        // linger in the target set (would let a user re-enable broadcast and
-        // silently exclude a phantom target from the count).
-        broadcast.removeSession(sessId);
-        // If the closing session was merged as a side pane in another
-        // session's canvas, drop it — otherwise the tile would render
-        // an empty <SessionView>. Collapse the whole split when it
-        // falls below the 2-pane minimum.
-        setMergedSessionIds(prev => {
-          const next = prev.filter(id => id !== sessId);
-          return next.length < 2 ? [] : next;
-        });
-        // Purge the closing session from the Wall pinboard too — a stale
-        // tile with no backing SessionView would render blank.
-        setWallItems(prev => prev.filter(i => i.sessionId !== sessId));
-        closeHandlersRef.current.delete(sessId);
-      };
-      closeHandlersRef.current.set(sessId, h);
-    }
-    return h;
-  }, [broadcast]);
-
   useGlobalShortcuts({
     enabled: isUnlocked,
     sessions,
@@ -331,268 +254,6 @@ function DesktopApp() {
     onCloseSession: (sessId) => getCloseHandler(sessId)(),
     onOpenCommandPalette: () => setIsCommandPaletteOpen(prev => !prev),
   });
-
-  // Stable identity matters: SessionView memoises on prop equality, so a
-  // fresh `addLog` reference on every DesktopApp render would force every
-  // session subtree to re-render when one session's status flips. Same
-  // reasoning as `handleSessionStatus` above.
-  const addLog = useCallback((msg: string, type = "info") => {
-    // Each entry gets a stable monotonically-increasing id so React can
-    // reconcile rows correctly when the list is rendered reversed. Using
-    // `key={index}` on a reverse-then-map list (the previous approach)
-    // re-keys every row on every push and busts list reconciliation.
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setLogs(prev => [...prev.slice(-99), { id, msg, type, time: new Date().toLocaleTimeString() }]);
-  }, []);
-
-  // Wrapped in useCallback because these are handed to memoised children
-  // (SessionView, MirrorsPanel, etc.). Without stable identity every parent
-  // render hands a fresh reference and defeats the child's memo gate.
-  const refreshServers = useCallback(async () => {
-    try { setServers((await invoke("get_servers")) as any[]); }
-    catch (e) { addLog(`SYNC_SERVERS: ${e}`, "error"); }
-  }, [addLog]);
-  const refreshCredentials = useCallback(async () => {
-    try { setCredentials((await invoke("get_credentials")) as any[]); }
-    catch (e) { addLog(`SYNC_CREDENTIALS: ${e}`, "error"); }
-  }, [addLog]);
-  const refreshSshKeys = useCallback(async () => {
-    try { setSshKeys((await invoke("get_ssh_keys")) as any[]); }
-    catch (e) { addLog(`SYNC_SSH_KEYS: ${e}`, "error"); }
-  }, [addLog]);
-  const refreshFolders = async () => {
-    try { setFolders((await invoke("get_folders")) as any[]); }
-    catch (e) { addLog(`SYNC_FOLDERS: ${e}`, "error"); }
-  };
-  const refreshCommands = async () => {
-    try { setCommands((await invoke("get_commands")) as any[]); }
-    catch (e) { addLog(`SYNC_COMMANDS: ${e}`, "error"); }
-  };
-  const refreshNotes = async () => {
-    try { setNotes((await invoke("get_notes")) as any[]); }
-    catch (e) { addLog(`SYNC_NOTES: ${e}`, "error"); }
-  };
-  const refreshAll = async () => {
-    await Promise.all([
-      refreshServers(),
-      refreshCredentials(),
-      refreshSshKeys(),
-      refreshFolders(),
-      refreshCommands(),
-      refreshNotes(),
-    ]);
-  };
-
-  // Per-entity cloud sync of the currently-open profile. Pushes every locally
-  // changed record and merges back the server's view (Last-Write-Wins by HLC),
-  // without the server ever decrypting anything. A guard prevents overlapping
-  // runs; on success we reload all local lists so a pulled change shows at once.
-  const handleCloudSync = useCallback(async () => {
-    setCloudSyncing(true);
-    try {
-      const report = await invoke<{ pushed: number; pulled: number }>("sync_now");
-      await refreshAll();
-      setLastSyncLabel(`Last synced ${new Date().toLocaleTimeString()}`);
-      addLog(`Cloud sync complete — pushed ${report.pushed}, pulled ${report.pulled}.`, "success");
-    } catch (e) {
-      const msg = String(e);
-      if (/NO_TOKEN|invalid_token|Missing auth|401/i.test(msg)) {
-        addLog("Cloud sync: not signed in. Open the Cloud panel from the profile picker and sign in first.", "error");
-      } else if (/NO_PROFILE_OPEN|DB_NOT_OPEN|NO_KEY|NO_HLC/i.test(msg)) {
-        addLog("Cloud sync: no profile open — unlock a profile first.", "error");
-      } else {
-        addLog(`Cloud sync failed: ${msg}`, "error");
-      }
-    } finally {
-      setCloudSyncing(false);
-    }
-    // refreshAll closes over stable setters; addLog is memoised. Intentionally
-    // excluded to keep this handler identity stable across renders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addLog]);
-
-  // ---- Auto-sync (hybrid: after-edit debounce + window focus + interval) ----
-  //
-  // A quiet counterpart to handleCloudSync: it never toasts. Cloud sync is a
-  // background convenience, so a transient network blip or a not-signed-in state
-  // must not spew errors while the user is doing something else. Overlap is
-  // guarded by a ref (React state is too laggy for timer/event callbacks that
-  // fire between renders). Only the OUTCOME that matters — a pull that changed
-  // local data — refreshes the UI.
-  const autoSyncBusy = useRef(false);
-  const isUnlockedRef = useRef(isUnlocked);
-  useEffect(() => { isUnlockedRef.current = isUnlocked; }, [isUnlocked]);
-  // Mirror cloudSyncing into a ref so quietSync can see a manual sync in flight
-  // WITHOUT depending on the state — otherwise every sync would toggle
-  // cloudSyncing, change quietSync's identity, and tear down + restart the
-  // interval effect, resetting the periodic timer so it might never fire.
-  const cloudSyncingRef = useRef(cloudSyncing);
-  useEffect(() => { cloudSyncingRef.current = cloudSyncing; }, [cloudSyncing]);
-
-  // When the last background sync actually ran. The focus trigger reads this so
-  // it can't out-pace the cadence the user configured — see the interval effect.
-  const lastSyncAt = useRef(0);
-  // refreshAll is redefined every render, so quietSync (which is deliberately
-  // identity-stable) would otherwise capture the very first one forever and
-  // repopulate the lists through stale handlers after a pull.
-  const refreshAllRef = useRef(refreshAll);
-  refreshAllRef.current = refreshAll;
-
-  const quietSync = useCallback(async () => {
-    if (autoSyncBusy.current || cloudSyncingRef.current) return;
-    if (!isUnlockedRef.current) return;
-    autoSyncBusy.current = true;
-    setCloudSyncing(true);
-    try {
-      const report = await invoke<{ pushed: number; pulled: number }>("sync_now");
-      if (report.pulled > 0) await refreshAllRef.current();
-      setLastSyncLabel(`Last synced ${new Date().toLocaleTimeString()}`);
-    } catch {
-      // Silent by design — not signed in, offline, or a viewer with nothing to
-      // push. The manual Sync-now button is where errors surface loudly.
-    } finally {
-      // Stamped even on failure: a server that's down shouldn't turn every
-      // window focus into a fresh retry storm.
-      lastSyncAt.current = Date.now();
-      autoSyncBusy.current = false;
-      setCloudSyncing(false);
-    }
-    // All refs/setters are stable — quietSync keeps a fixed identity so the
-    // interval effect isn't rebuilt on every sync.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // After-edit push, debounced so a burst of edits collapses into one sync a few
-  // seconds after the user stops. Mutation handlers call this.
-  const bumpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bumpSync = useCallback(() => {
-    if (!appSettings.autoSync) return;
-    if (bumpTimer.current) clearTimeout(bumpTimer.current);
-    bumpTimer.current = setTimeout(() => { quietSync(); }, 6000);
-  }, [appSettings.autoSync, quietSync]);
-
-  // Turning auto-sync off has to cancel a push that's already armed. The check
-  // above only runs when the timer is SCHEDULED, so editing something and then
-  // switching auto-sync off within the six-second window still fired the sync —
-  // which is precisely the moment someone reaching for that switch (metered
-  // connection, about to go offline) most wants it not to.
-  useEffect(() => {
-    if (appSettings.autoSync) return;
-    if (bumpTimer.current) {
-      clearTimeout(bumpTimer.current);
-      bumpTimer.current = null;
-    }
-  }, [appSettings.autoSync]);
-
-  // Interval (pulls collaborators' changes on shared profiles) + on-focus fresh
-  // pull. Both are no-ops until a profile is unlocked and auto-sync is enabled.
-  useEffect(() => {
-    if (!isUnlocked || !appSettings.autoSync) return;
-    const INTERVAL_MS = Math.max(1, appSettings.syncIntervalMin || 5) * 60 * 1000;
-    // Pull once shortly after unlock so the app opens on fresh data (a delay so
-    // the unlock's own refresh + autostart settle first).
-    const initial = setTimeout(() => { quietSync(); }, 4000);
-    const id = setInterval(() => { quietSync(); }, INTERVAL_MS);
-    let focusTimer: ReturnType<typeof setTimeout> | null = null;
-    // Coming back to the window is a good moment to be fresh, but it used to be
-    // an UNCONDITIONAL sync — and on a desktop app you alt-tab back constantly,
-    // so this fired far more often than the interval ever did. The cadence the
-    // user picked was effectively decoration: set it to 30 minutes and you'd
-    // still sync every time you switched windows. Now focus only pulls when the
-    // interval is already due, so the setting means what it says.
-    const onFocus = () => {
-      if (document.visibilityState === "hidden") return;
-      if (Date.now() - lastSyncAt.current < INTERVAL_MS) return;
-      if (focusTimer) clearTimeout(focusTimer);
-      focusTimer = setTimeout(() => { quietSync(); }, 1500);
-    };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
-    return () => {
-      clearTimeout(initial);
-      clearInterval(id);
-      if (focusTimer) clearTimeout(focusTimer);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
-    };
-  }, [isUnlocked, appSettings.autoSync, appSettings.syncIntervalMin, quietSync]);
-
-  const removeServer = async (id: number) => {
-    try {
-      await invoke("delete_server", { id });
-      refreshServers();
-      bumpSync();
-      addLog("Server removed.", "info");
-    } catch (e) { addLog(`DELETE_EXCEPTION: ${e}`, "error"); }
-  };
-
-  const removeFolder = async (id: number) => {
-    try {
-      await invoke("delete_folder", { id });
-      // delete_folder cascades to its servers (see main.rs), so refresh both.
-      await Promise.all([refreshFolders(), refreshServers()]);
-      bumpSync();
-      addLog("Folder removed.", "info");
-    } catch (e) { addLog(`DELETE_EXCEPTION: ${e}`, "error"); }
-  };
-
-  const renameFolder = async (id: number, name: string) => {
-    try {
-      await invoke("rename_folder", { id, name });
-      await refreshFolders();
-      bumpSync();
-      addLog(`Folder renamed to "${name}".`, "info");
-    } catch (e) {
-      addLog(`RENAME_EXCEPTION: ${e}`, "error");
-      throw e; // bubble up so NodeGrid can keep the input open if the user wants to retry
-    }
-  };
-
-  // ProfileSelectPage handles the entire profile pick + password + create
-  // flow on a single screen. By the time it fires `onUnlocked`, the
-  // backend has both selected the profile AND decrypted the DB — we just
-  // flip the UI and refresh data.
-  const handleProfileUnlocked = async (name: string) => {
-    setActiveProfile(name);
-    setIsUnlocked(true);
-    addLog(`Profile "${name}" unlocked.`, "success");
-    refreshAll();
-    // Attribute future edits to the signed-in cloud account so shared/multi-
-    // device profiles show "last edited by <email>". Best-effort; unattributed
-    // when not signed in.
-    invoke<{ signed_in: boolean; email: string | null }>("cloud_status")
-      .then((s) => invoke("set_editor_label", { label: s.signed_in && s.email ? s.email : "" }))
-      .catch(() => {});
-    // Autostart sweep: load servers directly (refreshAll is also doing this
-    // in parallel, but its state update is async and we can't read `servers`
-    // back here without a stale-closure race), pick the ones flagged
-    // autostart, and stage them all into the sessions tab strip in one
-    // setSessions call. The user lands focused on the first autostart node;
-    // each new SessionView component then kicks off its own connect on mount.
-    try {
-      const list = await invoke<any[]>("get_servers");
-      const toStart = list.filter((s) => s.autostart);
-      if (toStart.length === 0) return;
-      const newSessions = toStart.map((s) => ({
-        id: `session-${s.id}`,
-        serverId: s.id,
-        serverName: s.name,
-        mirrors: s.mirrors,
-      }));
-      setSessions((prev: any[]) => {
-        const seen = new Set(prev.map((p) => p.id));
-        const fresh = newSessions.filter((n) => !seen.has(n.id));
-        return [...prev, ...fresh];
-      });
-      setActiveView(newSessions[0].id);
-      addLog(`Autostart: opened ${newSessions.length} node${newSessions.length === 1 ? "" : "s"}.`, "info");
-    } catch (e) {
-      addLog(`AUTOSTART_LOAD_FAILED: ${e}`, "error");
-    }
-  };
-
-  const confirm = useConfirm();
-  const textPrompt = useTextPrompt();
 
   // Window-close guard. Keep `sessions` mirrored into a ref so the close
   // handler (which is registered ONCE inside useEffect, capturing snapshot
@@ -628,116 +289,6 @@ function DesktopApp() {
     }).then((fn) => { unlisten = fn; });
     return () => { if (unlisten) unlisten(); };
   }, [confirm]);
-
-  // Lock the current profile and return to the picker. Confirms first when
-  // there are open SSH sessions because they will be torn down — accidental
-  // double-clicks on the lock icon shouldn't kill the user's terminal work.
-  const handleLogout = async () => {
-    if (sessions.length > 0) {
-      const ok = await confirm({
-        title: "Switch profile?",
-        message: `You have ${sessions.length} open SSH session${sessions.length === 1 ? "" : "s"}. Switching will disconnect ${sessions.length === 1 ? "it" : "them all"} and take you back to the profile picker.`,
-        okLabel: "Switch",
-        cancelLabel: "Stay",
-        destructive: true,
-      });
-      if (!ok) return;
-      // Best-effort: tell the backend to clean up each session. We don't
-      // bail if one fails — `close_profile` will drop the DB anyway, and
-      // the OS will eventually reap the sockets.
-      for (const s of sessions) {
-        try { await invoke("disconnect_session", { sessionId: s.id }); }
-        catch (e) { console.error("disconnect on logout failed:", e); }
-      }
-    }
-    try { await invoke("close_profile"); }
-    catch (e) { addLog(`LOGOUT_EXCEPTION: ${e}`, "error"); }
-
-    // Reset all client state so the picker starts fresh — no stale
-    // servers/credentials/sessions leaking across profile contexts.
-    setIsUnlocked(false);
-    setActiveProfile(null);
-    setSessions([]);
-    setActiveView("nodes");
-    setServers([]); setCredentials([]); setSshKeys([]); setFolders([]); setCommands([]);
-    addLog("Profile locked.", "info");
-  };
-
-  const openServer = (server: any, initialTool?: 'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null) => {
-    const sessionId = `session-${server.id}`;
-    const existing = sessions.find(s => s.id === sessionId);
-    if (!existing) {
-      setSessions([...sessions, {
-        id: sessionId,
-        serverId: server.id,
-        serverName: server.name,
-        // Pass the raw mirrors JSON through to SessionView so the
-        // MirrorsPanel can pre-populate "Saved on this node" without
-        // another round-trip to the backend.
-        mirrors: server.mirrors,
-        // Commands to auto-run once on the first terminal (see SessionView).
-        runOnConnect: server.run_on_connect || "",
-        initialTool: initialTool || null,
-      }]);
-    } else if (initialTool) {
-      window.dispatchEvent(new CustomEvent(`submarine-set-tool-${sessionId}`, { detail: initialTool }));
-    }
-
-    setActiveView(sessionId);
-  };
-
-  const openMultipleServers = (serversToOpen: any[]) => {
-    if (!serversToOpen || !serversToOpen.length) return;
-    const newSessions: Session[] = [];
-    const newIds: string[] = [];
-    serversToOpen.forEach((srv: any) => {
-      const sId = `session-${srv.id}`;
-      newIds.push(sId);
-      if (!sessions.some(s => s.id === sId)) {
-        newSessions.push({
-          id: sId,
-          serverId: srv.id,
-          serverName: srv.name,
-          mirrors: srv.mirrors,
-          runOnConnect: srv.run_on_connect || "",
-          initialTool: null,
-        });
-      }
-    });
-    if (newSessions.length > 0) {
-      setSessions(prev => [...prev, ...newSessions]);
-    }
-    setActiveView(newIds[0]);
-    if (newIds.length >= 2) {
-      broadcast.selectAll(newIds);
-      addLog(`Fleet: Launched ${newIds.length} sessions with broadcast enabled`, "success");
-    }
-  };
-
-  // Spawn a session from inline Quick Connect auth AND leave behind a reusable
-  // node in the root directory so the target can be reconnected later without
-  // re-typing credentials. The connection itself still rides `quickAuth`
-  // (serverId = 0 sentinel = "look at quickAuth, not the DB") so it works
-  // exactly as before even if the save fails; the persisted node is a
-  // best-effort side effect the backend dedups by (host, port, username).
-  const openQuickConnect = (auth: QuickAuth) => {
-    const sessionId = `session-quick-${Date.now()}`;
-    const displayName = `${auth.username}@${auth.host}:${auth.port}`;
-    setSessions((prev: Session[]) => [...prev, {
-      id: sessionId,
-      serverId: 0,
-      serverName: displayName,
-      quickAuth: auth,
-    }]);
-    setActiveView(sessionId);
-    setIsQuickConnectOpen(false);
-    addLog(`Quick connect → ${displayName}`, "info");
-    // Persist a root-level profile for reuse. Best-effort: a failure here must
-    // never block the live connection the user just asked for.
-    invoke("save_quick_connect_node", { auth })
-      .then(() => { refreshServers(); bumpSync(); addLog(`Saved node → ${displayName}`, "success"); })
-      .catch((e) => addLog(`QUICK_NODE_SAVE_FAILED: ${e}`, "error"));
-  };
 
   const handleEditNode = async (server: any) => {
     // Servers come back from get_servers with `has_password` (boolean) but
