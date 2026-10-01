@@ -1,9 +1,9 @@
-import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical } from "lucide-react";
+import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers } from "lucide-react";
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../ui/confirm";
 
-export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onEditServer, onAddClick, onQuickConnect, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
+export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
   const [search, setSearch] = useState("");
   // Native window.confirm() is a silent no-op inside Tauri's Android WebView
   // (same shim gap useTextPrompt was added for), so the delete buttons here
@@ -303,6 +303,20 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
         {/* Actions: absolute + hover-revealed on desktop so the name gets the
             full width; inline + always-visible on mobile (no hover there). */}
         <div className="flex items-center gap-0.5 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 sm:absolute sm:right-1.5 sm:top-1/2 sm:-translate-y-1/2 sm:pl-8 sm:bg-gradient-to-l sm:from-[#121216] sm:via-[#121216] sm:to-transparent transition-all duration-200">
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenServer(s, 'sftp'); }}
+            title="Open SFTP directly"
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-indigo-400 hover:bg-white/5 transition-all"
+          >
+            <Folder size={13} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenServer(s, 'info'); }}
+            title="Open Docker & Overview directly"
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-sky-400 hover:bg-white/5 transition-all"
+          >
+            <Box size={13} />
+          </button>
           {onCloneServer && (
             <button
               onClick={(e) => { e.stopPropagation(); onCloneServer(s.id); }}
@@ -460,6 +474,15 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
             {/* Adding a server from inside a folder pre-selects this folder
                 in the new-node panel, so the user doesn't have to repeat
                 the choice they just clicked into. */}
+            {displayedServers.length >= 2 && onOpenMultipleServers && (
+              <button
+                onClick={() => onOpenMultipleServers(displayedServers)}
+                className="h-8 px-3 bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 rounded-lg flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors"
+                title="Connect all servers in this folder"
+              >
+                <Layers size={13} /> Connect All ({displayedServers.length})
+              </button>
+            )}
             <button
               onClick={() => onAddClick(activeFolderId)}
               className="h-8 px-3 bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 rounded-lg flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider"
@@ -502,6 +525,15 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300/90 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-500/20 hover:text-amber-200 transition-colors"
                   >
                     <Zap size={13} /> Quick connect
+                  </button>
+                )}
+                {displayedServers.length >= 2 && onOpenMultipleServers && (
+                  <button
+                    onClick={() => onOpenMultipleServers(displayedServers)}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-500/20 hover:text-white transition-colors"
+                    title="Connect all displayed servers and enable broadcast"
+                  >
+                    <Layers size={13} /> Connect All ({displayedServers.length})
                   </button>
                 )}
               </div>
