@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Cpu, X, Link2, ArrowLeftRight, Shield, Key, User, FolderPlus, Download, CheckSquare, Square, History } from "lucide-react";
+import { Cpu, X, Link2, ArrowLeftRight, Shield, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio } from "lucide-react";
 import PasswordField from "./PasswordField";
 
 // Compact "2h ago" style relative time for the attribution line.
@@ -36,6 +36,11 @@ type ImportedHost = {
 const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile }: any) => {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+
+  const [wolBusy, setWolBusy] = useState(false);
+  const [wolStatus, setWolStatus] = useState<string | null>(null);
+  const [knockBusy, setKnockBusy] = useState(false);
+  const [knockStatus, setKnockStatus] = useState<string | null>(null);
 
   // SSH-config import modal state. Lives here so it's colocated with the
   // "Add server" flow — the button that triggers it sits in this panel's
@@ -589,6 +594,93 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Wake-on-LAN & Port Knocking (Task 4.6) */}
+            <div className="space-y-2.5 pt-1">
+              <span className="text-[11px] font-bold text-zinc-400 flex items-center gap-1.5">
+                <Zap size={12} className="text-amber-400" />
+                <span>Wake-on-LAN & Port Knocking</span>
+              </span>
+              <div className="p-3 bg-[#1a1a1e] rounded-lg border border-white/5 space-y-2.5">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    MAC Address (Wake-on-LAN)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="flex-1 min-w-0 h-8 bg-black/40 rounded px-2.5 text-[11.5px] font-mono text-zinc-200 border border-white/10 outline-none focus:border-primary/50"
+                      placeholder="AA:BB:CC:DD:EE:FF"
+                      value={newNode.wol_mac || ""}
+                      onChange={(e) => setNewNode({ ...newNode, wol_mac: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      disabled={!newNode.wol_mac?.trim() || wolBusy}
+                      onClick={async () => {
+                        setWolBusy(true);
+                        try {
+                          await invoke("send_wake_on_lan", { macAddress: newNode.wol_mac.trim(), broadcastIp: null });
+                          setWolStatus("Magic packet broadcasted!");
+                          setTimeout(() => setWolStatus(null), 3500);
+                        } catch (err: any) {
+                          setWolStatus(`WoL failed: ${String(err)}`);
+                        } finally {
+                          setWolBusy(false);
+                        }
+                      }}
+                      className="h-8 px-2.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      <Zap size={11} />
+                      <span>{wolBusy ? "Sending…" : "Send WoL"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    Port Knock Sequence (comma-separated)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="flex-1 min-w-0 h-8 bg-black/40 rounded px-2.5 text-[11.5px] font-mono text-zinc-200 border border-white/10 outline-none focus:border-primary/50"
+                      placeholder="e.g. 7000, 8000, 9000"
+                      value={newNode.knock_ports || ""}
+                      onChange={(e) => setNewNode({ ...newNode, knock_ports: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      disabled={!newNode.knock_ports?.trim() || !newNode.host?.trim() || knockBusy}
+                      onClick={async () => {
+                        setKnockBusy(true);
+                        try {
+                          const ports = newNode.knock_ports
+                            .split(",")
+                            .map((p: string) => parseInt(p.trim(), 10))
+                            .filter((n: number) => !isNaN(n) && n > 0 && n <= 65535);
+                          await invoke("perform_port_knock", { host: newNode.host.trim(), ports, delayMs: 100 });
+                          setKnockStatus(`Knocked ${ports.length} ports!`);
+                          setTimeout(() => setKnockStatus(null), 3500);
+                        } catch (err: any) {
+                          setKnockStatus(`Knock failed: ${String(err)}`);
+                        } finally {
+                          setKnockBusy(false);
+                        }
+                      }}
+                      className="h-8 px-2.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 hover:bg-sky-500/25 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      <Radio size={11} />
+                      <span>{knockBusy ? "Knocking…" : "Knock"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {(wolStatus || knockStatus) && (
+                  <div className="text-[10.5px] font-mono text-primary py-0.5">
+                    {wolStatus || knockStatus}
+                  </div>
+                )}
               </div>
             </div>
 
