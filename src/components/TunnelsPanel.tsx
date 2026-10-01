@@ -1,11 +1,41 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, X, Activity, AlertTriangle, Globe, ArrowRight, ArrowDownLeft, Square, FileText, Trash2, ExternalLink } from "lucide-react";
+import {
+  Plus, X, Activity, AlertTriangle, Globe, ArrowRight,
+  ArrowDownLeft, Square, FileText, Trash2, ExternalLink,
+  RefreshCw, Radio, Zap, Check, ChevronDown, ChevronRight
+} from "lucide-react";
 
 // Tunnels panel — lists active SSH port-forwards for a session and lets the
 // user start / stop them on the fly. The full set is also auto-started from
 // the server's saved tunnel rules at connect time (see initiate_connection).
+
+export interface DiscoveredPort {
+  port: number;
+  protocol: "tcp" | "udp";
+  address: string;
+  process?: string;
+}
+
+const COMMON_PORT_NAMES: Record<number, string> = {
+  80: "HTTP Web Server",
+  443: "HTTPS Web Server",
+  1080: "SOCKS Proxy",
+  3000: "Node / Dev Server",
+  3306: "MySQL / MariaDB",
+  5000: "Flask / Python API",
+  5173: "Vite Dev Server",
+  5432: "PostgreSQL Database",
+  6379: "Redis Store",
+  8000: "HTTP Dev Server",
+  8080: "HTTP Alternate",
+  8443: "HTTPS Alternate",
+  9000: "Portainer / PHP-FPM",
+  9090: "Prometheus",
+  9200: "Elasticsearch",
+  27017: "MongoDB Database",
+};
 
 interface TunnelStatus {
   id: string;
@@ -63,6 +93,133 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
   const [logFilter, setLogFilter] = useState<string | null>(null); // tunnel id, null = all
   const logScrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
+
+  // Auto-discovery state
+  const [scanning, setScanning] = useState(false);
+  const [discoveredPorts, setDiscoveredPorts] = useState<DiscoveredPort[]>([]);
+  const [discoveredExpanded, setDiscoveredExpanded] = useState(true);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [forwardingPort, setForwardingPort] = useState<number | null>(null);
+
+  // Active local ports set for conflict detection
+  const activeLocalPorts = useMemo(() => {
+    const set = new Set<number>();
+    for (const t of Object.values(tunnels)) {
+      const p = t.listen_addr.includes(":") ? t.listen_addr.slice(t.listen_addr.lastIndexOf(":") + 1) : t.listen_addr;
+      const num = parseInt(p, 10);
+      if (!isNaN(num)) set.add(num);
+    }
+    return set;
+  }, [tunnels]);
+
+  const getNextFreePort = (startPort: number): number => {
+    let p = startPort < 1024 ? 8080 : startPort;
+    while (activeLocalPorts.has(p)) {
+      p++;
+    }
+    return p;
+  };
+
+  const draftLocalPortNum = useMemo(() => {
+    const pStr = draft.local.trim();
+    const p = pStr.includes(":") ? pStr.slice(pStr.lastIndexOf(":") + 1) : pStr;
+    const n = parseInt(p, 10);
+    return isNaN(n) ? null : n;
+  }, [draft.local]);
+
+  const draftHasConflict = draftLocalPortNum !== null && activeLocalPorts.has(draftLocalPortNum);
+  const suggestedPort = draftLocalPortNum !== null ? getNextFreePort(draftLocalPortNum + 1) : 8080;
+
+  const scanRemotePorts = async () => {
+    if (scanning || disabled) return;
+    setScanning(true);
+    setScanError(null);
+    try {
+      const cmd = "ss -tulpn 2>/dev/null || ss -tln 2>/dev/null || netstat -tulpn 2>/dev/null";
+      const out = await invoke<string>("sftp_exec_command", { sessionId, command: cmd });
+      const lines = out.split("\n");
+      const found: DiscoveredPort[] = [];
+      const seen = new Set<number>();
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const lower = line.toLowerCase();
+        if (!lower.includes("listen") && !lower.includes("unconn")) continue;
+
+        const isTcp = lower.startsWith("tcp");
+        const isUdp = lower.startsWith("udp");
+        if (!isTcp && !isUdp) continue;
+
+        // Extract port and address
+        const portMatch = line.match(/(?:(?:[0-9a-fA-F:\.]+|\*|\[[0-9a-fA-F:]+\])):(\d{2,5})\s+/);
+        if (!portMatch) continue;
+        const port = parseInt(portMatch[1], 10);
+        if (isNaN(port) || port < 1 || port > 65535 || port === 22 || seen.has(port)) continue;
+
+        const addrMatch = line.match(/([0-9a-fA-F:\.]+|\*|\[[0-9a-fA-F:]+\]):(\d{2,5})\s+/);
+        const address = addrMatch ? addrMatch[1] : "0.0.0.0";
+
+        let process: string | undefined;
+        const ssProcMatch = line.match(/users:\(\("([^"]+)"/);
+        if (ssProcMatch) {
+          process = ssProcMatch[1];
+        } else {
+          const netstatProcMatch = line.match(/\d+\/([a-zA-Z0-9_\-\.]+)/);
+          if (netstatProcMatch) {
+            process = netstatProcMatch[1];
+          }
+        }
+
+        seen.add(port);
+        found.push({
+          port,
+          protocol: isTcp ? "tcp" : "udp",
+          address,
+          process: process || COMMON_PORT_NAMES[port],
+        });
+      }
+
+      found.sort((a, b) => a.port - b.port);
+      setDiscoveredPorts(found);
+      setDiscoveredExpanded(true);
+      if (found.length === 0) {
+        setScanError("No open listening ports detected (or command requires sudo).");
+      }
+    } catch (err: any) {
+      setScanError(`Scan failed: ${String(err)}`);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const forwardDiscoveredPort = async (discovered: DiscoveredPort) => {
+    if (forwardingPort !== null || disabled) return;
+    setForwardingPort(discovered.port);
+    setError(null);
+    const localPort = getNextFreePort(discovered.port);
+    try {
+      await invoke("start_tunnel", {
+        sessionId,
+        spec: {
+          type: "L",
+          local: String(localPort),
+          remote: `127.0.0.1:${discovered.port}`,
+        },
+      });
+      persistTunnels();
+    } catch (e: any) {
+      setError(`Failed to forward port ${discovered.port}: ${String(e)}`);
+    } finally {
+      setForwardingPort(null);
+    }
+  };
+
+  const getExistingTunnelForPort = (port: number) => {
+    return Object.values(tunnels).find(
+      (t) => t.kind === "local" && (t.target === `127.0.0.1:${port}` || t.target === `localhost:${port}` || t.target.endsWith(`:${port}`))
+    );
+  };
 
   // Initial snapshot
   const reload = async () => {
@@ -204,20 +361,113 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
         </div>
       )}
 
-      {/* Header: counts + add button */}
+      {/* Header: counts + scan + add button */}
       <div className="shrink-0 px-3 py-2 flex items-center justify-between border-b border-white/5 bg-[#121214]">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           <Activity size={12} />
           <span>{arr.length} {arr.length === 1 ? "tunnel" : "tunnels"}</span>
         </div>
-        <button
-          onClick={() => { setAdding((a) => !a); setError(null); }}
-          className="h-6 px-2.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 flex items-center gap-1.5"
-        >
-          {adding ? <X size={11} /> : <Plus size={11} />}
-          <span>{adding ? "Cancel" : "Add"}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={scanRemotePorts}
+            disabled={scanning || disabled}
+            title="Scan remote listening ports via SSH (ss / netstat)"
+            className="h-6 px-2 rounded text-[10px] font-bold uppercase tracking-wider bg-white/[0.04] text-zinc-300 border border-white/10 hover:bg-white/10 hover:text-white flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={11} className={scanning ? "animate-spin text-primary" : "text-zinc-400"} />
+            <span>{scanning ? "Scanning…" : "Scan Remote"}</span>
+          </button>
+          <button
+            onClick={() => { setAdding((a) => !a); setError(null); }}
+            className="h-6 px-2.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 flex items-center gap-1.5"
+          >
+            {adding ? <X size={11} /> : <Plus size={11} />}
+            <span>{adding ? "Cancel" : "Add"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Discovered Remote Ports Section */}
+      {(discoveredPorts.length > 0 || scanning || scanError) && (
+        <div className="shrink-0 border-b border-white/5 bg-[#101014]">
+          <div
+            onClick={() => setDiscoveredExpanded(!discoveredExpanded)}
+            className="px-3 py-1.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] select-none"
+          >
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              <Radio size={11} className={scanning ? "animate-pulse" : ""} />
+              <span>Discovered Remote Ports ({discoveredPorts.length})</span>
+            </div>
+            <div className="text-zinc-500">
+              {discoveredExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </div>
+          </div>
+          {discoveredExpanded && (
+            <div className="px-3 pb-2.5 pt-1 space-y-1.5 max-h-48 overflow-y-auto">
+              {scanError && (
+                <div className="text-[10px] font-mono text-amber-400/90 py-0.5">{scanError}</div>
+              )}
+              {discoveredPorts.map((dp) => {
+                const existing = getExistingTunnelForPort(dp.port);
+                const isForwardingThis = forwardingPort === dp.port;
+                const localPortStr = existing ? (existing.listen_addr.includes(":") ? existing.listen_addr.split(":").pop() : existing.listen_addr) : null;
+                return (
+                  <div
+                    key={`${dp.protocol}-${dp.port}`}
+                    className="flex items-center justify-between gap-2 p-1.5 rounded bg-white/[0.02] border border-white/5 text-[11px] font-mono hover:border-white/10"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 shrink-0">
+                        {dp.protocol} {dp.port}
+                      </span>
+                      <div className="min-w-0 flex flex-col">
+                        <span className="text-zinc-200 font-medium truncate">
+                          {dp.process || "Unknown Service"}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 truncate">
+                          bind: {dp.address}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {existing ? (
+                        <div className="flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <Check size={9} /> :{localPortStr}
+                          </span>
+                          {existing.state === "listening" && (
+                            <button
+                              onClick={() => {
+                                if (localPortStr) {
+                                  invoke("open_external_url", { url: `http://localhost:${localPortStr}` }).catch(console.error);
+                                }
+                              }}
+                              title={`Open http://localhost:${localPortStr} in browser`}
+                              className="p-1 rounded text-zinc-400 hover:text-emerald-400 hover:bg-white/10"
+                            >
+                              <ExternalLink size={11} />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => forwardDiscoveredPort(dp)}
+                          disabled={isForwardingThis || busy}
+                          className="h-5 px-2 rounded text-[9.5px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <Zap size={10} />
+                          <span>{isForwardingThis ? "Forwarding…" : "Forward"}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add form — fields stacked top-to-bottom so the 1/3-width tool pane
           doesn't squeeze both inputs into illegible slivers. */}
@@ -244,6 +494,21 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
               className="flex-1 min-w-0 h-7 px-2 bg-white/[0.04] border border-white/10 rounded text-[11px] font-mono text-zinc-200"
             />
           </div>
+          {draftHasConflict && (
+            <div className="flex items-center justify-between gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10.5px] font-mono">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AlertTriangle size={12} className="shrink-0 text-amber-400" />
+                <span className="truncate">Port {draftLocalPortNum} is already forwarded by an active tunnel.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDraft((d) => ({ ...d, local: String(suggestedPort) }))}
+                className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-bold uppercase shrink-0 transition-colors"
+              >
+                Switch to {suggestedPort}
+              </button>
+            </div>
+          )}
           {draft.type !== "D" && (
             <div className="flex items-center gap-2 pl-1">
               <ArrowRight size={12} className="text-zinc-500 shrink-0" />
