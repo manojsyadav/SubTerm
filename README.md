@@ -23,10 +23,17 @@
 ## At a glance
 
 - **One window, many tools per server** — terminal, SFTP, tunnels, folder mirror, Docker, live server info, and a per-server command library, all as tabs around the same session
+- **Universal Command Palette (`Ctrl+K` / `Ctrl+P`)** — Instant fuzzy navigation across saved servers, open sessions, quick actions, and fleet clusters
+- **Tag-Based Fleet Operations** — Broadcast commands, runbooks, and health checks across tagged clusters simultaneously
+- **1-Click Git Drawer** — Inspect remote repositories, review side-by-side git diffs, stage files, and commit without leaving the terminal
+- **Smart Tar Acceleration & Visual Diff** — Up to 50x faster directory transfers via automated streaming compression and pre-overwrite visual diffing
+- **OSC 133 Semantic Command Blocks** — Visual command separation, return code indicators, and 1-click output copy
 - **Watch many servers at once** — session **split view** to tile any two sessions side-by-side, plus a global **Wall** pinboard for arbitrary terminals across hosts in a grid you control
+- **Wake-on-LAN & Port Knocking** — Pre-connection magic packets and multi-port knocking sequences for dormant hosts and locked firewalls
+- **Mobile Gesture Terminal Control** — Pinch-to-zoom terminal font scaling, 2-finger tap paste, and horizontal session swipe navigation
 - **Broadcast input** — type once, send to N selected sessions simultaneously (Tmux `synchronize-panes` for cross-server)
 - **Native and cross-platform** — Windows, macOS, Linux (`.deb` / `.rpm` / Arch / AppImage), and Android — same encrypted vault everywhere
-- **Zero-knowledge cloud sync** — profiles are Argon2id + AES-256-GCM sealed on your device before upload; the server (and everyone else) only sees ciphertext. Browser dashboard at [`api.sinaxhpm.com/account`](https://api.sinaxhpm.com/account/) to manage your account and stored profiles
+- **Zero-knowledge cloud sync** — profiles are Argon2id + AES-256-GCM sealed on your device before upload; the server (and everyone else) only sees ciphertext
 - **Docker manager** — containers, logs (live tail), stats, prune, and `docker exec` shells as first-class session tabs
 - **Import from anywhere** — PuTTY `.reg`, MobaXterm `.mxtsessions`, OpenSSH config, and Submarine JSON exports all bulk-imported from the Servers page
 - **Secure by default** — TOFU host keys with per-connection nonce binding, strict CSP, minimal Tauri permission ACL, zeroized master key
