@@ -5,10 +5,38 @@ import {
   RefreshCw, Loader2, Play, Square, RotateCw, Pause, X, ChevronRight,
   Container as ContainerIcon, Image as ImageIcon, Database, Network as NetIcon,
   FileText, Trash2, AlertTriangle, AlertCircle, ShieldAlert, Terminal,
-  Eye, Box, Activity, Search, Copy, Check,
+  Eye, Box, Activity, Search, Copy, Check, ExternalLink, Zap,
 } from "lucide-react";
 import { ScrollableTabs } from "./ScrollableTabs";
 import { useConfirm } from "../ui/confirm";
+
+export interface ParsedPortMapping {
+  hostPort: number;
+  containerPort: number;
+  protocol: string;
+  raw: string;
+}
+
+export function parseContainerPorts(portsStr: string): ParsedPortMapping[] {
+  if (!portsStr) return [];
+  const results: ParsedPortMapping[] = [];
+  const seenHostPorts = new Set<number>();
+  const chunks = portsStr.split(",");
+  for (const chunk of chunks) {
+    const trimmed = chunk.trim();
+    const m = trimmed.match(/(?:.*:)?(\d+)->(\d+)\/(\w+)/);
+    if (m) {
+      const hostPort = parseInt(m[1], 10);
+      const containerPort = parseInt(m[2], 10);
+      const protocol = m[3].toLowerCase();
+      if (!isNaN(hostPort) && !seenHostPorts.has(hostPort)) {
+        seenHostPorts.add(hostPort);
+        results.push({ hostPort, containerPort, protocol, raw: trimmed });
+      }
+    }
+  }
+  return results;
+}
 
 interface DockerTabProps {
   sessionId: string;
@@ -367,6 +395,65 @@ const ContainersView = ({
   const [lastResult, setLastResult] = useState<Record<string, { ok: boolean; msg: string; sudo: boolean } | undefined>>({});
   const confirm = useConfirm();
 
+  const [activeTunnels, setActiveTunnels] = useState<Record<string, { localPort: string; target: string }>>({});
+  const [tunnelingPort, setTunnelingPort] = useState<number | null>(null);
+  const [tunnelSuccess, setTunnelSuccess] = useState<{ port: number; localPort: string } | null>(null);
+
+  const loadTunnels = async () => {
+    try {
+      const list: any[] = await invoke("list_tunnels", { sessionId });
+      const map: Record<string, { localPort: string; target: string }> = {};
+      for (const t of list) {
+        if (t.kind === "local") {
+          const lp = t.listen_addr.includes(":") ? t.listen_addr.split(":").pop()! : t.listen_addr;
+          map[t.target] = { localPort: lp, target: t.target };
+        }
+      }
+      setActiveTunnels(map);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadTunnels();
+    let unlisten: (() => void) | null = null;
+    listen(`tunnel-update-${sessionId}`, () => {
+      loadTunnels();
+    }).then(fn => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, [sessionId]);
+
+  const forwardContainerPort = async (hostPort: number) => {
+    if (tunnelingPort !== null) return;
+    setTunnelingPort(hostPort);
+    try {
+      let localPort = hostPort < 1024 ? 8080 : hostPort;
+      const usedLocalPorts = new Set(
+        Object.values(activeTunnels)
+          .map(t => parseInt(t.localPort, 10))
+          .filter(n => !isNaN(n))
+      );
+      while (usedLocalPorts.has(localPort)) {
+        localPort++;
+      }
+
+      await invoke("start_tunnel", {
+        sessionId,
+        spec: {
+          type: "L",
+          local: String(localPort),
+          remote: `127.0.0.1:${hostPort}`,
+        },
+      });
+      setTunnelSuccess({ port: hostPort, localPort: String(localPort) });
+      setTimeout(() => setTunnelSuccess(null), 5000);
+      await loadTunnels();
+    } catch (err: any) {
+      console.error("Tunnel creation failed:", err);
+    } finally {
+      setTunnelingPort(null);
+    }
+  };
+
   if (state.loading && !state.data) return <Spinner label="Loading containers…" />;
   if (state.error) return <ErrorBanner err={state.error} />;
   if (!state.data) return null;
@@ -448,7 +535,72 @@ const ContainersView = ({
                     </div>
                     <div className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate">{c.image}</div>
                     <div className="text-[10px] text-zinc-500 mt-0.5 truncate">{c.status}</div>
-                    {c.ports && <div className="text-[10px] text-primary/70 font-mono mt-0.5 truncate">{c.ports}</div>}
+                    {(() => {
+                      const parsedPorts = parseContainerPorts(c.ports);
+                      if (parsedPorts.length > 0) {
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {parsedPorts.map((pp) => {
+                              const targetKey = `127.0.0.1:${pp.hostPort}`;
+                              const active = activeTunnels[targetKey] || Object.values(activeTunnels).find(t => t.target.endsWith(`:${pp.hostPort}`));
+                              const isTunneling = tunnelingPort === pp.hostPort;
+                              return (
+                                <div key={pp.hostPort} className="flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded px-1.5 py-0.5 text-[9.5px] font-mono">
+                                  <span className="text-zinc-300 font-semibold">:{pp.hostPort}</span>
+                                  <span className="text-zinc-500">→</span>
+                                  <span className="text-zinc-400">:{pp.containerPort}</span>
+                                  {active ? (
+                                    <div className="flex items-center gap-1 ml-1 text-emerald-400">
+                                      <span className="text-[9px] font-bold bg-emerald-500/15 px-1 rounded border border-emerald-500/30 flex items-center gap-0.5">
+                                        <Check size={9} /> :{active.localPort}
+                                      </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          invoke("open_external_url", { url: `http://localhost:${active.localPort}` }).catch(console.error);
+                                        }}
+                                        title={`Open http://localhost:${active.localPort} in browser`}
+                                        className="p-0.5 rounded text-zinc-400 hover:text-emerald-400 hover:bg-white/10 transition-colors"
+                                      >
+                                        <ExternalLink size={10} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        forwardContainerPort(pp.hostPort);
+                                      }}
+                                      disabled={isTunneling}
+                                      title={`Forward remote port ${pp.hostPort} to local port via SSH tunnel`}
+                                      className="ml-1 text-primary hover:text-white hover:bg-primary/20 px-1 py-0.5 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-0.5 disabled:opacity-50"
+                                    >
+                                      <Zap size={9} />
+                                      <span>{isTunneling ? "…" : "Forward"}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+                      if (c.ports) {
+                        return <div className="text-[10px] text-primary/70 font-mono mt-0.5 truncate">{c.ports}</div>;
+                      }
+                      return null;
+                    })()}
+                    {tunnelSuccess && parseContainerPorts(c.ports).some(p => p.hostPort === tunnelSuccess.port) && (
+                      <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-300">
+                        <span>Forwarded :{tunnelSuccess.port} → localhost:{tunnelSuccess.localPort}</span>
+                        <button
+                          onClick={() => invoke("open_external_url", { url: `http://localhost:${tunnelSuccess.localPort}` }).catch(console.error)}
+                          className="flex items-center gap-1 text-emerald-200 underline font-semibold hover:text-white"
+                        >
+                          <ExternalLink size={10} /> Open Browser
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {!isRunning && (
