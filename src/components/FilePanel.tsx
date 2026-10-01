@@ -9,7 +9,7 @@ import {
   TerminalSquare, FileCode, Archive, Copy, Check,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
-import { useConfirm, useOverwritePrompt, OverwriteChoice } from "../ui/confirm";
+import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions } from "../ui/confirm";
 import { IS_ANDROID } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
 
@@ -30,7 +30,8 @@ async function transferWithOverwriteCheck(
   direction: "download" | "upload",
   batchSize: number,
   batch: OverwriteBatch,
-  overwritePrompt: (opts: { name: string; direction: "download" | "upload"; batchSize: number }) => Promise<OverwriteChoice>,
+  overwritePrompt: (opts: OverwritePromptOptions) => Promise<OverwriteChoice>,
+  meta?: { localPath?: string; remotePath?: string; sessionId?: string }
 ): Promise<"done" | "skipped" | "cancelled"> {
   if (batch.kind === "overwrite-all") {
     await invokeFn(true);
@@ -43,7 +44,14 @@ async function transferWithOverwriteCheck(
     const msg = String(err);
     if (!msg.startsWith("EXISTS:")) throw err;
     if (batch.kind === "skip-all") return "skipped";
-    const choice = await overwritePrompt({ name, direction, batchSize });
+    const choice = await overwritePrompt({
+      name,
+      direction,
+      batchSize,
+      localPath: meta?.localPath,
+      remotePath: meta?.remotePath,
+      sessionId: meta?.sessionId,
+    });
     if (choice === "cancel") return "cancelled";
     if (choice === "skip") return "skipped";
     if (choice === "skip-all") { batch.kind = "skip-all"; return "skipped"; }
@@ -595,7 +603,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             const remote = dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
             const res = await transferWithOverwriteCheck(
               (ow) => invoke("sftp_upload_file", { sessionId, localPath: p, remotePath: remote, overwrite: ow }),
-              name, "upload", paths.length, batch, overwritePrompt
+              name, "upload", paths.length, batch, overwritePrompt,
+              { localPath: p, remotePath: remote, sessionId }
             );
             if (res === "done") notify(`Uploaded ${name}`, "success");
             if (res === "cancelled") { cancelled = true; notify("Upload batch cancelled", "info"); }
@@ -753,7 +762,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         const cmd = e.isDir ? "sftp_download_dir" : "sftp_download_file";
         const res = await transferWithOverwriteCheck(
           (ow) => invoke(cmd, { sessionId, remotePath: e.path, localPath: dest, overwrite: ow }),
-          e.name, "download", items.length, batch, overwritePrompt
+          e.name, "download", items.length, batch, overwritePrompt,
+          e.isDir ? undefined : { localPath: dest, remotePath: e.path, sessionId }
         );
         if (res === "done") count++;
         if (res === "cancelled") { cancelled = true; }
@@ -797,7 +807,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         const cmd = e.isDir ? "sftp_upload_dir" : "sftp_upload_file";
         const res = await transferWithOverwriteCheck(
           (ow) => invoke(cmd, { sessionId, localPath: e.path, remotePath, overwrite: ow }),
-          e.name, "upload", items.length, batch, overwritePrompt
+          e.name, "upload", items.length, batch, overwritePrompt,
+          e.isDir ? undefined : { localPath: e.path, remotePath, sessionId }
         );
         if (res === "done") count++;
         if (res === "cancelled") { cancelled = true; }

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, SplitSquareHorizontal, FileCode, Check, RefreshCw, Eye } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 
 // Focus trap for our modal portals. When `isOpen` flips true, remember the
 // element that had focus, then move focus into the panel (unless React's
@@ -87,6 +88,44 @@ export interface OverwritePromptOptions {
   direction: "download" | "upload";
   /** Total number of items in the batch, so we can hide "all" when only one. */
   batchSize: number;
+  /** Optional local and remote paths to enable side-by-side visual diff before overwrite */
+  localPath?: string;
+  remotePath?: string;
+  sessionId?: string;
+}
+
+interface DiffLine {
+  type: "same" | "add" | "del";
+  text: string;
+  oldNum?: number;
+  newNum?: number;
+}
+
+function computeDiff(original: string, modified: string): DiffLine[] {
+  const origLines = original.split("\n");
+  const modLines = modified.split("\n");
+  const diff: DiffLine[] = [];
+
+  let i = 0;
+  let j = 0;
+  let oldLineNum = 1;
+  let newLineNum = 1;
+
+  while (i < origLines.length || j < modLines.length) {
+    if (i < origLines.length && j < modLines.length && origLines[i] === modLines[j]) {
+      diff.push({ type: "same", text: origLines[i], oldNum: oldLineNum++, newNum: newLineNum++ });
+      i++;
+      j++;
+    } else if (j < modLines.length && (i >= origLines.length || !origLines.slice(i, i + 5).includes(modLines[j]))) {
+      diff.push({ type: "add", text: modLines[j], newNum: newLineNum++ });
+      j++;
+    } else if (i < origLines.length) {
+      diff.push({ type: "del", text: origLines[i], oldNum: oldLineNum++ });
+      i++;
+    }
+  }
+
+  return diff;
 }
 
 // Themed replacement for browser-native `prompt()`. Tauri's Android WebView
@@ -114,6 +153,14 @@ const TextPromptContext = createContext<((opts: TextPromptOptions) => Promise<st
 export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<{ opts: ConfirmOptions; resolve: Resolver } | null>(null);
   const [owState, setOwState] = useState<{ opts: OverwritePromptOptions; resolve: (c: OverwriteChoice) => void } | null>(null);
+  const [diffState, setDiffState] = useState<{
+    open: boolean;
+    loading: boolean;
+    error?: string;
+    lines: DiffLine[];
+    addCount: number;
+    delCount: number;
+  } | null>(null);
   const [tpState, setTpState] = useState<{ opts: TextPromptOptions; resolve: (v: string | null) => void } | null>(null);
   const [tpValue, setTpValue] = useState("");
   const [tpError, setTpError] = useState<string | null>(null);
@@ -153,6 +200,7 @@ export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => 
     setState(null);
   };
   const closeOverwrite = (choice: OverwriteChoice) => {
+    setDiffState(null);
     owState?.resolve(choice);
     setOwState(null);
   };
@@ -166,6 +214,26 @@ export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => 
     const err = tpState.opts.validate?.(v) ?? null;
     if (err) { setTpError(err); return; }
     closeTextPrompt(v);
+  };
+
+  const handleFetchDiff = async () => {
+    if (!owState?.opts.localPath || !owState?.opts.remotePath || !owState?.opts.sessionId) return;
+    setDiffState({ open: true, loading: true, lines: [], addCount: 0, delCount: 0 });
+    try {
+      const isUpload = owState.opts.direction === "upload";
+      const [localText, remoteText] = await Promise.all([
+        invoke<string>("local_read_file_text", { localPath: owState.opts.localPath, maxBytes: 1024 * 1024 }),
+        invoke<string>("sftp_read_file_text", { sessionId: owState.opts.sessionId, remotePath: owState.opts.remotePath, maxBytes: 1024 * 1024 }),
+      ]);
+      const destinationText = isUpload ? remoteText : localText;
+      const incomingText = isUpload ? localText : remoteText;
+      const lines = computeDiff(destinationText, incomingText);
+      const addCount = lines.filter((l) => l.type === "add").length;
+      const delCount = lines.filter((l) => l.type === "del").length;
+      setDiffState({ open: true, loading: false, lines, addCount, delCount });
+    } catch (err: any) {
+      setDiffState({ open: true, loading: false, error: String(err), lines: [], addCount: 0, delCount: 0 });
+    }
   };
 
   // Esc cancels, Enter confirms — matches the native dialog conventions so
@@ -215,12 +283,12 @@ export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => 
       {owState && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
              onClick={() => closeOverwrite("cancel")}>
-          <div ref={owPanelRef}
-               role="dialog"
-               aria-modal="true"
-               aria-labelledby="overwrite-modal-title"
-               onClick={(e) => e.stopPropagation()}
-               className="w-full max-w-[420px] bg-[#121214] border border-white/10 rounded-xl shadow-2xl p-4 font-mono text-[12px] animate-in zoom-in-95 fade-in duration-150">
+            <div ref={owPanelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="overwrite-modal-title"
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full ${diffState?.open ? "max-w-2xl" : "max-w-[420px]"} bg-[#121214] border border-white/10 rounded-xl shadow-2xl p-4 font-mono text-[12px] animate-in zoom-in-95 fade-in duration-150 transition-all`}>
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={14} className="text-amber-400" />
@@ -240,6 +308,82 @@ export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => 
             <p className="text-[12px] text-amber-300 leading-relaxed mb-4 break-all">
               {owState.opts.name}
             </p>
+
+            {owState.opts.localPath && owState.opts.remotePath && owState.opts.sessionId && (
+              <div className="mb-3">
+                {!diffState?.open ? (
+                  <button
+                    type="button"
+                    onClick={handleFetchDiff}
+                    className="w-full h-8 rounded text-[11px] font-bold uppercase tracking-wider bg-indigo-500/15 border border-indigo-500/35 text-indigo-300 hover:bg-indigo-500/25 flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <SplitSquareHorizontal size={13} />
+                    View Visual Diff Before Overwriting
+                  </button>
+                ) : (
+                  <div className="border border-white/10 rounded-lg overflow-hidden bg-black/50">
+                    <div className="p-2 border-b border-white/10 bg-white/[0.03] flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <FileCode size={13} className="text-indigo-400" />
+                        <span className="text-zinc-200 font-bold">Visual Diff (Existing vs Incoming)</span>
+                        {!diffState.loading && !diffState.error && (
+                          <span className="text-[10px] text-zinc-400">
+                            (<span className="text-emerald-400 font-bold">+{diffState.addCount}</span> / <span className="text-rose-400 font-bold">-{diffState.delCount}</span>)
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDiffState(null)}
+                        className="text-[10px] text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10"
+                      >
+                        Hide Diff
+                      </button>
+                    </div>
+                    {diffState.loading ? (
+                      <div className="p-6 flex items-center justify-center gap-2 text-zinc-400 text-xs">
+                        <RefreshCw size={14} className="animate-spin text-indigo-400" />
+                        <span>Reading files & computing diff…</span>
+                      </div>
+                    ) : diffState.error ? (
+                      <div className="p-3 text-amber-400 text-xs bg-amber-500/10 border-t border-amber-500/20">
+                        {diffState.error.includes("Binary") || diffState.error.includes("UTF")
+                          ? "Diff unavailable: binary or non-UTF8 encoded file."
+                          : `Diff error: ${diffState.error}`}
+                      </div>
+                    ) : (
+                      <div className="max-h-72 overflow-y-auto font-mono text-[11px] divide-y divide-white/[0.02]">
+                        {diffState.lines.length === 0 ? (
+                          <div className="p-4 text-center text-zinc-500 text-xs">
+                            Files are identical in content.
+                          </div>
+                        ) : (
+                          diffState.lines.map((line, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex items-start px-2 py-0.5 font-mono text-[11px] leading-5 ${
+                                line.type === "add"
+                                  ? "bg-emerald-500/15 text-emerald-300"
+                                  : line.type === "del"
+                                  ? "bg-rose-500/15 text-rose-300"
+                                  : "text-zinc-400"
+                              }`}
+                            >
+                              <span className="w-8 shrink-0 text-right pr-2 text-zinc-600 select-none text-[10px]">
+                                {line.type === "del" ? "-" : line.type === "add" ? "+" : " "}
+                              </span>
+                              <pre className="flex-1 whitespace-pre-wrap break-all font-mono select-text m-0">
+                                {line.text || " "}
+                              </pre>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => closeOverwrite("overwrite")} autoFocus
                       className="h-9 rounded text-[11px] font-bold uppercase tracking-wider bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25">
