@@ -1,3 +1,6 @@
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Server, KeyRound, Library, Activity, Settings, LogOut, UserCircle } from "lucide-react";
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -7,6 +10,86 @@ import { Server, KeyRound, Library, Activity, Settings, LogOut, UserCircle } fro
 // mobile so this component visually lands at the bottom while staying first
 // in DOM order (keyboard tab-order stays intuitive).
 export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileName, syncing }: any) => {
+  // Live health pulse state across monitored servers
+  const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
+  const [alertSummary, setAlertSummary] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const cleanups: (() => void)[] = [];
+
+    const checkHealth = async () => {
+      try {
+        const rows: any[] = await invoke("monitor_list");
+        if (!isMounted) return;
+        if (!rows || rows.length === 0) {
+          setHealthState("idle");
+          setAlertSummary(null);
+          return;
+        }
+
+        let hasCritical = false;
+        let hasWarning = false;
+        const criticalReasons: string[] = [];
+        const warningReasons: string[] = [];
+
+        for (const r of rows) {
+          if (r.paused) continue;
+          if (r.connected === false || r.last_error) {
+            hasCritical = true;
+            criticalReasons.push(`${r.name}: offline / error`);
+          }
+        }
+
+        if (hasCritical) {
+          setHealthState("critical");
+          setAlertSummary(criticalReasons.slice(0, 2).join(", "));
+        } else if (hasWarning) {
+          setHealthState("warning");
+          setAlertSummary(warningReasons.slice(0, 2).join(", "));
+        } else {
+          setHealthState("ok");
+          setAlertSummary("All monitored servers healthy");
+        }
+
+        for (const r of rows) {
+          listen<any>(`monitor-sample-${r.node_id}`, (ev) => {
+            if (!isMounted) return;
+            const values = ev.payload?.values || {};
+            const cpu = values.cpu_perc ?? 0;
+            const mem = values.mem_perc ?? 0;
+            if (cpu > 95 || mem > 95) {
+              setHealthState("warning");
+              setAlertSummary(`${r.name}: high load (${Math.round(Math.max(cpu, mem))}%)`);
+            }
+          }).then((unlisten) => cleanups.push(unlisten));
+
+          listen<any>(`monitor-outage-${r.node_id}`, (ev) => {
+            if (!isMounted) return;
+            setHealthState("critical");
+            setAlertSummary(`${ev.payload?.node_name || r.name}: outage detected`);
+          }).then((unlisten) => cleanups.push(unlisten));
+
+          listen<any>(`monitor-recovered-${r.node_id}`, () => {
+            if (!isMounted) return;
+            checkHealth();
+          }).then((unlisten) => cleanups.push(unlisten));
+        }
+      } catch {
+        // Monitor service may not have any nodes configured
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 20000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      cleanups.forEach((c) => c());
+    };
+  }, []);
+
   // The profile rail is deliberately apart from the content rails below. Those
   // switch what you're looking at INSIDE the open profile; this one is about the
   // profile itself — its cloud sync and who else can get into it. It used to
@@ -67,9 +150,28 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
                   ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
                   : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
               }`}
-              title={item.label}
+              title={(item.id === 'nodes' || item.id === 'monitor') && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
             >
               <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
+              {/* Live Health Pulse Badge */}
+              {(item.id === 'nodes' || item.id === 'monitor') && healthState !== 'idle' && (
+                <>
+                  {healthState === 'critical' && (
+                    <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+                    </span>
+                  )}
+                  {healthState === 'warning' && (
+                    <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                      <span className="animate-pulse relative inline-flex rounded-full h-2 w-2 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                    </span>
+                  )}
+                  {healthState === 'ok' && (
+                    <span className="absolute top-1.5 right-1.5 inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500/80 shadow-[0_0_4px_rgba(16,185,129,0.5)]" />
+                  )}
+                </>
+              )}
               {/* Bottom indicator stripe instead of left rail in mobile mode. */}
               {activeTab === item.id && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-1/2 bg-primary rounded-t-full shadow-[0_0_10px_rgba(var(--primary),1)]" />}
             </button>
@@ -124,9 +226,28 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
                 ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
                 : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
             }`}
-            title={item.label}
+            title={(item.id === 'nodes' || item.id === 'monitor') && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
           >
             <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
+            {/* Live Health Pulse Badge */}
+            {(item.id === 'nodes' || item.id === 'monitor') && healthState !== 'idle' && (
+              <>
+                {healthState === 'critical' && (
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+                  </span>
+                )}
+                {healthState === 'warning' && (
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                    <span className="animate-pulse relative inline-flex rounded-full h-2 w-2 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                  </span>
+                )}
+                {healthState === 'ok' && (
+                  <span className="absolute top-1.5 right-1.5 inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500/80 shadow-[0_0_4px_rgba(16,185,129,0.5)]" />
+                )}
+              </>
+            )}
             {activeTab === item.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-primary rounded-r-full shadow-[0_0_10px_rgba(var(--primary),1)]" />}
           </button>
         ))}
