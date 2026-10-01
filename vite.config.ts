@@ -37,4 +37,15 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          xterm: ["xterm", "xterm-addon-fit", "xterm-addon-search"],
+          vendor: ["react", "react-dom", "lucide-react"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
+  },
 }));
