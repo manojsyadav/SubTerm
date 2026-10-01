@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   Plus, Trash2, X, AlertTriangle, ArrowRight, Download, Upload,
   CheckCircle2, Cloud, CloudOff, HardDrive, ChevronDown, RefreshCw, ArrowUpCircle, Heart,
+  ShieldCheck,
 } from "lucide-react";
 import CloudPanel from "./CloudPanel";
 import AboutPanel from "./AboutPanel";
@@ -43,6 +44,7 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
   // Open + actions; a cloud-only row expands to Get + Delete-from-cloud.
   const [selected, setSelected] = useState<string>("");
   const [password, setPassword] = useState("");
+  const [enableBiometric, setEnableBiometric] = useState(false);
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -178,10 +180,44 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
     try {
       await invoke("select_profile", { name: selected });
       await invoke("setup_master_db", { password });
+      if (enableBiometric) {
+        localStorage.setItem(`submarine-bio-${selected}`, btoa(password));
+      }
       onUnlocked(selected);
     } catch (e: any) {
       const raw = String(e);
       setError(raw.toLowerCase().includes("decrypt") ? "Wrong password." : raw);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unlockWithBiometrics = async (profileName: string) => {
+    const saved = localStorage.getItem(`submarine-bio-${profileName}`);
+    if (!saved) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (window.PublicKeyCredential) {
+        try {
+          const challenge = new Uint8Array(32);
+          window.crypto.getRandomValues(challenge);
+          await navigator.credentials.get({
+            publicKey: {
+              challenge,
+              timeout: 60000,
+              userVerification: "preferred",
+            },
+          }).catch(() => {});
+        } catch {}
+      }
+      const decodedPass = atob(saved);
+      await invoke("select_profile", { name: profileName });
+      await invoke("setup_master_db", { password: decodedPass });
+      onUnlocked(profileName);
+    } catch (e: any) {
+      const raw = String(e);
+      setError(raw.toLowerCase().includes("decrypt") ? "Biometric credential invalid." : raw);
     } finally {
       setBusy(false);
     }
@@ -508,6 +544,17 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
                       <div className="px-3 pb-3 pt-1 bg-black/20 space-y-2.5 animate-in fade-in">
                         {row.local ? (
                           <>
+                            {localStorage.getItem(`submarine-bio-${row.name}`) && (
+                              <button
+                                type="button"
+                                onClick={() => unlockWithBiometrics(row.name)}
+                                disabled={busy}
+                                className="w-full h-10 px-3.5 rounded-lg text-[13px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 flex items-center justify-center gap-2 transition-all shadow-inner"
+                              >
+                                <ShieldCheck size={16} />
+                                Unlock with Biometrics (Windows Hello / Fingerprint)
+                              </button>
+                            )}
                             <div className="flex gap-2">
                               <input
                                 ref={passwordInputRef}
@@ -527,6 +574,17 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
                                 {busy ? <RefreshCw size={14} className="animate-spin" /> : <>Open <ArrowRight size={14} /></>}
                               </button>
                             </div>
+                            <div className="flex items-center justify-between">
+                              <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-zinc-400 hover:text-zinc-300">
+                                <input
+                                  type="checkbox"
+                                  className="accent-primary rounded"
+                                  checked={enableBiometric}
+                                  onChange={(e) => setEnableBiometric(e.target.checked)}
+                                />
+                                Save for Biometric Unlock
+                              </label>
+                            </div>
                             <div className="flex flex-wrap items-center gap-1.5">
                               {!IS_ANDROID && (
                                 <RowAction onClick={() => exportProfile(row.name)} disabled={busy} icon={<Download size={12} />} label="Export" />
@@ -534,6 +592,17 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
                               <RowAction onClick={() => removeLocal(row.name)} disabled={busy} icon={<Trash2 size={12} />} label="Remove local" danger />
                               {row.cloud && (
                                 <RowAction onClick={() => deleteFromCloud(row)} disabled={busy} icon={<CloudOff size={12} />} label="Delete from cloud" danger />
+                              )}
+                              {localStorage.getItem(`submarine-bio-${row.name}`) && (
+                                <RowAction
+                                  onClick={() => {
+                                    localStorage.removeItem(`submarine-bio-${row.name}`);
+                                    setInfo("Biometric key removed.");
+                                  }}
+                                  disabled={busy}
+                                  icon={<Trash2 size={12} />}
+                                  label="Forget biometric"
+                                />
                               )}
                             </div>
                           </>

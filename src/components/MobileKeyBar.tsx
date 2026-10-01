@@ -23,6 +23,14 @@ interface MobileKeyBarProps {
   onSpecialKey: (key: "esc" | "tab") => void;
 }
 
+const triggerHaptic = () => {
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(12);
+    }
+  } catch {}
+};
+
 export function MobileKeyBar({ modifiers, onToggleModifier, onSpecialKey }: MobileKeyBarProps) {
   const ModBtn = ({ m, label }: { m: ModKey; label: string }) => {
     const s = modifiers[m];
@@ -33,7 +41,10 @@ export function MobileKeyBar({ modifiers, onToggleModifier, onSpecialKey }: Mobi
     return (
       <button
         type="button"
-        onClick={() => onToggleModifier(m)}
+        onClick={() => {
+          triggerHaptic();
+          onToggleModifier(m);
+        }}
         // Pointer/touch should NOT steal focus from the terminal — otherwise
         // the soft keyboard would dismiss every time the user reaches for a
         // modifier. preventDefault on mousedown is the standard trick.
@@ -51,7 +62,10 @@ export function MobileKeyBar({ modifiers, onToggleModifier, onSpecialKey }: Mobi
   const KeyBtn = ({ label, onClick, title }: { label: string; onClick: () => void; title?: string }) => (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        triggerHaptic();
+        onClick();
+      }}
       onMouseDown={(e) => e.preventDefault()}
       onTouchStart={(e) => e.preventDefault()}
       title={title}
