@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -6,10 +6,12 @@ import {
   Folder, File, ArrowUp, RefreshCw, Trash2, Edit3, Shield,
   X, ChevronUp, ChevronDown, Plus, MoreVertical, FolderSearch,
   Download, Upload, ExternalLink, Move, CheckSquare, Square, Search,
+  TerminalSquare, FileCode, Archive, Copy, Check,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { useConfirm, useOverwritePrompt, OverwriteChoice } from "../ui/confirm";
 import { IS_ANDROID } from "../util/platform";
+import { QuickEditorModal } from "./QuickEditorModal";
 
 // Batch overwrite state shared across items in a single download/upload run.
 // Once the user picks "Overwrite all" or "Skip all" the kind is sticky and we
@@ -135,6 +137,111 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const [modal, setModal] = useState<{ type: "rename" | "mkdir" | "properties" | "move" | "move-bulk"; entry?: FileEntry; v1?: string; v2?: string } | null>(null);
   const [notification, setNotification] = useState<{ msg: string; type: "info" | "success" | "error" } | null>(null);
 
+  const [isEditingPath, setIsEditingPath] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
+  const [editorEntry, setEditorEntry] = useState<FileEntry | null>(null);
+  const [fuzzySearchOpen, setFuzzySearchOpen] = useState(false);
+  const [fuzzyQuery, setFuzzyQuery] = useState("");
+  const [gitFileStatuses, setGitFileStatuses] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const handleOpenEditor = (e: any) => {
+      const filePath = e.detail?.path;
+      if (!filePath) return;
+      const fileName = filePath.split(/[\\/]/).filter(Boolean).pop() || filePath;
+      setEditorEntry({
+        name: fileName,
+        path: filePath,
+        isDir: false,
+        size: 0,
+      });
+    };
+    window.addEventListener(`submarine-open-editor-${sessionId}`, handleOpenEditor);
+    return () => {
+      window.removeEventListener(`submarine-open-editor-${sessionId}`, handleOpenEditor);
+    };
+  }, [sessionId]);
+
+  const isTextFile = (name: string) => {
+    return /\.(txt|json|ya?ml|conf|sh|bash|zsh|env|py|js|jsx|ts|tsx|html|css|scss|md|toml|xml|ini|service|sql|rs|go|c|cpp|h|hpp|log|gitignore|dockerfile)$/i.test(name) || !name.includes(".");
+  };
+
+  const pathSegments = useMemo(() => {
+    if (!currentPath) return [];
+    const isWin = /^[a-zA-Z]:[\\/]/.test(currentPath) || currentPath.includes("\\");
+    if (isWin) {
+      const parts = currentPath.split(/[\\/]/).filter(Boolean);
+      const drive = currentPath.match(/^[a-zA-Z]:/)?.[0] || "";
+      const result: { label: string; fullPath: string }[] = [];
+      if (drive) {
+        let accumulated = drive + "\\";
+        result.push({ label: drive + "\\", fullPath: accumulated });
+        for (let i = 1; i < parts.length; i++) {
+          accumulated = accumulated + parts[i] + "\\";
+          result.push({ label: parts[i], fullPath: accumulated.replace(/\\+$/, "") });
+        }
+      }
+      return result;
+    } else {
+      const parts = currentPath.split("/").filter(Boolean);
+      const result: { label: string; fullPath: string }[] = [{ label: "/", fullPath: "/" }];
+      let accumulated = "";
+      for (const p of parts) {
+        accumulated = accumulated + "/" + p;
+        result.push({ label: p, fullPath: accumulated });
+      }
+      return result;
+    }
+  }, [currentPath]);
+
+  const extractArchive = async (entry: FileEntry) => {
+    if (!sessionId) return;
+    notify(`Extracting ${entry.name}…`, "info");
+    try {
+      const parent = provider.parentPath(entry.path);
+      const isZip = /\.zip$/i.test(entry.name);
+      const cmd = isZip
+        ? `unzip -o "${entry.path.replace(/"/g, '\\"')}" -d "${parent.replace(/"/g, '\\"')}"`
+        : `tar -xzf "${entry.path.replace(/"/g, '\\"')}" -C "${parent.replace(/"/g, '\\"')}"`;
+      await invoke("sftp_exec_command", { sessionId, command: cmd });
+      notify(`Extracted ${entry.name}`, "success");
+      fetch(currentPath);
+    } catch (err: any) {
+      notify(`Extraction failed: ${err}`, "error");
+    }
+  };
+
+  const compressToTar = async (items: FileEntry[]) => {
+    if (!sessionId || items.length === 0) return;
+    const firstName = items[0].name.replace(/\.[^/.]+$/, "");
+    const tarName = items.length === 1 ? `${firstName}.tar.gz` : `archive_${Date.now()}.tar.gz`;
+    notify(`Compressing to ${tarName}…`, "info");
+    try {
+      const parent = currentPath;
+      const fileArgs = items.map(it => `"${it.name.replace(/"/g, '\\"')}"`).join(" ");
+      const cmd = `cd "${parent.replace(/"/g, '\\"')}" && tar -czf "${tarName}" ${fileArgs}`;
+      await invoke("sftp_exec_command", { sessionId, command: cmd });
+      notify(`Created ${tarName}`, "success");
+      fetch(currentPath);
+    } catch (err: any) {
+      notify(`Compression failed: ${err}`, "error");
+    }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+        const root = dropTargetRef.current;
+        if (root && document.activeElement && !root.contains(document.activeElement)) return;
+        e.preventDefault();
+        setFuzzySearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const [dragOver, setDragOver] = useState(false);
   const dropTargetRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +309,28 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       lastSelectedPathRef.current = null;
       onPathChange?.(result.currentPath);
       pushRecent(result.currentPath);
+
+      if (provider.id === "remote" && sessionId) {
+        invoke<string>("sftp_exec_command", {
+          sessionId,
+          command: `cd "${result.currentPath.replace(/"/g, '\\"')}" 2>/dev/null && git status --porcelain . 2>/dev/null`,
+        }).then((out) => {
+          const map: Record<string, string> = {};
+          if (out) {
+            for (const line of out.split("\n")) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              const code = line.slice(0, 2).trim();
+              const relPath = line.slice(2).trim();
+              const base = relPath.split("/").pop() || relPath;
+              map[base] = code;
+            }
+          }
+          setGitFileStatuses(map);
+        }).catch(() => setGitFileStatuses({}));
+      } else {
+        setGitFileStatuses({});
+      }
     } catch (err: any) {
       notify(`List failed: ${err}`, "error");
     } finally {
@@ -853,52 +982,119 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               </div>
             )}
           </div>
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={tempInput}
-              onChange={(e) => { setTempInput(e.target.value); setActiveSuggestion(-1); }}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setTimeout(() => setInputFocused(false), 250)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  if (activeSuggestion >= 0 && activeSuggestion < suggestions.length) {
-                    pickSuggestion(suggestions[activeSuggestion]);
-                  } else {
-                    const target = tempInput.trim();
-                    if (target) {
-                      // Drop the autocomplete dropdown so the user clearly
-                      // sees navigation kick off, and blur the input so
-                      // browser default form-like behaviour doesn't kick in.
-                      setInputFocused(false);
-                      (e.currentTarget as HTMLInputElement).blur();
-                      fetch(target);
-                    }
-                  }
-                } else if (e.key === "ArrowDown" && suggestions.length > 0) {
-                  e.preventDefault(); setActiveSuggestion((p) => (p + 1) % suggestions.length);
-                } else if (e.key === "ArrowUp" && suggestions.length > 0) {
-                  e.preventDefault(); setActiveSuggestion((p) => (p - 1 + suggestions.length) % suggestions.length);
-                } else if (e.key === "Escape") setInputFocused(false);
-              }}
-              placeholder="Path…"
-              className="w-full h-6 px-2 bg-white/[0.04] border border-white/10 rounded text-[11px] text-zinc-100 font-mono focus:outline-none focus:border-indigo-400/50 focus:bg-white/10"
-            />
-            {inputFocused && suggestions.length > 0 && (
-              <div className="absolute top-[28px] left-0 right-0 max-h-[220px] overflow-y-auto z-50 bg-[#0c0c0e]/95 border border-white/10 rounded-lg shadow-2xl p-1 backdrop-blur-md font-mono text-[11px] text-zinc-200 no-scrollbar">
-                {suggestions.map((s, idx) => (
-                  <button key={s.path} onClick={() => pickSuggestion(s)}
-                    className={`w-full flex items-center justify-between p-1.5 rounded text-left transition-colors ${
-                      idx === activeSuggestion ? "bg-indigo-500/30 text-white font-bold" : "hover:bg-white/5 hover:text-white"
-                    }`}>
-                    <div className="flex items-center gap-2 truncate">
-                      {s.isDir ? <Folder size={11} className="text-indigo-300 shrink-0" /> : <File size={11} className="text-zinc-500 shrink-0" />}
-                      <span className="truncate">{s.name}</span>
-                    </div>
-                    {s.isDir && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1 rounded">dir</span>}
+          <div className="flex-1 relative min-w-0">
+            {!isEditingPath ? (
+              <div
+                onDoubleClick={() => {
+                  setTempInput(currentPath);
+                  setIsEditingPath(true);
+                }}
+                className="w-full h-6 px-1.5 bg-white/[0.04] border border-white/10 rounded flex items-center justify-between gap-1 overflow-hidden"
+              >
+                {/* Scrollable Breadcrumbs */}
+                <div className="flex-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar font-mono text-[11px] min-w-0">
+                  {pathSegments.map((seg, idx) => (
+                    <React.Fragment key={seg.fullPath}>
+                      <button
+                        onClick={() => fetch(seg.fullPath)}
+                        className={`px-1 py-0.5 rounded transition-colors truncate max-w-[140px] shrink-0 ${
+                          idx === pathSegments.length - 1
+                            ? "text-indigo-300 font-bold bg-white/[0.06]"
+                            : "text-zinc-400 hover:text-white hover:bg-white/10"
+                        }`}
+                        title={seg.fullPath}
+                      >
+                        {seg.label}
+                      </button>
+                      {idx < pathSegments.length - 1 && (
+                        <span className="text-zinc-600 select-none text-[10px] shrink-0">/</span>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+
+                {/* Breadcrumb Quick Actions */}
+                <div className="flex items-center gap-1 shrink-0 pl-1 border-l border-white/5">
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(currentPath);
+                      setCopiedPath(true);
+                      setTimeout(() => setCopiedPath(false), 1500);
+                    }}
+                    title="Copy full path"
+                    className="p-0.5 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+                  >
+                    {copiedPath ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
                   </button>
-                ))}
+                  <button
+                    onClick={() => {
+                      setTempInput(currentPath);
+                      setIsEditingPath(true);
+                    }}
+                    title="Edit path directly (or double click)"
+                    className="p-0.5 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+                  >
+                    <Edit3 size={10} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative w-full">
+                <input
+                  type="text"
+                  value={tempInput}
+                  autoFocus
+                  onChange={(e) => { setTempInput(e.target.value); setActiveSuggestion(-1); }}
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setInputFocused(false);
+                      setIsEditingPath(false);
+                    }, 250);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (activeSuggestion >= 0 && activeSuggestion < suggestions.length) {
+                        pickSuggestion(suggestions[activeSuggestion]);
+                        setIsEditingPath(false);
+                      } else {
+                        const target = tempInput.trim();
+                        if (target) {
+                          setInputFocused(false);
+                          setIsEditingPath(false);
+                          (e.currentTarget as HTMLInputElement).blur();
+                          fetch(target);
+                        }
+                      }
+                    } else if (e.key === "ArrowDown" && suggestions.length > 0) {
+                      e.preventDefault(); setActiveSuggestion((p) => (p + 1) % suggestions.length);
+                    } else if (e.key === "ArrowUp" && suggestions.length > 0) {
+                      e.preventDefault(); setActiveSuggestion((p) => (p - 1 + suggestions.length) % suggestions.length);
+                    } else if (e.key === "Escape") {
+                      setInputFocused(false);
+                      setIsEditingPath(false);
+                    }
+                  }}
+                  placeholder="Path…"
+                  className="w-full h-6 px-2 bg-white/[0.04] border border-indigo-400/50 rounded text-[11px] text-zinc-100 font-mono focus:outline-none focus:bg-white/10"
+                />
+                {inputFocused && suggestions.length > 0 && (
+                  <div className="absolute top-[28px] left-0 right-0 max-h-[220px] overflow-y-auto z-50 bg-[#0c0c0e]/95 border border-white/10 rounded-lg shadow-2xl p-1 backdrop-blur-md font-mono text-[11px] text-zinc-200 no-scrollbar">
+                    {suggestions.map((s, idx) => (
+                      <button key={s.path} onClick={() => { pickSuggestion(s); setIsEditingPath(false); }}
+                        className={`w-full flex items-center justify-between p-1.5 rounded text-left transition-colors ${
+                          idx === activeSuggestion ? "bg-indigo-500/30 text-white font-bold" : "hover:bg-white/5 hover:text-white"
+                        }`}>
+                        <div className="flex items-center gap-2 truncate">
+                          {s.isDir ? <Folder size={11} className="text-indigo-300 shrink-0" /> : <File size={11} className="text-zinc-500 shrink-0" />}
+                          <span className="truncate">{s.name}</span>
+                        </div>
+                        {s.isDir && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1 rounded">dir</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -906,6 +1102,29 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             className={`p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0 ${loading ? "animate-spin" : ""}`}>
             <RefreshCw size={11} />
           </button>
+          {isRemote && (
+            <>
+              <button
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: currentPath } })
+                  );
+                  notify(`Sent cd "${currentPath}" to Terminal`, "info");
+                }}
+                title="Open in Terminal (cd to current directory)"
+                className="p-1 rounded bg-white/[0.04] border border-white/10 text-amber-400 hover:bg-white/10 shrink-0"
+              >
+                <TerminalSquare size={11} />
+              </button>
+              <button
+                onClick={() => setFuzzySearchOpen(true)}
+                title="Quick Search Files (Ctrl+P)"
+                className="p-1 rounded bg-white/[0.04] border border-white/10 text-indigo-400 hover:bg-white/10 shrink-0"
+              >
+                <Search size={11} />
+              </button>
+            </>
+          )}
         </div>
         <div className="h-5 w-px bg-white/10 shrink-0" />
         <div className="flex items-center gap-1 shrink-0 relative">
@@ -1141,10 +1360,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 onClick={(e) => onRowClick(e, entry, sortedEntries)}
                 onDoubleClick={() => {
                   if (entry.isDir) { fetch(entry.path); return; }
-                  // For files: remote → live-edit (download + open editor +
-                  // auto-upload on save); local → open in the OS default app.
-                  // Both are desktop-only — on Android a double-tap on a file
-                  // is a no-op (there's no OS default editor to hand off to).
+                  if (isTextFile(entry.name)) {
+                    setEditorEntry(entry);
+                    return;
+                  }
                   if (IS_ANDROID) return;
                   if (isRemote) liveEditEntry(entry);
                   else openLocalEntry(entry);
@@ -1191,7 +1410,25 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                     ? <Folder size={12} className="text-indigo-300 shrink-0" />
                     : <File size={12} className="text-zinc-500 shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-zinc-100 text-[11px]">{entry.name}</div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate text-zinc-100 text-[11px]">{entry.name}</span>
+                      {gitFileStatuses[entry.name] && (
+                        <span
+                          className={`text-[8px] font-mono font-bold px-1 rounded uppercase tracking-wider shrink-0 select-none ${
+                            gitFileStatuses[entry.name].includes("M")
+                              ? "bg-amber-500/20 text-amber-300"
+                              : gitFileStatuses[entry.name].includes("A") || gitFileStatuses[entry.name].includes("?")
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : gitFileStatuses[entry.name].includes("D")
+                              ? "bg-rose-500/20 text-rose-300"
+                              : "bg-zinc-700/50 text-zinc-300"
+                          }`}
+                          title={`Git Status: ${gitFileStatuses[entry.name]}`}
+                        >
+                          {gitFileStatuses[entry.name].includes("?") ? "U" : gitFileStatuses[entry.name].trim()}
+                        </span>
+                      )}
+                    </div>
                     {/* Narrow-viewport subline: on < sm the SIZE / CHANGED /
                         RIGHTS cells are display:none (so they don't force
                         horizontal scroll), and their info collapses into
@@ -1273,6 +1510,53 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 <ExternalLink size={11} className="text-indigo-400" /><span>Open</span>
               </button>
             )
+          )}
+
+          {/* Edit in SubTerm */}
+          {!multi && !contextMenu.entry.isDir && (
+            <button onClick={() => { setContextMenu(null); setEditorEntry(contextMenu.entry); }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <FileCode size={11} className="text-cyan-400" /><span>Edit in SubTerm</span>
+            </button>
+          )}
+
+          {/* Deep link: Open in Terminal (cd) */}
+          {isRemote && !multi && (
+            <button onClick={() => {
+                setContextMenu(null);
+                const target = contextMenu.entry.isDir ? contextMenu.entry.path : currentPath;
+                window.dispatchEvent(new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: target } }));
+                notify(`Sent cd "${target}" to Terminal`, "info");
+              }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <TerminalSquare size={11} className="text-amber-400" /><span>Open in Terminal (cd)</span>
+            </button>
+          )}
+
+          {/* Extract / Compress for remote archives */}
+          {isRemote && !multi && /\.(tar\.gz|tgz|tar|zip)$/i.test(contextMenu.entry.name) && (
+            <button onClick={() => { setContextMenu(null); extractArchive(contextMenu.entry); }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <Archive size={11} className="text-violet-400" /><span>Extract Archive Here</span>
+            </button>
+          )}
+          {isRemote && (
+            <button onClick={() => { setContextMenu(null); compressToTar(acting); }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <Archive size={11} className="text-violet-400" /><span>Compress (.tar.gz)</span>
+            </button>
+          )}
+
+          {/* Copy full path */}
+          {!multi && (
+            <button onClick={async () => {
+                setContextMenu(null);
+                await navigator.clipboard.writeText(contextMenu.entry.path);
+                notify(`Copied path: ${contextMenu.entry.path}`, "info");
+              }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <Copy size={11} className="text-zinc-400" /><span>Copy Path</span>
+            </button>
           )}
 
           {!isRemote && !multi && !IS_ANDROID && (
@@ -1433,6 +1717,72 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 <button onClick={() => setModal(null)} className="px-3 h-7 rounded border border-white/5 text-zinc-400 hover:text-white">Cancel</button>
                 <button onClick={submitModal} className="px-3 h-7 rounded bg-indigo-500 text-white font-bold hover:bg-indigo-600">Apply</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick In-App Code Editor */}
+      {editorEntry && (
+        <QuickEditorModal
+          isOpen={Boolean(editorEntry)}
+          onClose={() => setEditorEntry(null)}
+          entry={editorEntry}
+          provider={provider}
+          sessionId={sessionId}
+          onSaved={() => fetch(currentPath)}
+        />
+      )}
+
+      {/* Quick Fuzzy File Search */}
+      {fuzzySearchOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+          <div className="w-full max-w-lg bg-[#0e0e12] border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-3 border-b border-white/10 flex items-center gap-2.5 bg-[#121217]">
+              <Search size={14} className="text-indigo-400 shrink-0" />
+              <input
+                type="text"
+                autoFocus
+                value={fuzzyQuery}
+                onChange={(e) => setFuzzyQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setFuzzySearchOpen(false);
+                }}
+                placeholder="Search files in current directory..."
+                className="flex-1 bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none font-mono"
+              />
+              <button onClick={() => setFuzzySearchOpen(false)} className="text-zinc-500 hover:text-white">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto p-1 font-mono text-xs no-scrollbar">
+              {entries
+                .filter(e => !fuzzyQuery.trim() || e.name.toLowerCase().includes(fuzzyQuery.toLowerCase()))
+                .slice(0, 30)
+                .map((e) => (
+                  <button
+                    key={e.path}
+                    onClick={() => {
+                      setFuzzySearchOpen(false);
+                      if (e.isDir) {
+                        fetch(e.path);
+                      } else if (isTextFile(e.name)) {
+                        setEditorEntry(e);
+                      } else {
+                        onRowClick({ shiftKey: false, ctrlKey: false, metaKey: false } as any, e, entries);
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/10 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      {e.isDir ? <Folder size={12} className="text-indigo-400 shrink-0" /> : <File size={12} className="text-zinc-400 shrink-0" />}
+                      <span className="truncate text-zinc-200">{e.name}</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 shrink-0">
+                      {e.isDir ? "Folder" : formatSize(e.size)}
+                    </span>
+                  </button>
+                ))}
             </div>
           </div>
         </div>

@@ -213,6 +213,58 @@ export const CmdsPanel = ({ activeTab, onClose, serverId, serverName }: { active
     }
   };
 
+  interface ParamModalState {
+    rawCommand: string;
+    title: string;
+    execute: boolean;
+    variables: { name: string; value: string }[];
+  }
+  const [paramModal, setParamModal] = useState<ParamModalState | null>(null);
+
+  const handleCommandAction = (content: string, execute: boolean, title = "") => {
+    const matches = Array.from(content.matchAll(/\{\{([^}]+)\}\}/g));
+    const varNames = Array.from(new Set(matches.map((m) => m[1].trim())));
+
+    if (varNames.length > 0) {
+      let savedParams: Record<string, string> = {};
+      try {
+        savedParams = JSON.parse(localStorage.getItem("submarine-cmd-params") || "{}");
+      } catch {}
+      setParamModal({
+        rawCommand: content,
+        title,
+        execute,
+        variables: varNames.map((name) => ({ name, value: savedParams[name] || "" })),
+      });
+      return;
+    }
+
+    writeToTerminal(content, execute);
+  };
+
+  const executeParameterizedCommand = (execute: boolean) => {
+    if (!paramModal) return;
+    let resolved = paramModal.rawCommand;
+    const nextSaved: Record<string, string> = {};
+    try {
+      Object.assign(nextSaved, JSON.parse(localStorage.getItem("submarine-cmd-params") || "{}"));
+    } catch {}
+
+    for (const v of paramModal.variables) {
+      const val = v.value.trim();
+      nextSaved[v.name] = val;
+      const re = new RegExp(`\\{\\{\\s*${v.name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*\\}\\}`, 'g');
+      resolved = resolved.replace(re, val);
+    }
+
+    try {
+      localStorage.setItem("submarine-cmd-params", JSON.stringify(nextSaved));
+    } catch {}
+
+    setParamModal(null);
+    writeToTerminal(resolved, execute);
+  };
+
   const copyToClipboard = async (text: string) => {
     try { await navigator.clipboard.writeText(text); }
     catch (e) { console.error("Clipboard write failed:", e); }
@@ -435,14 +487,14 @@ export const CmdsPanel = ({ activeTab, onClose, serverId, serverName }: { active
                       </div>
                       <div className="flex gap-1.5 mt-2">
                         <button
-                          onClick={() => writeToTerminal(c.content, true)}
+                          onClick={() => handleCommandAction(c.content, true, c.title)}
                           className="flex-1 h-7 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-zinc-950 hover:border-primary flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all"
                           title="Run in active terminal (writes + Enter)"
                         >
                           <Play size={11} fill="currentColor" /> Run
                         </button>
                         <button
-                          onClick={() => writeToTerminal(c.content, false)}
+                          onClick={() => handleCommandAction(c.content, false, c.title)}
                           className="flex-1 h-7 rounded-lg bg-white/[0.04] border border-white/10 hover:bg-white/10 hover:border-white/20 text-zinc-300 hover:text-white flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all"
                           title="Paste into active terminal (no Enter)"
                         >
@@ -535,7 +587,7 @@ export const CmdsPanel = ({ activeTab, onClose, serverId, serverName }: { active
                         <ClipboardCopy size={11} /> Copy
                       </button>
                       <button
-                        onClick={() => writeToTerminal(edit.body || "", false)}
+                        onClick={() => handleCommandAction(edit.body || "", false, edit.title)}
                         className="flex-1 h-7 min-w-[64px] rounded-lg bg-white/[0.04] border border-white/10 hover:bg-white/10 hover:border-white/20 text-zinc-300 hover:text-white flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all"
                         title="Paste body into active terminal (no Enter)"
                       >
@@ -565,6 +617,92 @@ export const CmdsPanel = ({ activeTab, onClose, serverId, serverName }: { active
           </div>
         )}
       </div>
+
+      {/* Parameterized Snippet Modal */}
+      {paramModal && (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-[#121217] border border-white/10 rounded-xl p-4 shadow-2xl flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Terminal size={14} className="text-primary" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Command Parameters
+                </span>
+              </div>
+              <button
+                onClick={() => setParamModal(null)}
+                className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {paramModal.title && (
+              <span className="text-xs font-bold text-zinc-300 font-mono truncate">
+                {paramModal.title}
+              </span>
+            )}
+
+            {/* Inputs for each variable */}
+            <div className="flex flex-col gap-2.5 max-h-[40vh] overflow-y-auto pr-1 no-scrollbar">
+              {paramModal.variables.map((v, i) => (
+                <div key={v.name} className="flex flex-col gap-1">
+                  <label className="text-[10px] font-mono font-bold text-primary flex items-center gap-1">
+                    <span>{`{{${v.name}}}`}</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={v.value}
+                    onChange={(e) => {
+                      const next = [...paramModal.variables];
+                      next[i] = { ...v, value: e.target.value };
+                      setParamModal({ ...paramModal, variables: next });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        executeParameterizedCommand(paramModal.execute);
+                      }
+                    }}
+                    placeholder={`Enter ${v.name}...`}
+                    autoFocus={i === 0}
+                    className="w-full h-7 px-2 bg-black/40 border border-white/10 rounded text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-primary/50 font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Live Command Preview */}
+            <div className="flex flex-col gap-1 pt-1">
+              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">
+                Preview:
+              </span>
+              <pre className="p-2 bg-black/60 border border-white/5 rounded text-[10px] font-mono text-emerald-400 whitespace-pre-wrap break-all max-h-20 overflow-y-auto">
+                {paramModal.variables.reduce((acc, v) => {
+                  const re = new RegExp(`\\{\\{\\s*${v.name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*\\}\\}`, 'g');
+                  return acc.replace(re, v.value || `{{${v.name}}}`);
+                }, paramModal.rawCommand)}
+              </pre>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+              <button
+                onClick={() => executeParameterizedCommand(true)}
+                className="flex-1 h-7 rounded-lg bg-primary text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow hover:opacity-90 transition-all"
+              >
+                <Play size={12} fill="currentColor" /> Run (Enter)
+              </button>
+              <button
+                onClick={() => executeParameterizedCommand(false)}
+                className="h-7 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 text-xs font-bold transition-all"
+              >
+                Paste
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

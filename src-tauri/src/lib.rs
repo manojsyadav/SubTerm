@@ -9078,6 +9078,105 @@ async fn local_open_in_explorer(local_path: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+async fn sftp_read_file_text(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    remote_path: String,
+    max_bytes: Option<usize>,
+) -> Result<String, String> {
+    let sftp = get_sftp_session(&state, &session_id).await?;
+    let limit = max_bytes.unwrap_or(2 * 1024 * 1024);
+    let data = sftp.read(&remote_path).await.map_err(|e| format!("Failed to read remote file: {}", e))?;
+    if data.len() > limit {
+        return Err(format!("File is too large ({} bytes, limit is {} bytes)", data.len(), limit));
+    }
+    String::from_utf8(data).map_err(|_| "File contains binary data and cannot be opened as text.".to_string())
+}
+
+#[tauri::command]
+async fn sftp_write_file_text(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    remote_path: String,
+    content: String,
+) -> Result<(), String> {
+    use russh_sftp::protocol::OpenFlags;
+    use tokio::io::AsyncWriteExt;
+    let sftp = get_sftp_session(&state, &session_id).await?;
+    let mut remote_file = sftp
+        .open_with_flags(
+            &remote_path,
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
+        )
+        .await
+        .map_err(|e| format!("Failed to open remote file: {}", e))?;
+    remote_file
+        .write_all(content.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to write to remote: {}", e))?;
+    remote_file
+        .shutdown()
+        .await
+        .map_err(|e| format!("Failed to flush remote file: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn local_read_file_text(
+    local_path: String,
+    max_bytes: Option<usize>,
+) -> Result<String, String> {
+    let safe = guard_local_path(&local_path, false)?;
+    let limit = max_bytes.unwrap_or(2 * 1024 * 1024);
+    let meta = std::fs::metadata(&safe).map_err(|e| e.to_string())?;
+    if meta.len() as usize > limit {
+        return Err(format!("File is too large ({} bytes, limit is {} bytes)", meta.len(), limit));
+    }
+    let data = std::fs::read(&safe).map_err(|e| e.to_string())?;
+    String::from_utf8(data).map_err(|_| "File contains binary data and cannot be opened as text.".to_string())
+}
+
+#[tauri::command]
+async fn local_write_file_text(
+    local_path: String,
+    content: String,
+) -> Result<(), String> {
+    let safe = guard_local_path(&local_path, true)?;
+    std::fs::write(&safe, content.as_bytes()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn sftp_exec_command(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    command: String,
+) -> Result<String, String> {
+    use tokio::io::AsyncReadExt;
+    let connections = state.connections.lock().await;
+    let session_arc = connections
+        .get(&session_id)
+        .cloned()
+        .ok_or_else(|| "Session not found".to_string())?;
+    drop(connections);
+
+    let channel = {
+        let session = session_arc.lock().await;
+        session.channel_open_session().await.map_err(|e| e.to_string())?
+    };
+    channel.exec(true, command.as_bytes()).await.map_err(|e| e.to_string())?;
+    let mut stream = channel.into_stream();
+    let mut output = Vec::new();
+    let mut buf = [0u8; 4096];
+    while let Ok(n) = stream.read(&mut buf).await {
+        if n == 0 { break; }
+        output.extend_from_slice(&buf[..n]);
+        if output.len() > 512 * 1024 { break; }
+    }
+    Ok(String::from_utf8_lossy(&output).to_string())
+}
+
+
 #[derive(serde::Serialize)]
 struct LocalFileEntry {
     name: String,
@@ -10525,6 +10624,7 @@ pub fn run() {
             sftp_list_dir, sftp_create_dir, sftp_remove_file, sftp_remove_dir,
             sftp_rename, sftp_set_permissions, sftp_set_owner,
             sftp_download_file, sftp_download_dir, sftp_upload_file, sftp_upload_dir, sftp_cancel_transfer, sftp_open_remote_file,
+            sftp_read_file_text, sftp_write_file_text, local_read_file_text, local_write_file_text, sftp_exec_command,
             local_open_file, local_open_in_explorer, sftp_prepare_drag,
             monitor_list, monitor_add, monitor_remove, monitor_set_metrics, monitor_set_custom_metrics,
             monitor_resume, monitor_pause, monitor_resume_all, monitor_pause_all,
