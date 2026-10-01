@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Zap, X, AlertTriangle, KeyRound, Lock } from "lucide-react";
+import { Zap, X, AlertTriangle, KeyRound, Lock, History } from "lucide-react";
 import PasswordField from "./PasswordField";
 
 // Quick Connect: the auth bundle lives in component state, gets passed to
@@ -34,6 +34,28 @@ const QuickConnectModal = ({ isOpen, onClose, onConnect }: Props) => {
   const [passphrase, setPassphrase] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
+  const [history, setHistory] = useState<{ host: string; port: number; username: string; authMode: "password" | "key" }[]>(() => {
+    try {
+      const raw = localStorage.getItem("submarine-quick-history");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveToHistory = (item: { host: string; port: number; username: string; authMode: "password" | "key" }) => {
+    try {
+      const next = [item, ...history.filter(h => !(h.host === item.host && h.port === item.port && h.username === item.username))].slice(0, 5);
+      setHistory(next);
+      localStorage.setItem("submarine-quick-history", JSON.stringify(next));
+    } catch { /* ignore */ }
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    try { localStorage.removeItem("submarine-quick-history"); } catch {}
+  };
+
   if (!isOpen) return null;
 
   const reset = () => {
@@ -51,6 +73,13 @@ const QuickConnectModal = ({ isOpen, onClose, onConnect }: Props) => {
     if (!port || port < 1 || port > 65535) { setErr("Port must be 1–65535"); return; }
     if (authMode === "password" && !password) { setErr("Password is required"); return; }
     if (authMode === "key" && !privateKey.trim()) { setErr("Private key body is required"); return; }
+
+    saveToHistory({
+      host: host.trim(),
+      port,
+      username: username.trim(),
+      authMode,
+    });
 
     const auth: QuickAuth = {
       host: host.trim(),
@@ -79,6 +108,42 @@ const QuickConnectModal = ({ isOpen, onClose, onConnect }: Props) => {
           {err && (
             <div className="px-3 py-2 bg-rose-500/15 border border-rose-500/30 rounded text-rose-200 text-[11.5px] font-mono flex items-center gap-2">
               <AlertTriangle size={12} /> {err}
+            </div>
+          )}
+
+          {/* Recent connections MRU chips */}
+          {history.length > 0 && (
+            <div className="space-y-1.5 pb-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <History size={11} className="text-primary/70" /> Recent
+                </span>
+                <button
+                  type="button"
+                  onClick={clearHistory}
+                  className="text-[9.5px] text-zinc-500 hover:text-rose-400 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {history.map((h, i) => (
+                  <button
+                    key={`${h.username}@${h.host}:${h.port}-${i}`}
+                    type="button"
+                    onClick={() => {
+                      setHost(h.host);
+                      setPort(h.port);
+                      setUsername(h.username);
+                      setAuthMode(h.authMode);
+                    }}
+                    className="h-6 px-2 rounded-md bg-white/[0.04] hover:bg-primary/10 border border-white/10 hover:border-primary/30 text-[11px] font-mono text-zinc-300 hover:text-white transition-all flex items-center gap-1 max-w-[200px] truncate"
+                    title={`Click to fill ${h.username}@${h.host}:${h.port}`}
+                  >
+                    <span className="truncate">{h.username}@{h.host}:{h.port}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

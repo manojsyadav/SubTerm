@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, X, Activity, AlertTriangle, Globe, ArrowRight, ArrowDownLeft, Square, FileText, Trash2 } from "lucide-react";
+import { Plus, X, Activity, AlertTriangle, Globe, ArrowRight, ArrowDownLeft, Square, FileText, Trash2, ExternalLink } from "lucide-react";
 
 // Tunnels panel — lists active SSH port-forwards for a session and lets the
 // user start / stop them on the fly. The full set is also auto-started from
@@ -315,6 +315,20 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
                   >
                     <FileText size={11} />
                   </button>
+                  {t.kind === "local" && t.state === "listening" && (
+                    <button
+                      onClick={() => {
+                        const port = t.listen_addr.includes(":") ? t.listen_addr.split(":").pop() : t.listen_addr;
+                        if (port) {
+                          invoke("open_external_url", { url: `http://localhost:${port}` }).catch(console.error);
+                        }
+                      }}
+                      title={`Open http://localhost:${t.listen_addr.includes(":") ? t.listen_addr.split(":").pop() : t.listen_addr} in browser`}
+                      className="p-0.5 rounded shrink-0 text-zinc-400 hover:text-emerald-400 hover:bg-white/10"
+                    >
+                      <ExternalLink size={11} />
+                    </button>
+                  )}
                   <button
                     onClick={() => stopOne(t.id)}
                     title="Stop"
