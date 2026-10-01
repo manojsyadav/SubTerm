@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Terminal } from 'xterm';
+import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { AlertTriangle, FileCode, Play, X } from 'lucide-react';
 import 'xterm/css/xterm.css';
 import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
 import { useBroadcast } from '../ui/broadcast';
 import HistorySearchOverlay from './HistorySearchOverlay';
+import { AiCopilotModal } from './AiCopilotModal';
+
+const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
 
 // Does the recent remote OUTPUT look like a no-echo password / passphrase
 // prompt? Used to skip command-history capture so typed secrets (sudo, su,
@@ -60,43 +64,18 @@ const TerminalView = ({
   serverId = 0,
   serverName = "",
   attachOnly = false,
+  isProd = false,
 }: {
   sessionId: string;
   terminalId: string;
   disabled?: boolean;
-  /// Attach-only mode: the PTY behind this terminal is owned by
-  /// another TerminalView instance (typically the one inside the
-  /// session tab). This instance ONLY listens to output events and
-  /// forwards input — it doesn't call open_terminal on mount,
-  /// close_terminal on unmount, or fight over resize_terminal. Used
-  /// by the Wall pinboard so pinning a terminal doesn't duplicate the
-  /// PTY or tear it down when Wall is closed.
   attachOnly?: boolean;
-  /// Tells us when this terminal is the visible one in its parent. Used to
-  /// trigger a refit + refresh whenever we become visible — without this,
-  /// xterm's internal canvas can be left holding stale glyphs from before
-  /// the parent's display/opacity change and the prompt appears garbled
-  /// until the user types something.
   isActive?: boolean;
-  /// When set, this terminal runs `docker exec -it <container> <shell>`
-  /// on the SSH host instead of the user's login shell. Used by the
-  /// Docker tab in InfoPanel to open an interactive session inside a
-  /// specific container without leaving the app.
   containerExec?: { container: string; useSudo: boolean };
-  /// Bumped by the parent SessionView on every successful reconnect.
-  /// When the value changes we re-open a fresh PTY against the new SSH
-  /// handle WITHOUT disposing xterm — the user keeps their scroll-back
-  /// from before the drop and can copy/paste anything they did pre-drop.
-  /// Initial mount is opened by the main effect, so we only act on
-  /// value CHANGES after that.
   connectionEpoch?: number;
-  /// Server id + name are used to stamp command-history rows so the
-  /// Ctrl+R overlay can show which server the command was run against.
-  /// Quick-connect sessions have serverId=0 and just record the display
-  /// name — that's fine for search, since the row is orphaned from any
-  /// saved node anyway.
   serverId?: number;
   serverName?: string;
+  isProd?: boolean;
 }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -153,6 +132,15 @@ const TerminalView = ({
   // gate as search: only pop it when the user is focused inside this
   // terminal's DOM subtree, so multi-tab windows don't fire N overlays.
   const [showHistory, setShowHistory] = useState(false);
+  const [showCopilot, setShowCopilot] = useState(false);
+
+  const isProdServer = isProd || Boolean(serverName && (
+    serverName.toLowerCase().includes("prod") ||
+    serverName.toLowerCase().includes("production")
+  ));
+  const [safetyWarningCmd, setSafetyWarningCmd] = useState<string | null>(null);
+  const [scriptPasteModal, setScriptPasteModal] = useState<{ text: string; lines: string[] } | null>(null);
+  const [pasteSafetyBypass, setPasteSafetyBypass] = useState(false);
 
   // Broadcast context. `stateRef` gives us live access from inside the
   // xterm.onData closure without re-binding on every state change.
@@ -318,6 +306,9 @@ const TerminalView = ({
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         setShowHistory(true);
+      } else if (e.key === 'i' || e.key === 'I') {
+        e.preventDefault();
+        setShowCopilot(true);
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -376,6 +367,70 @@ const TerminalView = ({
     const searchAddon = new SearchAddon();
     searchAddonRef.current = searchAddon;
     term.loadAddon(searchAddon);
+
+    // Clickable links for URLs and file paths in output
+    try {
+      term.registerLinkProvider({
+        provideLinks(bufferLineNumber, callback) {
+          const line = term.buffer.active.getLine(bufferLineNumber - 1);
+          if (!line) {
+            callback(undefined);
+            return;
+          }
+          const lineText = line.translateToString(true);
+          const links: ILink[] = [];
+
+          // 1. URLs
+          const urlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
+          let match: RegExpExecArray | null;
+          while ((match = urlRegex.exec(lineText)) !== null) {
+            const url = match[1];
+            const startX = match.index + 1;
+            const endX = startX + url.length;
+            links.push({
+              range: {
+                start: { x: startX, y: bufferLineNumber },
+                end: { x: endX, y: bufferLineNumber },
+              },
+              text: url,
+              activate: (_ev, text) => {
+                invoke('open_url', { url: text }).catch(() => {
+                  window.open(text, '_blank');
+                });
+              },
+            });
+          }
+
+          // 2. Absolute or home-relative file paths
+          const pathRegex = /(?:^|[\s"'`])((?:\/[\w.-]+)+\/?|~\/[\w.-]+(?:\/[\w.-]+)*)/g;
+          while ((match = pathRegex.exec(lineText)) !== null) {
+            const fullPath = match[1];
+            if (fullPath.length >= 4 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
+              const startX = match.index + (match[0].length - fullPath.length) + 1;
+              const endX = startX + fullPath.length;
+              links.push({
+                range: {
+                  start: { x: startX, y: bufferLineNumber },
+                  end: { x: endX, y: bufferLineNumber },
+                },
+                text: fullPath,
+                activate: (_ev, pathText) => {
+                  window.dispatchEvent(
+                    new CustomEvent(`submarine-open-editor-${sessionId}`, { detail: { path: pathText } })
+                  );
+                  notify(`Opening ${pathText.split('/').filter(Boolean).pop() || pathText}...`);
+                },
+              });
+            }
+          }
+
+          callback(links.length > 0 ? links : undefined);
+        },
+      });
+    } catch (e) {
+      console.warn("LinkProvider registration failed:", e);
+    }
+
     term.open(terminalRef.current);
     
     setTimeout(() => {
@@ -495,6 +550,10 @@ const TerminalView = ({
         const ch = data.charCodeAt(i);
         if (ch === 0x0d /* CR */ || ch === 0x0a /* LF */) {
           const line = commandBufRef.current.trim();
+          if (isProdServer && DESTRUCTIVE_REGEX.test(line)) {
+            setSafetyWarningCmd(line);
+            return;
+          }
           commandBufRef.current = "";
           // Do NOT persist what was typed at a no-echo password/passphrase
           // prompt — otherwise sudo/su/mysql -p/gpg secrets land verbatim in
@@ -615,9 +674,34 @@ const TerminalView = ({
     // clobber the clipboard. Disarm on blur so only a release we actually see
     // can copy.
     const onWindowBlur = () => { selectionArmed = false; };
-    // Right-click → paste clipboard into the PTY. preventDefault swallows the
-    // platform context menu so the user gets the terminal-style behavior they
-    // asked for. Disabled sessions silently drop the paste (matches onData).
+
+    const sendPastedData = (raw: string) => {
+      const normalized = raw.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+      invoke('write_terminal_data', {
+        terminalId,
+        data: Array.from(new TextEncoder().encode(normalized)),
+      }).catch(console.error);
+      notify('Pasted');
+    };
+
+    const handlePaste = (text: string) => {
+      if (disabledRef.current) return;
+      if (!text) return;
+
+      if (isProdServer && DESTRUCTIVE_REGEX.test(text)) {
+        setSafetyWarningCmd(text.trim());
+        return;
+      }
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length >= 3 && !pasteSafetyBypass) {
+        setScriptPasteModal({ text, lines });
+        return;
+      }
+
+      sendPastedData(text);
+    };
+
     const onContextMenu = async (ev: MouseEvent) => {
       ev.preventDefault();
       if (disabledRef.current) return;
@@ -625,23 +709,43 @@ const TerminalView = ({
       try { text = await navigator.clipboard.readText(); }
       catch { notify('Clipboard read denied', 'err'); return; }
       if (!text) return;
-      // Normalize line endings the way xterm and OpenSSH do: collapse
-      // CRLF / lone LF to a single CR. A Windows-style clipboard pastes
-      // `\r\n` per line — the PTY sees CR (Enter) followed by LF (Enter
-      // again), and the shell runs the previous command twice and inserts
-      // a blank line between every pair. Stripping LF puts paste back on
-      // the standard terminal contract: one Enter per line break.
-      const normalized = text.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
-      invoke('write_terminal_data', {
-        terminalId,
-        data: Array.from(new TextEncoder().encode(normalized)),
-      }).catch(console.error);
-      notify('Pasted');
+      handlePaste(text);
     };
+
+    const onPaste = (ev: ClipboardEvent) => {
+      const text = ev.clipboardData?.getData('text');
+      if (text) {
+        ev.preventDefault();
+        handlePaste(text);
+      }
+    };
+
+    let touchCount = 0;
+    const onTouchStart = (ev: TouchEvent) => {
+      touchCount = ev.touches.length;
+    };
+    const onTouchEnd = async (ev: TouchEvent) => {
+      if (touchCount === 2 && ev.touches.length === 0) {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) handlePaste(text);
+        } catch {}
+      }
+      touchCount = 0;
+    };
+
+    const handleOpenCopilot = () => {
+      setShowCopilot(true);
+    };
+
     terminalRef.current.addEventListener('mousedown', onMouseDown);
     document.addEventListener('mouseup', onDocMouseUp);
     window.addEventListener('blur', onWindowBlur);
     terminalRef.current.addEventListener('contextmenu', onContextMenu);
+    terminalRef.current.addEventListener('paste', onPaste);
+    terminalRef.current.addEventListener('touchstart', onTouchStart, { passive: true });
+    terminalRef.current.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener(`submarine-open-copilot-${sessionId}`, handleOpenCopilot);
 
     // Handle Resize
     const onResizeDisposable = term.onResize(({ cols, rows }) => {
@@ -747,7 +851,11 @@ const TerminalView = ({
       if (container) {
         container.removeEventListener('mousedown', onMouseDown);
         container.removeEventListener('contextmenu', onContextMenu);
+        container.removeEventListener('paste', onPaste);
+        container.removeEventListener('touchstart', onTouchStart);
+        container.removeEventListener('touchend', onTouchEnd);
       }
+      window.removeEventListener(`submarine-open-copilot-${sessionId}`, handleOpenCopilot);
       document.removeEventListener('mouseup', onDocMouseUp);
       window.removeEventListener('blur', onWindowBlur);
       window.visualViewport?.removeEventListener('resize', onVvResize);
@@ -875,17 +983,165 @@ const TerminalView = ({
           if (!execute) commandBufRef.current = command;
         }}
       />
-      {/* Disabled badge: NON-blocking. xterm stays interactive for scroll +
-          mouse selection so the user can copy whatever was on screen at the
-          time the session dropped. Keystrokes are still swallowed at the
-          source via `disabledRef` in the onData callback — no input reaches
-          a dead PTY. `pointer-events-none` keeps the badge from eating the
-          select-drag that starts under it. */}
+      <AiCopilotModal
+        isOpen={showCopilot}
+        onClose={() => {
+          setShowCopilot(false);
+          xtermRef.current?.focus();
+        }}
+        onInsertCommand={(command, execute) => {
+          if (disabledRef.current) return;
+          const payload = execute ? command + "\r" : command;
+          const bytes = Array.from(new TextEncoder().encode(payload));
+          invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
+          if (!execute) commandBufRef.current = command;
+        }}
+      />
+      {/* Disabled badge */}
       {disabled && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <span className="px-2.5 py-1 rounded text-[10.5px] font-mono uppercase tracking-wider border bg-rose-500/15 border-rose-500/30 text-rose-300 shadow-lg">
             Disconnected — buffer is read-only
           </span>
+        </div>
+      )}
+
+      {/* Production Safety Guardrail Dialog */}
+      {safetyWarningCmd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg bg-[#141216] border border-rose-500/30 rounded-xl shadow-2xl p-5 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[14px] font-bold text-white flex items-center gap-2">
+                  <span>Destructive Command Guardrail</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
+                    PROD
+                  </span>
+                </h3>
+                <p className="text-[12px] text-zinc-400">
+                  Potentially destructive command intercepted on <span className="font-semibold text-zinc-200">{serverName || "Production"}</span>:
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-black/70 rounded-lg p-3 border border-white/5 font-mono text-[12px] text-rose-300 overflow-x-auto whitespace-pre-wrap break-all max-h-36 custom-scrollbar">
+              {safetyWarningCmd}
+            </div>
+
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              This server is marked as a production environment. Executing this command could cause system instability, data loss, or service interruption.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => {
+                  invoke('write_terminal_data', { terminalId, data: [0x03] }).catch(console.error);
+                  setSafetyWarningCmd(null);
+                  commandBufRef.current = "";
+                  notify("Command aborted", "err");
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 text-zinc-300 hover:text-white text-[12px] font-medium transition-colors"
+              >
+                Cancel (Abort)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cmd = safetyWarningCmd + "\r";
+                  const bytes = Array.from(new TextEncoder().encode(cmd));
+                  invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
+                  setSafetyWarningCmd(null);
+                  commandBufRef.current = "";
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[12px] font-bold shadow-md shadow-rose-600/30 transition-all flex items-center gap-1.5"
+              >
+                <Play size={13} />
+                Execute Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Line Script Paste Preview Dialog */}
+      {scriptPasteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-xl bg-[#121217] border border-white/10 rounded-xl shadow-2xl p-5 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center text-primary">
+                  <FileCode size={16} />
+                </div>
+                <div>
+                  <h3 className="text-[13px] font-bold text-white flex items-center gap-2">
+                    Paste Script Preview
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-zinc-300 font-mono">
+                      {scriptPasteModal.lines.length} lines
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">Review code lines before executing into the shell</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScriptPasteModal(null)}
+                className="w-7 h-7 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="bg-black/80 rounded-lg p-3 border border-white/10 font-mono text-[11px] text-zinc-300 max-h-56 overflow-y-auto custom-scrollbar space-y-1">
+              {scriptPasteModal.lines.map((line, idx) => (
+                <div key={idx} className="flex items-start gap-3 hover:bg-white/[0.03] px-1 rounded">
+                  <span className="text-zinc-600 select-none text-[10px] w-6 text-right shrink-0">{idx + 1}</span>
+                  <span className="flex-1 break-all whitespace-pre-wrap">{line}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-zinc-400 hover:text-zinc-300">
+                <input
+                  type="checkbox"
+                  className="accent-primary rounded"
+                  checked={pasteSafetyBypass}
+                  onChange={(e) => setPasteSafetyBypass(e.target.checked)}
+                />
+                Don't ask again for this terminal
+              </label>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setScriptPasteModal(null)}
+                  className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 text-zinc-300 hover:text-white text-[12px] font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const normalized = scriptPasteModal.text.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+                    invoke('write_terminal_data', {
+                      terminalId,
+                      data: Array.from(new TextEncoder().encode(normalized)),
+                    }).catch(console.error);
+                    notify('Pasted');
+                    setScriptPasteModal(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-black text-[12px] font-bold shadow-md shadow-primary/20 transition-all flex items-center gap-1.5"
+                >
+                  <Play size={13} />
+                  Paste & Run
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

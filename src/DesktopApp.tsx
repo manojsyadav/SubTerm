@@ -5,7 +5,7 @@ import {
   Plus, X, RefreshCw, Terminal, Key, Trash2,
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
-  ChevronDown, Columns, LayoutGrid, Pin, PinOff
+  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
 
@@ -24,6 +24,8 @@ import ProfilePanel from "./components/ProfilePanel";
 import { SessionView } from "./components/SessionView";
 import MonitoringPanel from "./components/MonitoringPanel";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { CommandPalette } from "./components/CommandPalette";
 
 const appWindow = getCurrentWindow();
 
@@ -31,7 +33,7 @@ const appWindow = getCurrentWindow();
 // connect (one-shot, `serverId === 0` and `quickAuth` populated). SessionView
 // forwards `quickAuth` to `initiate_connection` which uses it instead of
 // looking up the DB row.
-type Session = { id: string; serverId: number; serverName: string; mirrors?: string; runOnConnect?: string; quickAuth?: QuickAuth | null };
+type Session = { id: string; serverId: number; serverName: string; mirrors?: string; runOnConnect?: string; quickAuth?: QuickAuth | null; initialTool?: 'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null };
 
 const hexToRgb = (hex: string) => {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -156,6 +158,7 @@ function DesktopApp() {
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [servers, setServers] = useState<any[]>([]);
   const [credentials, setCredentials] = useState<any[]>([]);
   const [sshKeys, setSshKeys] = useState<any[]>([]);
@@ -319,6 +322,15 @@ function DesktopApp() {
     }
     return h;
   }, [broadcast]);
+
+  useGlobalShortcuts({
+    enabled: isUnlocked,
+    sessions,
+    activeView,
+    setActiveView,
+    onCloseSession: (sessId) => getCloseHandler(sessId)(),
+    onOpenCommandPalette: () => setIsCommandPaletteOpen(prev => !prev),
+  });
 
   // Stable identity matters: SessionView memoises on prop equality, so a
   // fresh `addLog` reference on every DesktopApp render would force every
@@ -651,7 +663,7 @@ function DesktopApp() {
     addLog("Profile locked.", "info");
   };
 
-  const openServer = (server: any) => {
+  const openServer = (server: any, initialTool?: 'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null) => {
     const sessionId = `session-${server.id}`;
     const existing = sessions.find(s => s.id === sessionId);
     if (!existing) {
@@ -665,10 +677,41 @@ function DesktopApp() {
         mirrors: server.mirrors,
         // Commands to auto-run once on the first terminal (see SessionView).
         runOnConnect: server.run_on_connect || "",
+        initialTool: initialTool || null,
       }]);
+    } else if (initialTool) {
+      window.dispatchEvent(new CustomEvent(`submarine-set-tool-${sessionId}`, { detail: initialTool }));
     }
 
     setActiveView(sessionId);
+  };
+
+  const openMultipleServers = (serversToOpen: any[]) => {
+    if (!serversToOpen || !serversToOpen.length) return;
+    const newSessions: Session[] = [];
+    const newIds: string[] = [];
+    serversToOpen.forEach((srv: any) => {
+      const sId = `session-${srv.id}`;
+      newIds.push(sId);
+      if (!sessions.some(s => s.id === sId)) {
+        newSessions.push({
+          id: sId,
+          serverId: srv.id,
+          serverName: srv.name,
+          mirrors: srv.mirrors,
+          runOnConnect: srv.run_on_connect || "",
+          initialTool: null,
+        });
+      }
+    });
+    if (newSessions.length > 0) {
+      setSessions(prev => [...prev, ...newSessions]);
+    }
+    setActiveView(newIds[0]);
+    if (newIds.length >= 2) {
+      broadcast.selectAll(newIds);
+      addLog(`Fleet: Launched ${newIds.length} sessions with broadcast enabled`, "success");
+    }
   };
 
   // Spawn a session from inline Quick Connect auth AND leave behind a reusable
@@ -1275,6 +1318,16 @@ function DesktopApp() {
           phone and reclaim ~120 px of titlebar for the tab strip. */}
       <div className="hidden sm:flex items-center h-full gap-1 no-drag">
         <button
+          type="button"
+          onClick={() => setIsCommandPaletteOpen(true)}
+          title="Command Palette (Ctrl+K)"
+          className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
+        >
+          <Command size={11} className="text-primary" />
+          <span className="hidden md:inline font-medium">Palette</span>
+          <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">Ctrl+K</kbd>
+        </button>
+        <button
           onClick={() => appWindow.minimize()}
           title="Minimize"
           className="w-10 h-full flex items-center justify-center hover:bg-white/5 transition-colors"
@@ -1488,6 +1541,7 @@ function DesktopApp() {
                 activeFolderId={activeFolderId}
                 onActiveFolderChange={setActiveFolderId}
                 onOpenServer={openServer}
+                onOpenMultipleServers={openMultipleServers}
                 onEditServer={handleEditNode}
                 onAddClick={(folderId?: number | null) => {
                   // When invoked from inside a folder header, seed the new
@@ -2412,6 +2466,44 @@ function DesktopApp() {
         isOpen={isQuickConnectOpen}
         onClose={() => setIsQuickConnectOpen(false)}
         onConnect={openQuickConnect}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        servers={servers}
+        sessions={sessions}
+        activeView={activeView}
+        onSelectView={(viewId) => {
+          setActiveView(viewId);
+          setIsCommandPaletteOpen(false);
+        }}
+        onConnectServer={(server) => {
+          openServer(server);
+          setIsCommandPaletteOpen(false);
+        }}
+        onOpenQuickConnect={() => {
+          setIsCommandPaletteOpen(false);
+          setIsQuickConnectOpen(true);
+        }}
+        onOpenAddNode={() => {
+          setIsCommandPaletteOpen(false);
+          setNewNode(defaultNode);
+          setIsPanelOpen(true);
+        }}
+        onOpenSettings={() => {
+          setIsCommandPaletteOpen(false);
+          setActiveView("settings");
+        }}
+        onCloseSession={(sessId) => {
+          getCloseHandler(sessId)();
+        }}
+        commands={commands}
+        onExecuteCommand={(cmd) => {
+          if (activeView.startsWith("session-")) {
+            window.dispatchEvent(new CustomEvent(`submarine-terminal-exec-${activeView}`, { detail: { text: cmd + "\n" } }));
+          }
+        }}
       />
 
 

@@ -3,12 +3,13 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles } from "lucide-react";
 import TerminalView from "./TerminalView";
 import SftpWorkspace from "./SftpWorkspace";
 import TunnelsPanel from "./TunnelsPanel";
 import InfoPanel from "./InfoPanel";
 import { CmdsPanel } from "./CmdsPanel";
+import { GitDrawer, GitRepoInfo } from "./GitDrawer";
 import { useIsCompact } from "../hooks/useViewport";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
@@ -52,6 +53,7 @@ const SepToggle = ({ on, onToggle, status, title, onReconnect }: {
 );
 
 const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange }: any) => {
+  const isProd = Boolean((session as any)?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>('connecting');
 
   // Bubble every status change up to the parent so the session-tab strip
@@ -111,6 +113,36 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
   // reconnected terminal appeared frozen while SFTP/tunnels worked fine.
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
+
+  const [gitInfo, setGitInfo] = useState<GitRepoInfo | null>(null);
+  const [gitDrawerOpen, setGitDrawerOpen] = useState(false);
+
+  const refreshGitInfo = async () => {
+    if (statusRef.current !== 'connected' || !session?.id) return;
+    try {
+      const out = await invoke<string>("sftp_exec_command", {
+        sessionId: session.id,
+        command: 'sh -c \'b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -n "$b" ]; then d=$(git status --porcelain 2>/dev/null | wc -l); echo "SUBTERM_GIT:$b:$d"; git status -s 2>/dev/null; fi\'',
+      });
+      if (out.includes("SUBTERM_GIT:")) {
+        const line = out.split("\n").find(l => l.startsWith("SUBTERM_GIT:")) || "";
+        const parts = line.replace("SUBTERM_GIT:", "").split(":");
+        const branch = parts[0]?.trim() || "";
+        const dirtyCount = parseInt(parts[1] || "0", 10);
+        const statusText = out.split("\n").filter(l => !l.startsWith("SUBTERM_GIT:")).join("\n").trim();
+        setGitInfo({
+          branch,
+          isDirty: dirtyCount > 0,
+          dirtyCount,
+          statusText,
+        });
+      } else {
+        setGitInfo(null);
+      }
+    } catch {
+      // not in a git repo
+    }
+  };
 
   // ---- Dedicated SSH connections for SFTP / port-forwarding -----------------
   // Two INDEPENDENT, per-tab toggles (the controls live in the SFTP and
@@ -334,7 +366,15 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       onTerminalsChange(session.id, terminals, activeTab);
     }
   }, [session?.id, terminals, activeTab, onTerminalsChange]);
-  const [activeTool, setActiveTool] = useState<'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null>(null);
+  const [activeTool, setActiveTool] = useState<'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null>(() => session?.initialTool || null);
+  useEffect(() => {
+    if (!session?.id) return;
+    const handleSetTool = (e: any) => {
+      if (e.detail) setActiveTool(e.detail);
+    };
+    window.addEventListener(`submarine-set-tool-${session.id}`, handleSetTool);
+    return () => window.removeEventListener(`submarine-set-tool-${session.id}`, handleSetTool);
+  }, [session?.id]);
   // Split-pane state — an ORDERED array of terminal IDs that currently
   // share the main pane. `[]` or a single-id array means "no split, use
   // the usual absolute-overlap layout"; length ≥ 2 means the panes tile
@@ -358,6 +398,74 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
   // panes redistributes those two panes' share and leaves the rest
   // alone. Reset (double-click a divider) flattens back to all-equal.
   const [splitRatios, setSplitRatios] = useState<number[]>([]);
+
+  const splitWithNewPane = (orientation?: "h" | "v") => {
+    if (orientation) setSplitOrientation(orientation);
+    const newId = `${session.id}-term-${Date.now()}`;
+    setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
+    if (splitTerminals.length >= 2) {
+      setSplitTerminals(prev => [...prev, newId]);
+      setSplitRatios(prev => [...prev, 1]);
+    } else {
+      setSplitTerminals([activeTab, newId]);
+      setSplitRatios([1, 1]);
+    }
+    setActiveTab(newId);
+  };
+
+  const addNewTerminal = () => {
+    const newId = `${session.id}-term-${Date.now()}`;
+    setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
+    setActiveTab(newId);
+  };
+
+  useEffect(() => {
+    if (!session?.id) return;
+    const handleSplit = (e: any) => {
+      splitWithNewPane(e.detail?.orientation);
+    };
+    const handleNewTerm = () => {
+      addNewTerminal();
+    };
+    const handleToggleSftp = () => {
+      setActiveTool(prev => prev === 'sftp' ? null : 'sftp');
+    };
+    const handleTerminalCd = (e: any) => {
+      const targetPath = e.detail?.path;
+      if (!targetPath) return;
+      setActiveTool(null);
+      const cleanPath = targetPath.replace(/"/g, '\\"');
+      const cdCmd = `cd "${cleanPath}"\n`;
+      const bytes = Array.from(new TextEncoder().encode(cdCmd));
+      invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
+    };
+    const handleTerminalExec = (e: any) => {
+      const text = e.detail?.text;
+      if (!text) return;
+      const bytes = Array.from(new TextEncoder().encode(text));
+      invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
+    };
+    const handleOpenEditor = () => {
+      setActiveTool('sftp');
+    };
+
+    window.addEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
+    window.addEventListener(`submarine-new-terminal-${session.id}`, handleNewTerm);
+    window.addEventListener(`submarine-toggle-sftp-${session.id}`, handleToggleSftp);
+    window.addEventListener(`submarine-terminal-cd-${session.id}`, handleTerminalCd);
+    window.addEventListener(`submarine-terminal-exec-${session.id}`, handleTerminalExec);
+    window.addEventListener(`submarine-open-editor-${session.id}`, handleOpenEditor);
+
+    return () => {
+      window.removeEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
+      window.removeEventListener(`submarine-new-terminal-${session.id}`, handleNewTerm);
+      window.removeEventListener(`submarine-toggle-sftp-${session.id}`, handleToggleSftp);
+      window.removeEventListener(`submarine-terminal-cd-${session.id}`, handleTerminalCd);
+      window.removeEventListener(`submarine-terminal-exec-${session.id}`, handleTerminalExec);
+      window.removeEventListener(`submarine-open-editor-${session.id}`, handleOpenEditor);
+    };
+  }, [session?.id, activeTab, splitTerminals]);
+
   // "+" button's secondary menu — surfaced via right-click / long-press
   // so the primary click stays a fast "new tab" without stealing the
   // advanced flows (split view, compare across servers). Coordinates are
@@ -545,6 +653,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       // survives an app restart — otherwise the prompt would reappear every
       // session, which was especially painful for SOCKS-proxied connections.
       invoke("persist_vault").catch(console.error);
+      setTimeout(() => { refreshGitInfo(); }, 1200);
       // Separate-sessions: now that the primary is up (and the host key is
       // saved, so no double fingerprint prompt), spin up the dedicated SFTP /
       // forwarding connections. No-op when the setting is off. Fires on
@@ -1017,7 +1126,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
 
   // Connected State with Nested Tabs
   return (
-    <div className="flex-1 flex flex-col bg-background overflow-hidden animate-in fade-in">
+    <div className={`flex-1 flex flex-col bg-background overflow-hidden animate-in fade-in ${isProd ? 'border-t-2 border-rose-500 shadow-[inset_0_1px_10px_rgba(244,63,94,0.15)]' : ''}`}>
       {/* Auth prompts during an AUTO-RECONNECT. The full-screen view above only
           renders on the first connect (reconnectAttempt===0); once a reconnect
           cycle is running we show the terminal behind a slim banner, so a
@@ -1039,6 +1148,11 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
           vertical space with duplicate toolbars. */}
       {!chromeless && (
       <div className="h-12 border-b border-white/5 bg-[#121214]/50 flex items-center px-2 sm:px-4 shrink-0 justify-between gap-1">
+        {isProd && (
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-rose-500/15 border border-rose-500/30 text-rose-300 mr-2 shrink-0 animate-pulse" title="Production Server — exercise caution!">
+            <ShieldAlert size={11} /> PROD
+          </span>
+        )}
         <div
           className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-1 sm:mr-4 mask-fade-right"
           onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY; }}
@@ -1147,6 +1261,21 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
               </span>
             )}
           </button>
+
+          {/* 1-Click direct split button (or flip orientation when already split) */}
+          <button
+            onClick={() => {
+              if (splitTerminals.length >= 2) {
+                setSplitOrientation(o => o === "h" ? "v" : "h");
+              } else {
+                splitWithNewPane("h");
+              }
+            }}
+            title={splitTerminals.length >= 2 ? `Flip split orientation to ${splitOrientation === 'h' ? 'vertical' : 'horizontal'}` : "Split terminal (2-column)"}
+            className="h-10 w-10 sm:h-8 sm:w-8 ml-1 shrink-0 rounded-lg flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-white transition-all border border-white/5"
+          >
+            {splitOrientation === "h" ? <Columns size={13} /> : <Rows size={13} />}
+          </button>
         </div>
 
         {/* Tool rail: icon + text label. The label collapses to icon-only on
@@ -1181,6 +1310,65 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
           })}
         </div>
       </div>
+      )}
+
+      {/* Quick Actions Bar — 1-click common sysadmin commands */}
+      {!chromeless && !activeTool && (
+        <div className="h-7 px-2 sm:px-4 bg-[#0d0d10] border-b border-white/[0.04] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 text-[10.5px] font-mono text-zinc-400">
+          {/* Git Branch & Status Pill */}
+          <button
+            onClick={() => {
+              refreshGitInfo();
+              setGitDrawerOpen(true);
+            }}
+            title={gitInfo ? `Git: ${gitInfo.branch} (${gitInfo.isDirty ? `${gitInfo.dirtyCount} modified` : "clean"})` : "Inspect Git Status"}
+            className={`h-5 px-2 rounded border flex items-center gap-1.5 shrink-0 transition-all font-mono text-[10px] ${
+              gitInfo?.branch
+                ? gitInfo.isDirty
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+                : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <GitBranch size={10} className={gitInfo?.branch ? (gitInfo.isDirty ? "text-amber-400" : "text-emerald-400") : "text-zinc-500"} />
+            <span>{gitInfo?.branch || "Git"}</span>
+            {gitInfo?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+          </button>
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
+            }}
+            title="Open AI Shell Copilot (Ctrl+I)"
+            className="h-5 px-2 rounded bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary transition-all shrink-0 flex items-center gap-1 font-semibold text-[10px]"
+          >
+            <Sparkles size={10} />
+            <span>Copilot</span>
+          </button>
+          <div className="h-3 w-px bg-white/10 shrink-0" />
+          <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold mr-1 shrink-0 select-none">Quick:</span>
+          {[
+            { label: "docker ps", cmd: "docker ps\r" },
+            { label: "htop", cmd: "htop\r" },
+            { label: "df -h", cmd: "df -h\r" },
+            { label: "free -m", cmd: "free -m\r" },
+            { label: "git status", cmd: "git status\r" },
+            { label: "tail syslog", cmd: "journalctl -n 50 -f\r" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={() => {
+                invoke("write_terminal_data", {
+                  terminalId: activeTab,
+                  data: Array.from(new TextEncoder().encode(item.cmd)),
+                }).catch(console.error);
+              }}
+              title={`Run: ${item.cmd.replace('\r', '')}`}
+              className="h-5 px-1.5 rounded bg-white/[0.03] hover:bg-primary/10 border border-white/5 hover:border-primary/25 hover:text-primary transition-all shrink-0 flex items-center"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* "+" secondary menu — right-click / long-press on the plus
@@ -1231,6 +1419,45 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                   {splitOrientation === "h" ? <Rows size={13} className="text-zinc-500" /> : <Columns size={13} className="text-zinc-500" />}
                   <span className="flex-1">Flip orientation ({splitOrientation === "h" ? "→ vertical" : "→ horizontal"})</span>
                 </button>
+                {splitTerminals.length >= 2 && (
+                  <div className="border-t border-white/5 my-1 pt-1.5 px-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block mb-1.5">
+                      Split Layout Presets
+                    </span>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSplitRatios(splitTerminals.map(() => 1));
+                          setPlusMenu(null);
+                        }}
+                        className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/10 text-[11px] text-zinc-300 hover:text-white text-center font-mono transition-colors"
+                      >
+                        50:50
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSplitRatios([7, 3]);
+                          setPlusMenu(null);
+                        }}
+                        className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/10 text-[11px] text-zinc-300 hover:text-white text-center font-mono transition-colors"
+                      >
+                        70:30
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSplitRatios([3, 7]);
+                          setPlusMenu(null);
+                        }}
+                        className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/10 text-[11px] text-zinc-300 hover:text-white text-center font-mono transition-colors"
+                      >
+                        30:70
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {splitTerminals.length >= 2 && (
                   <button
                     onClick={() => {
@@ -1351,6 +1578,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                       connectionEpoch={connectionEpoch}
                       serverId={session.serverId}
                       serverName={session.serverName}
+                      isProd={isProd}
                     />
                     {/* Per-pane detach affordance — pulls the pane out of
                         the split without killing the underlying terminal.
@@ -1456,6 +1684,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                     connectionEpoch={connectionEpoch}
                     serverId={session.serverId}
                     serverName={session.serverName}
+                    isProd={isProd}
                   />
                 ))}
               </div>
@@ -1472,6 +1701,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                   connectionEpoch={connectionEpoch}
                   serverId={session.serverId}
                   serverName={session.serverName}
+                  isProd={isProd}
                 />
               </div>
             ))
@@ -1579,6 +1809,15 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
           </div>
         </div>
       </div>
+      {/* Git Drawer */}
+      <GitDrawer
+        isOpen={gitDrawerOpen}
+        onClose={() => setGitDrawerOpen(false)}
+        sessionId={session.id}
+        terminalId={activeTab}
+        gitInfo={gitInfo}
+        onRefresh={refreshGitInfo}
+      />
     </div>
   );
 
