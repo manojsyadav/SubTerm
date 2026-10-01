@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { QuickAuth } from "../components/QuickConnectModal";
 
@@ -25,6 +25,23 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
   const [mergedSessionIds, setMergedSessionIds] = useState<string[]>([]);
   const [mobileSessionPickerOpen, setMobileSessionPickerOpen] = useState(false);
+
+  useEffect(() => {
+    const onRelativeTab = (e: Event) => {
+      const custom = e as CustomEvent<{ delta: number }>;
+      const delta = custom.detail?.delta || 0;
+      if (!delta || sessions.length <= 1) return;
+      const idx = sessions.findIndex((s) => s.id === activeView);
+      if (idx === -1) {
+        if (sessions.length > 0) setActiveView(sessions[0].id);
+        return;
+      }
+      const nextIdx = (idx + delta + sessions.length) % sessions.length;
+      setActiveView(sessions[nextIdx].id);
+    };
+    window.addEventListener("submarine-switch-tab-relative", onRelativeTab);
+    return () => window.removeEventListener("submarine-switch-tab-relative", onRelativeTab);
+  }, [sessions, activeView]);
 
   const closeHandlersRef = useRef<Map<string, () => void>>(new Map());
 

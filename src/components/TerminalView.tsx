@@ -827,17 +827,100 @@ const TerminalView = ({
     };
 
     let touchCount = 0;
+    let touchStartTime = 0;
+    let touchStartX1 = 0;
+    let touchStartY1 = 0;
+    let touchStartX2 = 0;
+    let touchStartY2 = 0;
+    let initialPinchDist: number | null = null;
+    let isPinching = false;
+    let isSwiping = false;
+
     const onTouchStart = (ev: TouchEvent) => {
       touchCount = ev.touches.length;
-    };
-    const onTouchEnd = async (ev: TouchEvent) => {
-      if (touchCount === 2 && ev.touches.length === 0) {
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text) handlePaste(text);
-        } catch {}
+      touchStartTime = Date.now();
+      if (ev.touches.length === 2) {
+        const t1 = ev.touches[0];
+        const t2 = ev.touches[1];
+        touchStartX1 = t1.clientX;
+        touchStartY1 = t1.clientY;
+        touchStartX2 = t2.clientX;
+        touchStartY2 = t2.clientY;
+        initialPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        isPinching = false;
+        isSwiping = false;
+      } else {
+        initialPinchDist = null;
       }
-      touchCount = 0;
+    };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      if (ev.touches.length === 2 && initialPinchDist !== null) {
+        const t1 = ev.touches[0];
+        const t2 = ev.touches[1];
+        const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const distDelta = currentDist - initialPinchDist;
+
+        // Check if fingers are moving in the same direction (swipe) or opposite (pinch)
+        const dx1 = t1.clientX - touchStartX1;
+        const dx2 = t2.clientX - touchStartX2;
+        const sameDirX = (dx1 * dx2 > 0) && Math.abs(dx1) > 25 && Math.abs(dx2) > 25;
+
+        if (sameDirX && !isPinching) {
+          isSwiping = true;
+        } else if (Math.abs(distDelta) > 20 && !isSwiping) {
+          isPinching = true;
+          const currentFont = term.options.fontSize || 14;
+          const fontDelta = distDelta > 0 ? 1 : -1;
+          const newSize = Math.max(9, Math.min(30, currentFont + fontDelta));
+          if (newSize !== currentFont) {
+            term.options.fontSize = newSize;
+            try { fitAddon.fit(); } catch {}
+            localStorage.setItem('submarine-terminal-font-size', String(newSize));
+            notify(`Font: ${newSize}px`);
+            if (navigator.vibrate) navigator.vibrate(10);
+            initialPinchDist = currentDist;
+          }
+        }
+      }
+    };
+
+    const onTouchEnd = async (ev: TouchEvent) => {
+      const elapsed = Date.now() - touchStartTime;
+
+      if (touchCount === 2) {
+        if (isSwiping) {
+          const changed = ev.changedTouches;
+          const lastTouch = changed[0];
+          const avgStartX = (touchStartX1 + touchStartX2) / 2;
+          const totalDx = lastTouch.clientX - avgStartX;
+          if (Math.abs(totalDx) > 40) {
+            const delta = totalDx > 0 ? -1 : 1;
+            window.dispatchEvent(new CustomEvent('submarine-switch-tab-relative', { detail: { delta } }));
+            notify(delta > 0 ? "Next Session →" : "← Previous Session");
+            if (navigator.vibrate) navigator.vibrate(15);
+          }
+        } else if (!isPinching && elapsed < 350 && ev.touches.length === 0) {
+          // Fast 2-finger tap -> paste from clipboard
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+              handlePaste(text);
+              notify("Pasted from clipboard");
+              if (navigator.vibrate) navigator.vibrate(15);
+            }
+          } catch {
+            notify("Clipboard access denied", "err");
+          }
+        }
+      }
+
+      touchCount = ev.touches.length;
+      if (touchCount === 0) {
+        initialPinchDist = null;
+        isPinching = false;
+        isSwiping = false;
+      }
     };
 
     const handleOpenCopilot = () => {
@@ -850,6 +933,7 @@ const TerminalView = ({
     terminalRef.current.addEventListener('contextmenu', onContextMenu);
     terminalRef.current.addEventListener('paste', onPaste);
     terminalRef.current.addEventListener('touchstart', onTouchStart, { passive: true });
+    terminalRef.current.addEventListener('touchmove', onTouchMove, { passive: true });
     terminalRef.current.addEventListener('touchend', onTouchEnd, { passive: true });
     window.addEventListener(`submarine-open-copilot-${sessionId}`, handleOpenCopilot);
 
