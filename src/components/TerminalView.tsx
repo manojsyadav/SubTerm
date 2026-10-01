@@ -4,7 +4,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { AlertTriangle, FileCode, Play, X } from 'lucide-react';
+import { AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles } from 'lucide-react';
 import 'xterm/css/xterm.css';
 import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
@@ -289,11 +289,19 @@ const TerminalView = ({
   // the Tauri webview a document-level preventDefault stops that dead.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
       const wrapper = terminalRef.current;
       if (!wrapper) return;
       const active = document.activeElement;
       if (!(active instanceof Node) || !wrapper.contains(active)) return;
+
+      if (e.altKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        if (lastCommandRef.current) {
+          copyCommandOutput(lastCommandRef.current);
+        }
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         setShowSearch(true);
@@ -345,6 +353,44 @@ const TerminalView = ({
     toastTimerRef.current = window.setTimeout(() => setToast(null), 1400);
   };
 
+  // Command block separation and output capture (OSC 133 + buffer parsing)
+  const lastCommandRef = useRef<{
+    command: string;
+    exitCode?: number;
+    startLine: number;
+    outputStartLine: number;
+    endLine?: number;
+    running: boolean;
+  } | null>(null);
+
+  const [lastCommand, setLastCommand] = useState<{
+    command: string;
+    exitCode?: number;
+    startLine: number;
+    outputStartLine: number;
+    endLine?: number;
+    running: boolean;
+  } | null>(null);
+
+  const copyCommandOutput = (block: { outputStartLine: number; endLine?: number }) => {
+    const term = xtermRef.current;
+    if (!term) return;
+    const lines: string[] = [];
+    const fromLine = block.outputStartLine;
+    const toLine = block.endLine ?? (term.buffer.active.cursorY + term.buffer.active.baseY);
+    for (let i = fromLine; i <= toLine; i++) {
+      const l = term.buffer.active.getLine(i);
+      if (l) lines.push(l.translateToString(true));
+    }
+    const text = lines.join("\n").trim();
+    if (text) {
+      navigator.clipboard.writeText(text);
+      notify("Command output copied!");
+    } else {
+      notify("No output to copy", "err");
+    }
+  };
+
   useEffect(() => {
     if (!terminalRef.current) return;
 
@@ -367,6 +413,55 @@ const TerminalView = ({
     const searchAddon = new SearchAddon();
     searchAddonRef.current = searchAddon;
     term.loadAddon(searchAddon);
+
+    // OSC 133 Shell Integration handler (FinalTerm / iTerm / VS Code spec)
+    try {
+      term.parser.registerOscHandler(133, (data: string) => {
+        const parts = data.split(';');
+        const action = parts[0]?.trim();
+        const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
+
+        if (action === 'A') {
+          // Prompt start: mark previous command output finished
+          if (lastCommandRef.current && lastCommandRef.current.running) {
+            const updated = {
+              ...lastCommandRef.current,
+              endLine: Math.max(lastCommandRef.current.outputStartLine, currentLine - 1),
+              running: false,
+            };
+            lastCommandRef.current = updated;
+            setLastCommand(updated);
+          }
+        } else if (action === 'C') {
+          // Command output start
+          if (lastCommandRef.current) {
+            const updated = {
+              ...lastCommandRef.current,
+              outputStartLine: currentLine,
+              running: true,
+            };
+            lastCommandRef.current = updated;
+            setLastCommand(updated);
+          }
+        } else if (action === 'D') {
+          // Command finished [; exit_code]
+          const code = parts[1] !== undefined ? parseInt(parts[1], 10) : 0;
+          if (lastCommandRef.current) {
+            const updated = {
+              ...lastCommandRef.current,
+              exitCode: isNaN(code) ? 0 : code,
+              endLine: Math.max(lastCommandRef.current.outputStartLine, currentLine),
+              running: false,
+            };
+            lastCommandRef.current = updated;
+            setLastCommand(updated);
+          }
+        }
+        return true;
+      });
+    } catch (e) {
+      console.warn("OSC 133 handler registration failed:", e);
+    }
 
     // Clickable links for URLs and file paths in output
     try {
@@ -553,6 +648,17 @@ const TerminalView = ({
           if (isProdServer && DESTRUCTIVE_REGEX.test(line)) {
             setSafetyWarningCmd(line);
             return;
+          }
+          if (line.length > 0) {
+            const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
+            const newBlock = {
+              command: line,
+              startLine: currentLine,
+              outputStartLine: currentLine + 1,
+              running: true,
+            };
+            lastCommandRef.current = newBlock;
+            setLastCommand(newBlock);
           }
           commandBufRef.current = "";
           // Do NOT persist what was typed at a no-echo password/passphrase
@@ -939,6 +1045,67 @@ const TerminalView = ({
             className="px-1.5 py-0.5 text-[11px] text-zinc-400 hover:text-white hover:bg-white/5 rounded"
           >
             {'✕'}
+          </button>
+        </div>
+      )}
+
+      {/* Floating Command Output Quick Actions & OSC 133 Status */}
+      {lastCommand && (
+        <div
+          className={`absolute ${showSearch ? 'top-12' : 'top-2'} right-2 z-20 flex items-center gap-1.5 p-1 bg-[#121217]/95 backdrop-blur-md border border-white/10 rounded-lg shadow-xl text-xs font-mono select-none animate-in fade-in slide-in-from-top-1 duration-150`}
+        >
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/[0.04]">
+            {lastCommand.running ? (
+              <span className="flex items-center gap-1 text-sky-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping" />
+                <span className="text-[10px] uppercase font-bold">running</span>
+              </span>
+            ) : lastCommand.exitCode === 0 ? (
+              <span className="flex items-center gap-1 text-emerald-400">
+                <Check size={11} />
+                <span className="text-[10px] font-bold">0</span>
+              </span>
+            ) : lastCommand.exitCode !== undefined ? (
+              <span className="flex items-center gap-1 text-rose-400">
+                <span className="text-[10px] font-bold">exit {lastCommand.exitCode}</span>
+              </span>
+            ) : (
+              <span className="text-[10px] text-zinc-400">cmd</span>
+            )}
+            <span className="text-zinc-300 font-semibold max-w-[130px] truncate text-[10.5px]">
+              {lastCommand.command}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => copyCommandOutput(lastCommand)}
+            title="Copy command output without prompt (Alt+O)"
+            className="h-6 px-2 rounded bg-white/[0.05] hover:bg-white/10 text-zinc-300 hover:text-white flex items-center gap-1 text-[10.5px] transition-colors"
+          >
+            <Copy size={11} />
+            <span>Copy Output</span>
+          </button>
+
+          {lastCommand.exitCode !== undefined && lastCommand.exitCode !== 0 && (
+            <button
+              type="button"
+              onClick={() => setShowCopilot(true)}
+              title="Explain command failure with Shell AI Copilot (Ctrl+I)"
+              className="h-6 px-2 rounded bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 flex items-center gap-1 text-[10.5px] font-bold transition-colors"
+            >
+              <Sparkles size={11} />
+              <span>Explain</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setLastCommand(null)}
+            className="w-5 h-5 rounded hover:bg-white/10 text-zinc-500 hover:text-zinc-300 flex items-center justify-center transition-colors"
+            title="Dismiss command status"
+          >
+            <X size={10} />
           </button>
         </div>
       )}
