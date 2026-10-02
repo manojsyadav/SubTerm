@@ -37,7 +37,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked 
             <Settings size={24} className="text-primary" /> Settings
           </h2>
         <p className="text-[13px] text-zinc-400 mt-2">
-          Tweak how Submarine looks and feels.
+          Tweak how SubTerm looks and feels.
           {' '}
           <span className="text-zinc-500 italic">Per-device — preferences live in this machine's local storage and don't sync with your cloud profile.</span>
         </p>
@@ -147,6 +147,137 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked 
                 onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })}
                 className="w-full accent-primary"
               />
+            </div>
+
+            {/* Auto-Close on Shell Exit */}
+            <div className="pt-4 border-t border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-zinc-200">Auto-close tab on exit</div>
+                  <div className="text-xs text-zinc-500">Automatically close the session tab when the shell exits</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.autoCloseOnExit}
+                  onClick={() => setSettings({ ...settings, autoCloseOnExit: !settings.autoCloseOnExit })}
+                  className={`w-11 h-6 rounded-full transition-colors relative ${settings.autoCloseOnExit ? 'bg-primary' : 'bg-white/10'}`}
+                >
+                  <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${settings.autoCloseOnExit ? 'translate-x-5' : 'translate-x-0.5'} shadow-md`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Download Audit on Exit */}
+            <div className="pt-4 border-t border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-zinc-200">Download audit on exit</div>
+                  <div className="text-xs text-zinc-500">Automatically save session audit log to file when session terminates</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.downloadAuditOnExit}
+                  onClick={() => setSettings({ ...settings, downloadAuditOnExit: !settings.downloadAuditOnExit })}
+                  className={`w-11 h-6 rounded-full transition-colors relative ${settings.downloadAuditOnExit ? 'bg-primary' : 'bg-white/10'}`}
+                >
+                  <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${settings.downloadAuditOnExit ? 'translate-x-5' : 'translate-x-0.5'} shadow-md`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Auto-Copy Command Output to Clipboard */}
+            <div className="pt-4 border-t border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-zinc-200">Auto-copy output to clipboard</div>
+                  <div className="text-xs text-zinc-500">Automatically copy command output to clipboard upon completion</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.autoCopyOutput}
+                  onClick={() => setSettings({ ...settings, autoCopyOutput: !settings.autoCopyOutput })}
+                  className={`w-11 h-6 rounded-full transition-colors relative ${settings.autoCopyOutput ? 'bg-primary' : 'bg-white/10'}`}
+                >
+                  <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${settings.autoCopyOutput ? 'translate-x-5' : 'translate-x-0.5'} shadow-md`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Command Widget Auto-Dismiss Timer */}
+            <div className="pt-4 border-t border-white/5 space-y-2">
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-sm font-semibold text-zinc-200">Command widget dismiss timer</div>
+                  <div className="text-xs text-zinc-500">Seconds before floating output pill fades out (0 = keep open)</div>
+                </div>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="30"
+                  value={settings.commandDismissSec !== undefined ? settings.commandDismissSec : 4} 
+                  onChange={(e) => setSettings({ ...settings, commandDismissSec: Math.max(0, parseInt(e.target.value) || 0) })}
+                  className="w-16 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center"
+                />
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                value={settings.commandDismissSec !== undefined ? settings.commandDismissSec : 4}
+                onChange={(e) => setSettings({ ...settings, commandDismissSec: Math.max(0, parseInt(e.target.value) || 0) })}
+                className="w-full accent-primary"
+              />
+            </div>
+
+            {/* Session Ended Actions Configuration (Only relevant if tab does not auto-close) */}
+            <div className={`pt-4 border-t border-white/5 space-y-3 transition-opacity ${settings.autoCloseOnExit ? 'opacity-40' : ''}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-black text-zinc-500 uppercase tracking-wider block">Session End Screen Buttons</label>
+                  <div className="text-[11px] text-zinc-500">
+                    {settings.autoCloseOnExit 
+                      ? "Disabled because 'Auto-close tab on exit' is enabled" 
+                      : "Configure action buttons shown on the session ended banner"}
+                  </div>
+                </div>
+              </div>
+              
+              {!settings.autoCloseOnExit ? (
+                <>
+                  <div className="flex items-center justify-between pl-2 border-l border-white/10">
+                    <div className="text-xs text-zinc-300">Show "Copy Output" button on session end</div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={settings.showAuditCopy !== false}
+                      onClick={() => setSettings({ ...settings, showAuditCopy: settings.showAuditCopy === false ? true : false })}
+                      className={`w-9 h-5 rounded-full transition-colors relative ${settings.showAuditCopy !== false ? 'bg-primary' : 'bg-white/10'}`}
+                    >
+                      <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${settings.showAuditCopy !== false ? 'translate-x-4' : 'translate-x-0.5'} shadow-md`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pl-2 border-l border-white/10">
+                    <div className="text-xs text-zinc-300">Show "Download Audit" button on session end</div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={settings.showAuditDownload !== false}
+                      onClick={() => setSettings({ ...settings, showAuditDownload: settings.showAuditDownload === false ? true : false })}
+                      className={`w-9 h-5 rounded-full transition-colors relative ${settings.showAuditDownload !== false ? 'bg-primary' : 'bg-white/10'}`}
+                    >
+                      <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${settings.showAuditDownload !== false ? 'translate-x-4' : 'translate-x-0.5'} shadow-md`} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-zinc-500 italic pl-2 border-l border-white/10">
+                  When auto-close tab is enabled, tabs close immediately upon shell exit without displaying the session end banner.
+                </div>
+              )}
             </div>
           </div>
         </section>

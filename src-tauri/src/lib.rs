@@ -74,13 +74,45 @@ pub struct DbState {
 pub(crate) fn profiles_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let data_dir = app.path().app_data_dir()
         .map_err(|e| format!("[SYSTEM] APP_DATA_DIR_NOT_FOUND: {}", e))?;
-    Ok(data_dir.join("profiles"))
+    let dir = data_dir.join("profiles");
+    // Migration: If the legacy com.submarine.app directory exists, copy any missing profiles
+    // so saved servers, credentials, and SSH keys are preserved seamlessly across app renames.
+    if let Some(parent) = data_dir.parent() {
+        let legacy_dir = parent.join("com.submarine.app").join("profiles");
+        if legacy_dir.is_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            if let Ok(entries) = std::fs::read_dir(&legacy_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                        if ext == "submarine" || ext == "subterm" {
+                            let dest = dir.join(entry.file_name());
+                            if !dest.exists() {
+                                let _ = std::fs::copy(&path, &dest);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(dir)
 }
 
 /// Compute the on-disk path for a named profile. Caller has already
-/// validated the name with `validate_profile_name`.
+/// validated the name with `validate_profile_name`. Supports both modern
+/// `.subterm` and legacy `.submarine` profiles seamlessly.
 pub(crate) fn profile_path(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
-    Ok(profiles_dir(app)?.join(format!("{}.submarine", name)))
+    let dir = profiles_dir(app)?;
+    let subterm_path = dir.join(format!("{}.subterm", name));
+    if subterm_path.exists() {
+        return Ok(subterm_path);
+    }
+    let submarine_path = dir.join(format!("{}.submarine", name));
+    if submarine_path.exists() {
+        return Ok(submarine_path);
+    }
+    Ok(subterm_path)
 }
 
 /// Reject names that would let a user escape the profiles dir or collide
@@ -2773,12 +2805,13 @@ async fn list_profiles(app_handle: tauri::AppHandle) -> Result<Vec<String>, Stri
         let entry = match entry { Ok(e) => e, Err(_) => continue };
         let path = entry.path();
         if !path.is_file() { continue; }
-        if path.extension().and_then(|e| e.to_str()) != Some("submarine") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext != Some("subterm") && ext != Some("submarine") { continue; }
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
             // Hide anything that wouldn't pass our name validator — likely
             // a manually-placed file or stray artefact. We don't surface it
             // because the user has no way to act on it from the UI.
-            if validate_profile_name(stem).is_ok() {
+            if !out.contains(&stem.to_string()) && validate_profile_name(stem).is_ok() {
                 out.push(stem.to_string());
             }
         }
@@ -3019,11 +3052,11 @@ async fn export_profile(
         // rfd's blocking dialog must not run on the main thread on macOS — we're
         // already off the UI thread in a tauri async command so a direct call is
         // fine. spawn_blocking would be needed if this was wrapped differently.
-        let default_name = format!("{}.submarine", name);
+        let default_name = format!("{}.subterm", name);
         let chosen = rfd::FileDialog::new()
-            .set_title("Export profile")
+            .set_title("Export SubTerm Profile")
             .set_file_name(&default_name)
-            .add_filter("Submarine profile", &["submarine"])
+            .add_filter("SubTerm profile (*.subterm, *.submarine)", &["subterm", "submarine"])
             .save_file();
 
         let dst = match chosen {
@@ -3033,6 +3066,37 @@ async fn export_profile(
 
         fs::copy(&src, &dst)
             .map_err(|e| format!("[FILE] EXPORT_COPY_FAILED to {:?}: {}", dst, e))?;
+        Ok(Some(dst.to_string_lossy().to_string()))
+    }
+}
+
+/// Prompt the user with a native Save dialog to save a session audit log file.
+#[tauri::command]
+async fn save_audit_log(
+    content: String,
+    filename: String,
+) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        let _ = (content, filename);
+        return Err("Audit log export is not available on Android.".into());
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let chosen = rfd::FileDialog::new()
+            .set_title("Save Session Audit Log")
+            .set_file_name(&filename)
+            .add_filter("Log file (*.log)", &["log"])
+            .add_filter("Text file (*.txt)", &["txt"])
+            .save_file();
+
+        let dst = match chosen {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        std::fs::write(&dst, content)
+            .map_err(|e| format!("Failed to write audit log to {:?}: {}", dst, e))?;
         Ok(Some(dst.to_string_lossy().to_string()))
     }
 }
@@ -3053,8 +3117,8 @@ async fn import_profile_pick() -> Result<Option<(String, String)>, String> {
     #[cfg(not(target_os = "android"))]
     {
         let picked = rfd::FileDialog::new()
-            .set_title("Import profile")
-            .add_filter("Submarine profile", &["submarine"])
+            .set_title("Import SubTerm Profile")
+            .add_filter("SubTerm profile (*.subterm, *.submarine)", &["subterm", "submarine"])
             .pick_file();
 
         let path = match picked {
@@ -3069,11 +3133,11 @@ async fn import_profile_pick() -> Result<Option<(String, String)>, String> {
         use std::io::Read;
         let n = f.read(&mut header).map_err(|e| format!("[FILE] IMPORT_READ_FAILED: {}", e))?;
         if n < 5 || &header[..4] != VAULT_MAGIC {
-            return Err("Selected file is not a Submarine profile (bad header).".into());
+            return Err("Selected file is not a SubTerm profile (bad header).".into());
         }
         if header[4] != VAULT_VERSION {
             return Err(format!(
-                "Profile uses an unsupported vault version ({}). Update Submarine first.",
+                "Profile uses an unsupported vault version ({}). Update SubTerm first.",
                 header[4]
             ));
         }
@@ -3124,7 +3188,7 @@ async fn import_profile_save(
     // between the header read and the copy and we'd import garbage.
     let bytes = fs::read(&src).map_err(|e| format!("[FILE] IMPORT_READ_FAILED: {}", e))?;
     if bytes.len() < 5 || &bytes[..4] != VAULT_MAGIC || bytes[4] != VAULT_VERSION {
-        return Err("Source file is no longer a valid Submarine profile.".into());
+        return Err("Source file is no longer a valid SubTerm profile.".into());
     }
     if bytes.len() < HEADER_LEN + NONCE_LEN + 16 {
         return Err("Source file is truncated — header is valid but the body is too small.".into());
@@ -6721,7 +6785,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             check_db_exists, setup_master_db, persist_vault,
             list_profiles, cloud_list_sync_profiles, cloud_delete_profile, force_push_profile, select_profile, create_profile, delete_profile, close_profile,
-            export_profile, import_profile_pick, import_profile_save,
+            export_profile, import_profile_pick, import_profile_save, save_audit_log,
             cloud::cloud_set_api_base, cloud::cloud_status, cloud::cloud_signup, cloud::cloud_consume_verify_link,
             cloud::cloud_set_password, cloud::cloud_login, cloud::cloud_logout,
             cloud::cloud_request_password_reset, cloud::cloud_reset_password,

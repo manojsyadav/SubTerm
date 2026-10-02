@@ -391,13 +391,13 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings }: Props) => {
             >
               About
             </button>
-            <button
+            {/* <button
               onClick={openDonate}
-              title="Support Submarine on GitHub"
+              title="Support SubTerm on GitHub"
               className="h-8 px-4 rounded-lg text-[12.5px] font-bold text-rose-200 bg-rose-500/10 border border-rose-500/25 hover:bg-rose-500/20 hover:text-rose-100 transition-colors flex items-center gap-1.5"
             >
               <Heart size={13} className="fill-rose-400/40" /> Donate
-            </button>
+            </button> */}
           </div>
           {update?.has_update && update.latest && (
             <button

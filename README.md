@@ -28,6 +28,7 @@ This fork diverges from the original Submarine repository by adding a massive su
 - **Network & Health**: Live server health pulses, outage alert badges, Wake-on-LAN magic packets, and port knocking connection options.
 - **Mobile & UI QoL**: Gesture-based terminal control, Shell AI Copilot, biometric vault unlock, keybar haptics, and quick-connect history.
 - **Performance**: Heavily optimized Vite bundle chunking for xterm and vendor packages, plus a massive backend refactor for stability.
+- **Session Audits & Clipboard Automation**: Automated session transcripts, configurable command dismiss timers, auto-copy output to clipboard, native file export for session logs, and configurable session-end actions with Esc/Enter quick close.
 - **Dynamic Cloud Backend**: The hardcoded cloud sync API has been replaced with a dynamic system. You can now define your own custom backend endpoint at runtime via the UI Settings without needing to recompile the source code.
 
 ## Getting Started

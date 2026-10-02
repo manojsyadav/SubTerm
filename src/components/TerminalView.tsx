@@ -65,6 +65,7 @@ const TerminalView = ({
   serverName = "",
   attachOnly = false,
   isProd = false,
+  onTerminalClosed,
 }: {
   sessionId: string;
   terminalId: string;
@@ -76,7 +77,10 @@ const TerminalView = ({
   serverId?: number;
   serverName?: string;
   isProd?: boolean;
+  onTerminalClosed?: (details: { cleanExit: boolean; transcript: string }) => void;
 }) => {
+  const onTerminalClosedRef = useRef(onTerminalClosed);
+  useEffect(() => { onTerminalClosedRef.current = onTerminalClosed; }, [onTerminalClosed]);
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -372,6 +376,9 @@ const TerminalView = ({
     running: boolean;
   } | null>(null);
 
+  const commandSettleTimerRef = useRef<number | null>(null);
+  const commandDismissTimerRef = useRef<number | null>(null);
+
   const copyCommandOutput = (block: { outputStartLine: number; endLine?: number }) => {
     const term = xtermRef.current;
     if (!term) return;
@@ -455,6 +462,19 @@ const TerminalView = ({
             };
             lastCommandRef.current = updated;
             setLastCommand(updated);
+
+            if (localStorage.getItem('subterm-auto-copy-output') === 'true') {
+              copyCommandOutput(updated);
+            }
+
+            const rawSec = localStorage.getItem('subterm-command-dismiss-sec');
+            const dismissSec = rawSec !== null ? Math.max(0, parseInt(rawSec, 10) || 0) : 4;
+            if (dismissSec > 0) {
+              if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
+              commandDismissTimerRef.current = window.setTimeout(() => {
+                setLastCommand(null);
+              }, dismissSec * 1000);
+            }
           }
         }
         return true;
@@ -649,7 +669,7 @@ const TerminalView = ({
             setSafetyWarningCmd(line);
             return;
           }
-          if (line.length > 0) {
+          if (line.length > 0 && !/^(exit|logout)$/i.test(line)) {
             const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
             const newBlock = {
               command: line,
@@ -659,6 +679,9 @@ const TerminalView = ({
             };
             lastCommandRef.current = newBlock;
             setLastCommand(newBlock);
+            if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
+          } else if (/^(exit|logout)$/i.test(line)) {
+            setLastCommand(null);
           }
           commandBufRef.current = "";
           // Do NOT persist what was typed at a no-echo password/passphrase
@@ -959,6 +982,60 @@ const TerminalView = ({
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
       } catch { /* decode hiccup on a split multibyte chunk — ignore */ }
+
+      // If a command was started without OSC 133 shell integration, detect output settling
+      if (lastCommandRef.current && lastCommandRef.current.running) {
+        if (commandSettleTimerRef.current) window.clearTimeout(commandSettleTimerRef.current);
+        commandSettleTimerRef.current = window.setTimeout(() => {
+          if (lastCommandRef.current && lastCommandRef.current.running && xtermRef.current) {
+            const currentLine = xtermRef.current.buffer.active.cursorY + xtermRef.current.buffer.active.baseY;
+            const updated = {
+              ...lastCommandRef.current,
+              endLine: currentLine,
+              running: false,
+              exitCode: 0,
+            };
+            lastCommandRef.current = updated;
+            setLastCommand(updated);
+
+            if (localStorage.getItem('subterm-auto-copy-output') === 'true') {
+              copyCommandOutput(updated);
+            }
+
+            const rawSec = localStorage.getItem('subterm-command-dismiss-sec');
+            const dismissSec = rawSec !== null ? Math.max(0, parseInt(rawSec, 10) || 0) : 4;
+            if (dismissSec > 0) {
+              if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
+              commandDismissTimerRef.current = window.setTimeout(() => {
+                setLastCommand(null);
+              }, dismissSec * 1000);
+            }
+          }
+        }, 500);
+      }
+    });
+
+    // Handle Terminal Closure (Server exit / EOF / drop)
+    const unlistenClosedPromise = listen(`terminal-closed-${terminalId}`, (event: any) => {
+      if (commandSettleTimerRef.current) window.clearTimeout(commandSettleTimerRef.current);
+      if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
+      setLastCommand(null);
+      const cleanExit = !!event.payload?.clean_exit;
+      let transcript = "";
+      if (xtermRef.current) {
+        const t = xtermRef.current;
+        const lines: string[] = [];
+        const total = t.buffer.active.length;
+        for (let i = 0; i < total; i++) {
+          const l = t.buffer.active.getLine(i);
+          if (l) lines.push(l.translateToString(true));
+        }
+        while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+          lines.pop();
+        }
+        transcript = lines.join("\n");
+      }
+      onTerminalClosedRef.current?.({ cleanExit, transcript });
     });
 
     // Coalesce resize bursts via rAF, and skip the refit on hidden tabs
@@ -1050,7 +1127,10 @@ const TerminalView = ({
       window.removeEventListener('blur', onWindowBlur);
       window.visualViewport?.removeEventListener('resize', onVvResize);
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      if (commandSettleTimerRef.current) window.clearTimeout(commandSettleTimerRef.current);
+      if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
       unlistenPromise.then(unlisten => unlisten());
+      unlistenClosedPromise.then(unlisten => unlisten());
       searchAddon.dispose();
       searchAddonRef.current = null;
       term.dispose();

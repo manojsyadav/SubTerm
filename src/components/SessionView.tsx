@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText } from "lucide-react";
 import TerminalView from "./TerminalView";
 import SftpWorkspace from "./SftpWorkspace";
 import TunnelsPanel from "./TunnelsPanel";
@@ -11,6 +11,7 @@ import InfoPanel from "./InfoPanel";
 import { CmdsPanel } from "./CmdsPanel";
 import { GitDrawer, GitRepoInfo } from "./GitDrawer";
 import { useIsCompact } from "../hooks/useViewport";
+import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -85,6 +86,21 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
   const [kbiValues, setKbiValues] = useState<string[]>([]);
   const [isAuthError, setIsAuthError] = useState(false);
   const [customPassword, setCustomPassword] = useState("");
+  const sessionStartTimeRef = useRef<number>(Date.now());
+  const [sessionEndedAudit, setSessionEndedAudit] = useState<AuditLogEntry | null>(null);
+
+  useEffect(() => {
+    if (!sessionEndedAudit) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKey, true);
+    return () => window.removeEventListener("keydown", handleKey, true);
+  }, [sessionEndedAudit, onClose]);
   // The connect-time log box mirrors the terminal font-size setting, so the
   // user's chosen size applies to the startup logs too — not just the shell.
   // `submarine-settings-changed` (dispatched by Settings on save) keeps it live.
@@ -356,6 +372,56 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
   };
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
+  const terminalsRef = useRef(terminals);
+  terminalsRef.current = terminals;
+
+  const handleTerminalClosed = async (termId: string, details: { cleanExit: boolean; transcript: string }) => {
+    const auditEntry = saveSessionAudit({
+      sessionId: session.id,
+      serverName: session.serverName,
+      startTime: sessionStartTimeRef.current,
+      cleanExit: details.cleanExit,
+      transcript: details.transcript,
+    });
+
+    const currentTerms = terminalsRef.current;
+    const remaining = currentTerms.filter(t => t.id !== termId);
+    if (remaining.length > 0) {
+      setTerminals(remaining);
+      if (activeTab === termId) {
+        setActiveTab(remaining[0].id);
+      }
+      return;
+    }
+
+    const autoClose = localStorage.getItem('subterm-auto-close-on-exit') === 'true';
+    const autoCopy = localStorage.getItem('subterm-auto-copy-output') === 'true';
+    const autoDownload = localStorage.getItem('subterm-download-audit-on-exit') === 'true';
+
+    if (autoCopy && details.transcript) {
+      navigator.clipboard.writeText(details.transcript).catch(() => {});
+      addLog("Session transcript auto-copied to clipboard.", "info");
+    }
+
+    if (autoDownload) {
+      try {
+        const savedPath = await downloadAuditLog(auditEntry);
+        if (savedPath) {
+          addLog(`Audit log saved: ${savedPath}`, "success");
+        }
+      } catch (e) {
+        console.error("Auto download audit failed", e);
+      }
+    }
+
+    if (autoClose && details.cleanExit) {
+      addLog(`Session "${session.serverName}" ended cleanly.`, "info");
+      onClose();
+    } else {
+      setSessionEndedAudit(auditEntry);
+      addLog(`Session "${session.serverName}" ended. Audit log recorded.`, "info");
+    }
+  };
   // Bubble our terminals + active-tab up to the parent (App) whenever
   // they change so the Wall pinboard and any other App-level consumers
   // don't have to duplicate the per-session terminal book-keeping.
@@ -1529,6 +1595,66 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
         })()
       )}
 
+      {/* Session Ended Audit Banner */}
+      {sessionEndedAudit && (
+        <div className="bg-zinc-900/95 border-b border-white/10 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-30 shadow-lg backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${sessionEndedAudit.cleanExit ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+            <span className="font-semibold text-zinc-100">
+              Session Ended ({sessionEndedAudit.cleanExit ? "Clean Exit" : "Disconnected"})
+            </span>
+            <span className="text-zinc-500 font-mono text-[11px]">
+              [{new Date(sessionEndedAudit.endTime).toLocaleTimeString()}]
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {localStorage.getItem('subterm-show-audit-copy') !== 'false' && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(sessionEndedAudit.transcript);
+                  addLog("Session transcript copied to clipboard.", "success");
+                }}
+                className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white rounded-md text-[11px] font-medium transition-colors flex items-center gap-1.5"
+                title="Copy session output to clipboard"
+              >
+                <Copy size={12} /> Copy Output
+              </button>
+            )}
+            {localStorage.getItem('subterm-show-audit-download') !== 'false' && (
+              <button
+                onClick={async () => {
+                  const savedPath = await downloadAuditLog(sessionEndedAudit);
+                  if (savedPath) {
+                    addLog(`Audit log saved: ${savedPath}`, "success");
+                  } else {
+                    addLog("Audit log text copied to clipboard.", "info");
+                  }
+                }}
+                className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white rounded-md text-[11px] font-medium transition-colors flex items-center gap-1.5"
+                title="Save transcript as .log file"
+              >
+                <Download size={12} /> Download Audit
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setSessionEndedAudit(null);
+                reconnect();
+              }}
+              className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-md text-[11px] font-bold uppercase transition-colors"
+            >
+              Reconnect
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 rounded-md text-[11px] font-bold uppercase transition-colors"
+            >
+              Close (Esc)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab Content Split Pane. Side-by-side on roomy desktop; on narrow
           (`isCompact`) viewports the tool pane takes over the full width
           and the terminal is hidden — the tool tabs themselves act as the
@@ -1572,13 +1698,14 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                     <TerminalView
                       sessionId={session.id}
                       terminalId={t.id}
-                      disabled={status !== 'connected'}
+                      disabled={status !== 'connected' || !!sessionEndedAudit}
                       isActive={isFocused && !(activeTool && isCompact)}
                       containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                       connectionEpoch={connectionEpoch}
                       serverId={session.serverId}
                       serverName={session.serverName}
                       isProd={isProd}
+                      onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                     />
                     {/* Per-pane detach affordance — pulls the pane out of
                         the split without killing the underlying terminal.
@@ -1678,13 +1805,14 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                     key={t.id}
                     sessionId={session.id}
                     terminalId={t.id}
-                    disabled={status !== 'connected'}
+                    disabled={status !== 'connected' || !!sessionEndedAudit}
                     isActive={false}
                     containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                     connectionEpoch={connectionEpoch}
                     serverId={session.serverId}
                     serverName={session.serverName}
                     isProd={isProd}
+                    onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                   />
                 ))}
               </div>
@@ -1695,13 +1823,14 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                 <TerminalView
                   sessionId={session.id}
                   terminalId={t.id}
-                  disabled={status !== 'connected'}
+                  disabled={status !== 'connected' || !!sessionEndedAudit}
                   isActive={activeTab === t.id && !(activeTool && isCompact)}
                   containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                   connectionEpoch={connectionEpoch}
                   serverId={session.serverId}
                   serverName={session.serverName}
                   isProd={isProd}
+                  onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                 />
               </div>
             ))

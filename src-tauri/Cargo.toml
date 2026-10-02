@@ -9,7 +9,7 @@ rust-version = "1.70"
 
 # Library + binary dual target. The Tauri Builder, command registry, and
 # state setup live in `src/lib.rs::run()`. The bin entry point (`src/main.rs`)
-# is a one-liner that calls `submarine_lib::run()` on desktop; on Android
+# is a one-liner that calls `subterm_lib::run()` on desktop; on Android
 # Tauri's `#[mobile_entry_point]` attr on `run()` generates the JNI glue and
 # the bin is never built. `cdylib` is what Gradle dlopens from the APK.
 [lib]

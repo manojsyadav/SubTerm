@@ -209,7 +209,7 @@ impl CloudState {
             // Tauri builds set their own user-agent for the WebView; we want
             // the API server to be able to distinguish app traffic from a
             // random browser hit.
-            .user_agent(concat!("submarine-app/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("subterm-app/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("reqwest client should build");
 

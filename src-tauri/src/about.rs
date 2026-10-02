@@ -86,7 +86,7 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     // GitHub API; an empty/missing UA gets a 403.
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(6))
-        .user_agent(concat!("submarine-app/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("subterm-app/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| format!("[UPDATE] CLIENT: {}", e))?;
 

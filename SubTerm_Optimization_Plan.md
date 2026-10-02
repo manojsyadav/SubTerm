@@ -213,7 +213,7 @@ This master plan covers every single requested feature and enhancement, structur
 ### 4.6 Wake-on-LAN (WoL) & Port Knocking
 * **Target Files:** [src/components/AddNodePanel.tsx](file:///d:/REPO/SubTerm/src/components/AddNodePanel.tsx), [src-tauri/src/lib.rs](file:///d:/REPO/SubTerm/src-tauri/src/lib.rs)
 * **Effort:** 4 hours
-* **Details:** Configure MAC address or knock port sequence. Submarine sends magic packet or port knocks before initiating SSH connection.
+* **Details:** Configure MAC address or knock port sequence. SubTerm sends magic packet or port knocks before initiating SSH connection.
 * **Validation:** Configure WoL on sleeping server $\rightarrow$ connect $\rightarrow$ verify packet transmission log and successful connection.
 
 ---

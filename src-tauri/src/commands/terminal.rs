@@ -64,6 +64,7 @@ pub async fn open_terminal(
         let park = || tokio::time::Instant::now() + std::time::Duration::from_secs(24 * 3600);
         let flush_timer = tokio::time::sleep_until(park());
         tokio::pin!(flush_timer);
+        let mut clean_exit = false;
         loop {
             tokio::select! {
                 msg_opt = channel.wait() => {
@@ -88,8 +89,11 @@ pub async fn open_terminal(
                         },
                         // Flush whatever's buffered before the terminal goes away
                         // so the last screenful isn't lost.
-                        Some(ChannelMsg::Eof) => { emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf); break; },
-                        Some(ChannelMsg::Close) => { emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf); break; },
+                        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => {
+                            clean_exit = true;
+                            emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                            break;
+                        },
                         Some(_) => {},
                         None => { emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf); break; }, // channel closed (e.g. after disconnect_session)
                     }
@@ -127,7 +131,9 @@ pub async fn open_terminal(
                 }
             }
         }
-        let _ = app_clone.emit(&format!("terminal-closed-{}", terminal_id_clone), serde_json::json!({}));
+        let _ = app_clone.emit(&format!("terminal-closed-{}", terminal_id_clone), serde_json::json!({
+            "clean_exit": clean_exit
+        }));
     });
 
     Ok(())

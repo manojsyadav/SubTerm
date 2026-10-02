@@ -47,12 +47,18 @@ function DesktopApp() {
   const textPrompt = useTextPrompt();
 
   const [appSettings, setAppSettings] = useState({
-    primaryColor: localStorage.getItem('submarine-primary-color') || '#60a5fa',
-    backgroundColor: localStorage.getItem('submarine-bg-color') || '#0a0a0c',
-    terminalFontSize: parseInt(localStorage.getItem('submarine-terminal-font-size') || '14'),
-    autoSync: localStorage.getItem('submarine-auto-sync') !== 'off',
-    syncIntervalMin: Math.max(1, parseInt(localStorage.getItem('submarine-sync-interval-min') || '5', 10) || 5),
-    cloudApiBase: localStorage.getItem('submarine-cloud-api-base') || '',
+    primaryColor: localStorage.getItem('subterm-primary-color') || localStorage.getItem('submarine-primary-color') || '#60a5fa',
+    backgroundColor: localStorage.getItem('subterm-bg-color') || localStorage.getItem('submarine-bg-color') || '#0a0a0c',
+    terminalFontSize: parseInt(localStorage.getItem('subterm-terminal-font-size') || localStorage.getItem('submarine-terminal-font-size') || '14'),
+    autoSync: (localStorage.getItem('subterm-auto-sync') || localStorage.getItem('submarine-auto-sync')) !== 'off',
+    syncIntervalMin: Math.max(1, parseInt(localStorage.getItem('subterm-sync-interval-min') || localStorage.getItem('submarine-sync-interval-min') || '5', 10) || 5),
+    cloudApiBase: localStorage.getItem('subterm-cloud-api-base') || localStorage.getItem('submarine-cloud-api-base') || '',
+    autoCloseOnExit: localStorage.getItem('subterm-auto-close-on-exit') === 'true',
+    downloadAuditOnExit: localStorage.getItem('subterm-download-audit-on-exit') === 'true',
+    commandDismissSec: Math.max(0, parseInt(localStorage.getItem('subterm-command-dismiss-sec') || '4', 10) ?? 4),
+    autoCopyOutput: localStorage.getItem('subterm-auto-copy-output') === 'true',
+    showAuditDownload: localStorage.getItem('subterm-show-audit-download') !== 'false',
+    showAuditCopy: localStorage.getItem('subterm-show-audit-copy') !== 'false',
   });
 
   const wallManager = useWallManager();
@@ -236,16 +242,29 @@ function DesktopApp() {
     document.documentElement.style.setProperty('--primary', rgb);
     document.documentElement.style.setProperty('--primary-hex', appSettings.primaryColor);
     document.documentElement.style.setProperty('--background', appSettings.backgroundColor);
+    localStorage.setItem('subterm-primary-color', appSettings.primaryColor);
+    localStorage.setItem('subterm-bg-color', appSettings.backgroundColor);
+    localStorage.setItem('subterm-terminal-font-size', appSettings.terminalFontSize.toString());
+    localStorage.setItem('subterm-auto-sync', appSettings.autoSync ? 'on' : 'off');
+    localStorage.setItem('subterm-sync-interval-min', String(appSettings.syncIntervalMin));
+    localStorage.setItem('subterm-cloud-api-base', appSettings.cloudApiBase);
     localStorage.setItem('submarine-primary-color', appSettings.primaryColor);
     localStorage.setItem('submarine-bg-color', appSettings.backgroundColor);
     localStorage.setItem('submarine-terminal-font-size', appSettings.terminalFontSize.toString());
     localStorage.setItem('submarine-auto-sync', appSettings.autoSync ? 'on' : 'off');
     localStorage.setItem('submarine-sync-interval-min', String(appSettings.syncIntervalMin));
     localStorage.setItem('submarine-cloud-api-base', appSettings.cloudApiBase);
+    localStorage.setItem('subterm-auto-close-on-exit', appSettings.autoCloseOnExit ? 'true' : 'false');
+    localStorage.setItem('subterm-download-audit-on-exit', appSettings.downloadAuditOnExit ? 'true' : 'false');
+    localStorage.setItem('subterm-command-dismiss-sec', String(appSettings.commandDismissSec));
+    localStorage.setItem('subterm-auto-copy-output', appSettings.autoCopyOutput ? 'true' : 'false');
+    localStorage.setItem('subterm-show-audit-download', appSettings.showAuditDownload ? 'true' : 'false');
+    localStorage.setItem('subterm-show-audit-copy', appSettings.showAuditCopy ? 'true' : 'false');
     invoke('cloud_set_api_base', { url: appSettings.cloudApiBase }).catch(console.error);
     // Tell already-mounted terminals to re-fit with the new font size.
     // Without this dispatch the listener in TerminalView is dead code and
     // users have to close+reopen every terminal to see a size change.
+    window.dispatchEvent(new CustomEvent('subterm-settings-changed'));
     window.dispatchEvent(new CustomEvent('submarine-settings-changed'));
   }, [appSettings]);
 
@@ -280,7 +299,7 @@ function DesktopApp() {
       if (n === 0) return; // nothing to lose — let the close proceed
       event.preventDefault();
       const ok = await confirm({
-        title: "Close Submarine?",
+        title: "Close SubTerm?",
         message: `${n} SSH session${n === 1 ? "" : "s"} ${n === 1 ? "is" : "are"} still connected. Closing now disconnects ${n === 1 ? "it" : "them all"} and aborts any in-flight transfers.`,
         okLabel: "Close anyway",
         cancelLabel: "Stay",
@@ -1181,7 +1200,7 @@ function DesktopApp() {
                         // WebView — themed useTextPrompt works everywhere.
                         const name = await textPrompt({
                           title: "Generate SSH key",
-                          message: "Give this key a name — it's just for your reference here in Submarine.",
+                          message: "Give this key a name — it's just for your reference here in SubTerm.",
                           placeholder: "e.g. laptop-2026",
                           okLabel: "Generate",
                           validate: (v) => v.length === 0 ? "Name is required" : null,
