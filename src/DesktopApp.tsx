@@ -6,7 +6,7 @@ import {
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
   ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check,
-  Layers
+  Layers, Settings
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
 import { useProfileIcon, getProfileIcon } from "./utils/profileMetadata";
@@ -42,6 +42,36 @@ const hexToRgb = (hex: string) => {
   const b = parseInt(hex.slice(5, 7), 16);
   return `${r} ${g} ${b}`;
 };
+
+function LockedVaultNotice({ onUnlock, onOpenLocal }: { onUnlock: () => void; onOpenLocal: () => void }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-radial from-amber-500/[0.03] via-transparent to-transparent animate-in fade-in duration-300">
+      <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 shadow-xl shadow-amber-500/5">
+        <Lock size={28} />
+      </div>
+      <h3 className="text-lg font-bold text-white tracking-tight mb-1.5">Vault is Locked</h3>
+      <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+        Your remote servers, SSH credentials, and snippets are protected by your master password. Sign in to unlock your workspace.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onUnlock}
+          className="h-9 px-5 rounded-xl bg-primary text-black font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <Lock size={13} />
+          <span>Sign In / Unlock Vault</span>
+        </button>
+        <button
+          onClick={onOpenLocal}
+          className="h-9 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 hover:text-white font-medium text-xs transition-all flex items-center gap-2"
+        >
+          <Terminal size={13} className="text-emerald-400" />
+          <span>Open Local Shell</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function DesktopApp() {
   const broadcast = useBroadcast();
@@ -151,12 +181,21 @@ function DesktopApp() {
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isWorkspaceSwitcherOpen, setIsWorkspaceSwitcherOpen] = useState(false);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const { icon: profileIcon } = useProfileIcon(activeProfile);
 
   useEffect(() => {
     invoke<{ id: string; name: string; command: string }[]>("get_available_local_shells")
       .then((shells) => setAvailableShells(shells || []))
       .catch(() => {});
+  }, []);
+
+  // Local-first launch: open default local shell on startup so user can run commands immediately
+  useEffect(() => {
+    if (sessions.length === 0) {
+      openLocalTerminal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   vaultRef.current = vault;
@@ -167,24 +206,36 @@ function DesktopApp() {
   });
 
   const handleLockProfile = async () => {
-    if (sessions.length > 0) {
+    const remoteSessions = sessions.filter((s) => !s.isLocal);
+    if (remoteSessions.length > 0) {
       const ok = await confirm({
-        title: "Lock profile?",
-        message: `You have ${sessions.length} open SSH session${sessions.length === 1 ? "" : "s"}. Locking will disconnect ${sessions.length === 1 ? "it" : "them all"} and return to the unlock screen.`,
-        okLabel: "Lock Profile",
+        title: "Lock SubTerm Vault?",
+        message: `You have ${remoteSessions.length} open remote SSH session${remoteSessions.length === 1 ? "" : "s"}. Locking will disconnect them.`,
+        okLabel: "Lock Vault",
         cancelLabel: "Cancel",
         destructive: true,
       });
       if (!ok) return;
-    }
-    for (const s of sessions) {
-      try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
+      for (const s of remoteSessions) {
+        try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
+      }
     }
     try { await invoke("close_profile"); } catch {}
     setIsUnlocked(false);
-    setSessions([]);
-    setActiveView("nodes");
-    addLog(`Profile "${activeProfile}" locked.`, "info");
+    const remainingLocal = sessions.filter((s) => s.isLocal);
+    if (remainingLocal.length === 0) {
+      openLocalTerminal();
+    } else {
+      setSessions(remainingLocal);
+      setActiveView(remainingLocal[0].id);
+    }
+    setServers([]);
+    setCredentials([]);
+    setSshKeys([]);
+    setFolders([]);
+    setCommands([]);
+    setNotes([]);
+    addLog(`Vault locked. Local terminal remains active.`, "info");
   };
 
   const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
@@ -525,78 +576,87 @@ function DesktopApp() {
         <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
       </div>
 
-      {/* Top Bar Bookmarks Strip: Local Shell + Quick Access Servers */}
-      <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.03] border border-white/5 rounded-lg no-drag shrink-0 mx-1">
-        {/* Pinned Bookmark: Local Shell with Shell Flavor Selector */}
-        {isUnlocked && (
-          <div className="relative flex items-center">
+      {/* Profile / Sign In Pill (Top Left) */}
+      <div className="hidden sm:flex items-center no-drag mr-1">
+        {!isUnlocked ? (
+          <button
+            type="button"
+            onClick={() => setIsUnlockModalOpen(true)}
+            title="Sign In / Unlock Vault"
+            className="h-7 px-2.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/5 group"
+          >
+            <Lock size={12} className="text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>Sign In</span>
+          </button>
+        ) : (
+          <div className="relative">
             <button
               type="button"
-              onClick={() => openLocalTerminal()}
-              title={`Open or Focus Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
-              className={`h-7 pl-2.5 pr-1.5 rounded-l-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
-                activeView.startsWith("session-local-")
-                  ? "bg-emerald-500/20 text-emerald-300 border-y border-l border-emerald-500/40 shadow-sm font-semibold"
-                  : "text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-l border-transparent hover:border-emerald-500/20"
-              }`}
+              onClick={() => setProfileDropdownOpen((prev) => !prev)}
+              title={`Workspace: ${activeProfile || "Default"}`}
+              className="h-7 px-2.5 rounded-md bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-all shadow-sm"
             >
-              <Terminal size={12} className={activeView.startsWith("session-local-") ? "text-emerald-400" : "text-emerald-500/80"} />
-              <span className="whitespace-nowrap tracking-tight font-medium">Local Shell</span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShellMenuOpen((v) => !v);
-              }}
-              title="Select Shell (PowerShell, CMD, Git Bash, WSL)"
-              className={`h-7 px-1.5 rounded-r-md flex items-center justify-center transition-all ${
-                activeView.startsWith("session-local-")
-                  ? "bg-emerald-500/20 text-emerald-300 border-y border-r border-emerald-500/40 hover:bg-emerald-500/30"
-                  : "text-zinc-500 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-r border-transparent hover:border-emerald-500/20"
-              }`}
-            >
-              <ChevronDown size={11} className={`transition-transform duration-150 ${shellMenuOpen ? "rotate-180" : ""}`} />
+              <span className="text-xs select-none">{profileIcon || "💼"}</span>
+              <span className="font-semibold max-w-[100px] truncate">{activeProfile || "Workspace"}</span>
+              <ChevronDown size={11} className={`text-zinc-400 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {/* Dropdown Menu */}
-            {shellMenuOpen && (
+            {profileDropdownOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShellMenuOpen(false)} />
-                <div className="absolute left-0 top-full mt-1 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-lg shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11px]">
-                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border-b border-white/5 mb-1 flex items-center justify-between">
-                    <span>Installed Shells</span>
-                    <span className="text-[9px] text-zinc-500 font-normal">Choose flavor</span>
+                <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)} />
+                <div className="absolute left-0 top-full mt-1.5 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11.5px]">
+                  {/* Header info */}
+                  <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0 select-none">
+                      {profileIcon || "💼"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-white text-xs truncate">{activeProfile || "Default Workspace"}</div>
+                      <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <span>Active Workspace</span>
+                      </div>
+                    </div>
                   </div>
-                  {availableShells.length > 0 ? (
-                    availableShells.map((sh) => (
-                      <button
-                        key={sh.id}
-                        type="button"
-                        onClick={() => {
-                          setShellMenuOpen(false);
-                          openLocalTerminal(sh.id, false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-300 flex items-center justify-between group transition-colors"
-                      >
-                        <span className="font-medium truncate">{sh.name}</span>
-                        <span className="text-[10px] text-zinc-500 font-mono group-hover:text-emerald-400/80 shrink-0 ml-2">{sh.id}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-1.5 text-zinc-500 italic text-[10.5px]">Default OS Shell</div>
-                  )}
-                  <div className="border-t border-white/5 mt-1 pt-1">
+
+                  {/* Switch Workspace */}
+                  <div className="p-1">
                     <button
                       type="button"
                       onClick={() => {
-                        setShellMenuOpen(false);
-                        openLocalTerminal(undefined, true);
+                        setProfileDropdownOpen(false);
+                        setIsWorkspaceSwitcherOpen(true);
                       }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/5 text-zinc-400 hover:text-white flex items-center gap-2 transition-colors font-medium"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-zinc-300 hover:text-white flex items-center justify-between transition-colors font-medium"
                     >
-                      <Plus size={12} className="text-zinc-500" />
-                      <span>+ New Tab (Default Shell)</span>
+                      <div className="flex items-center gap-2">
+                        <ArrowLeftRight size={13} className="text-primary" />
+                        <span>Switch Workspace</span>
+                      </div>
+                      <kbd className="text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-500 font-mono border border-white/5">1-click</kbd>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        setActiveView("settings");
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-zinc-300 hover:text-white flex items-center gap-2 transition-colors font-medium"
+                    >
+                      <Settings size={13} className="text-zinc-400" />
+                      <span>Workspace Settings</span>
+                    </button>
+                    <div className="border-t border-white/5 my-1" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        handleLockProfile();
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-amber-500/10 text-amber-300/90 hover:text-amber-300 flex items-center gap-2 transition-colors font-medium"
+                    >
+                      <Lock size={13} />
+                      <span>Lock Vault</span>
                     </button>
                   </div>
                 </div>
@@ -604,9 +664,88 @@ function DesktopApp() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Top Bar Bookmarks Strip: Local Shell + Quick Access Servers */}
+      <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.03] border border-white/5 rounded-lg no-drag shrink-0 mx-1">
+        {/* Pinned Bookmark: Local Shell with Shell Flavor Selector */}
+        <div className="relative flex items-center">
+          <button
+            type="button"
+            onClick={() => openLocalTerminal()}
+            title={`Open or Focus Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
+            className={`h-7 pl-2.5 pr-1.5 rounded-l-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
+              activeView.startsWith("session-local-")
+                ? "bg-emerald-500/20 text-emerald-300 border-y border-l border-emerald-500/40 shadow-sm font-semibold"
+                : "text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-l border-transparent hover:border-emerald-500/20"
+            }`}
+          >
+            <Terminal size={12} className={activeView.startsWith("session-local-") ? "text-emerald-400" : "text-emerald-500/80"} />
+            <span className="whitespace-nowrap tracking-tight font-medium">Local Shell</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShellMenuOpen((v) => !v);
+            }}
+            title="Select Shell (PowerShell, CMD, Git Bash, WSL)"
+            className={`h-7 px-1.5 rounded-r-md flex items-center justify-center transition-all ${
+              activeView.startsWith("session-local-")
+                ? "bg-emerald-500/20 text-emerald-300 border-y border-r border-emerald-500/40 hover:bg-emerald-500/30"
+                : "text-zinc-500 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-r border-transparent hover:border-emerald-500/20"
+            }`}
+          >
+            <ChevronDown size={11} className={`transition-transform duration-150 ${shellMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {/* Dropdown Menu */}
+          {shellMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShellMenuOpen(false)} />
+              <div className="absolute left-0 top-full mt-1 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-lg shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11px]">
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border-b border-white/5 mb-1 flex items-center justify-between">
+                  <span>Installed Shells</span>
+                  <span className="text-[9px] text-zinc-500 font-normal">Choose flavor</span>
+                </div>
+                {availableShells.length > 0 ? (
+                  availableShells.map((sh) => (
+                    <button
+                      key={sh.id}
+                      type="button"
+                      onClick={() => {
+                        setShellMenuOpen(false);
+                        openLocalTerminal(sh.id, false);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-300 flex items-center justify-between group transition-colors"
+                    >
+                      <span className="font-medium truncate">{sh.name}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono group-hover:text-emerald-400/80 shrink-0 ml-2">{sh.id}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-1.5 text-zinc-500 italic text-[10.5px]">Default OS Shell</div>
+                )}
+                <div className="border-t border-white/5 mt-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShellMenuOpen(false);
+                      openLocalTerminal(undefined, true);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-white/5 text-zinc-400 hover:text-white flex items-center gap-2 transition-colors font-medium"
+                  >
+                    <Plus size={12} className="text-zinc-500" />
+                    <span>+ New Tab (Default Shell)</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Separator if quick access servers exist */}
-        {quickAccessServersList.length > 0 && isUnlocked && (
+        {quickAccessServersList.length > 0 && (
           <div className="w-[1px] h-4 bg-white/10 mx-0.5 shrink-0" />
         )}
 
@@ -623,6 +762,10 @@ function DesktopApp() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!isUnlocked) {
+                    setIsUnlockModalOpen(true);
+                    return;
+                  }
                   if (sess) {
                     if (!mergedSessionIds.includes(sess.id)) setMergedSessionIds([]);
                     setActiveView(sess.id);
@@ -1203,154 +1346,6 @@ function DesktopApp() {
               </kbd>
             </button>
 
-            {/* Profile Dropdown Button: After Palette and before Minimize */}
-            <div className="relative mr-1">
-              <button
-                type="button"
-                onClick={() => setProfileDropdownOpen((prev) => !prev)}
-                title={`Profile: ${activeProfile || "Default"}`}
-                className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-300 hover:text-white text-[11px] flex items-center gap-1.5 transition-colors no-drag"
-              >
-                <span className="text-xs select-none">{profileIcon || "👤"}</span>
-                <span className="font-semibold max-w-[90px] truncate hidden md:inline">{activeProfile || "Profile"}</span>
-                <ChevronDown size={11} className={`text-zinc-500 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              {profileDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1.5 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11.5px]">
-                    {/* Header info */}
-                    <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0 select-none">
-                        {profileIcon || "👤"}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-white text-xs truncate">{activeProfile || "Default Workspace"}</div>
-                        <div className="text-[10px] text-zinc-400 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                          <span>Active Workspace</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Workspaces list */}
-                    <div className="py-1 border-b border-white/5">
-                      <div className="px-3 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-                        <span>Workspaces</span>
-                        <span className="text-[9px] text-primary/80 font-normal">0-prompt switch</span>
-                      </div>
-                      <div className="max-h-40 overflow-y-auto custom-scrollbar px-1 space-y-0.5">
-                        {availableProfiles.map((p) => {
-                          const isCur = p === activeProfile;
-                          return (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => {
-                                if (!isCur) {
-                                  switchWorkspace(p);
-                                }
-                              }}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                                isCur
-                                  ? "bg-primary/15 text-primary font-semibold"
-                                  : "hover:bg-white/[0.06] text-zinc-300 hover:text-white"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs select-none">{getProfileIcon(p)}</span>
-                                <span className="truncate">{p}</span>
-                              </div>
-                              {isCur ? (
-                                <Check size={12} className="text-primary shrink-0" />
-                              ) : (
-                                <span className="text-[10px] text-zinc-500 font-normal">switch</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          setIsWorkspaceSwitcherOpen(true);
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-300 hover:text-primary flex items-center gap-2 transition-colors border-t border-white/5 mt-1"
-                      >
-                        <Layers size={12} className="text-primary" />
-                        <span>All Workspaces…</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          setActiveView("settings");
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-400 hover:text-primary flex items-center gap-2 transition-colors"
-                      >
-                        <Plus size={12} />
-                        <span>Manage / Add Workspace</span>
-                      </button>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="py-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          setActiveView("logs");
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
-                      >
-                        <Activity size={13} className="text-primary" />
-                        <span>View Recent Activities</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          setActiveView("settings");
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
-                      >
-                        <UserCheck size={13} className="text-primary" />
-                        <span>Profile & Cloud Sync</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          handleLockProfile();
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-amber-300 hover:text-amber-200 flex items-center gap-2 transition-colors"
-                      >
-                        <Lock size={13} className="text-amber-400" />
-                        <span>Lock SubTerm</span>
-                      </button>
-                    </div>
-
-                    <div className="border-t border-white/5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          handleSignOut();
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 flex items-center gap-2 transition-colors"
-                      >
-                        <LogOut size={13} />
-                        <span>Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
           </>
         )}
         <button
@@ -1548,47 +1543,34 @@ function DesktopApp() {
   return (
     <div className="h-full w-full bg-background flex flex-col overflow-hidden text-zinc-200 select-none">
       {TitleBar()}
-      {!isUnlocked ? (
-        activeView === "settings" ? (
-          <SettingsPanel
-            settings={appSettings}
-            setSettings={setAppSettings}
-            servers={servers}
-            onOpenLogs={() => setActiveView("logs")}
-            onClose={() => setActiveView("nodes")}
-            onUnlocked={handleProfileUnlocked}
-            onSync={handleCloudSync}
-            syncing={cloudSyncing}
-            lastSyncLabel={lastSyncLabel}
-          />
-        ) : (
-          <MasterUnlockPage
-            onUnlocked={handleProfileUnlocked}
-            autoSync={appSettings.autoSync}
-            onOpenSettings={() => setActiveView("settings")}
-            initialSelectedProfile={activeProfile}
-          />
-        )
-      ) : (
-        // Layout swap: on desktop the sidebar is a left rail (row).
-        // On mobile we flip to flex-col-reverse so the sidebar component
-        // renders at the bottom while staying first in DOM order — keyboard
-        // tab-order stays intuitive and <main> grabs the full screen width
-        // (terminal gains the ~50px the vertical rail used to eat).
-        <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
-          <Sidebar
-            activeTab={activeView.startsWith('session-') ? 'nodes' : activeView}
-            setActiveTab={setActiveView}
-            isMobile={isMobile}
-            onLogout={handleLogout}
-            onLock={handleLockProfile}
-            onSwitchProfile={handleSwitchProfile}
-            enableMonitoring={appSettings.enableMonitoring}
-          />
+      {/* Layout swap: on desktop the sidebar is a left rail (row).
+          On mobile we flip to flex-col-reverse so the sidebar component
+          renders at the bottom while staying first in DOM order — keyboard
+          tab-order stays intuitive and <main> grabs the full screen width
+          (terminal gains the ~50px the vertical rail used to eat). */}
+      <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
+        <Sidebar
+          activeTab={activeView.startsWith('session-') ? 'nodes' : activeView}
+          setActiveTab={setActiveView}
+          isMobile={isMobile}
+          isUnlocked={isUnlocked}
+          onUnlock={() => setIsUnlockModalOpen(true)}
+          onLogout={handleLogout}
+          onLock={handleLockProfile}
+          onSwitchProfile={() => (isUnlocked ? setIsWorkspaceSwitcherOpen(true) : setIsUnlockModalOpen(true))}
+          enableMonitoring={appSettings.enableMonitoring}
+        />
 
-          <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent relative">
-            {activeView === "nodes" && (
-              <NodeGrid
+        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent relative">
+          {!isUnlocked && (activeView === "nodes" || activeView === "vault" || activeView === "library" || activeView === "monitor") ? (
+            <LockedVaultNotice
+              onUnlock={() => setIsUnlockModalOpen(true)}
+              onOpenLocal={() => openLocalTerminal()}
+            />
+          ) : (
+            <>
+              {activeView === "nodes" && (
+                <NodeGrid
                 servers={servers}
                 folders={folders}
                 activeFolderId={activeFolderId}
@@ -2408,9 +2390,10 @@ function DesktopApp() {
               </div>
             )}
 
+            </>
+          )}
           </main>
         </div>
-      )}
 
       <AddNodePanel
         isOpen={isPanelOpen} onClose={() => { setIsPanelOpen(false); setFormError(""); }}
@@ -2542,6 +2525,23 @@ function DesktopApp() {
           setActiveView("settings");
         }}
       />
+
+      {isUnlockModalOpen && (
+        <MasterUnlockPage
+          isModal={true}
+          onClose={() => setIsUnlockModalOpen(false)}
+          onUnlocked={(p) => {
+            setIsUnlockModalOpen(false);
+            handleProfileUnlocked(p);
+          }}
+          autoSync={appSettings.autoSync}
+          onOpenSettings={() => {
+            setIsUnlockModalOpen(false);
+            setActiveView("settings");
+          }}
+          initialSelectedProfile={activeProfile}
+        />
+      )}
 
       {isUnlocked && (
         <CommandPalette

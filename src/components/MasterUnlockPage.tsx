@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   AlertTriangle, ArrowRight, ShieldCheck, Heart,
-  Sparkles, CheckCircle2, Lock, Cloud, KeyRound, ArrowUpCircle, Info
+  Sparkles, CheckCircle2, Lock, Cloud, KeyRound, ArrowUpCircle, Info, X
 } from "lucide-react";
 import logoUrl from "../assets/logo.png";
 import PasswordField from "./PasswordField";
@@ -25,6 +25,8 @@ interface Props {
   autoSync?: boolean;
   onOpenSettings?: () => void;
   initialSelectedProfile?: string | null;
+  isModal?: boolean;
+  onClose?: () => void;
 }
 
 export const MasterUnlockPage = ({
@@ -32,6 +34,8 @@ export const MasterUnlockPage = ({
   autoSync,
   onOpenSettings,
   initialSelectedProfile,
+  isModal = false,
+  onClose,
 }: Props) => {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +155,7 @@ export const MasterUnlockPage = ({
         }
         localStorage.setItem("subterm_last_workspace", "default");
         onUnlocked("default");
+        onClose?.();
       } else {
         // Normal unlock
         const target = getTargetWorkspace(profiles);
@@ -163,6 +168,7 @@ export const MasterUnlockPage = ({
         }
         localStorage.setItem("subterm_last_workspace", target);
         onUnlocked(target);
+        onClose?.();
       }
     } catch (e: any) {
       const raw = String(e);
@@ -200,6 +206,7 @@ export const MasterUnlockPage = ({
 
       localStorage.setItem("subterm_last_workspace", target);
       onUnlocked(target);
+      onClose?.();
     } catch (e: any) {
       const raw = String(e);
       if (raw.toLowerCase().includes("decrypt")) {
@@ -211,6 +218,15 @@ export const MasterUnlockPage = ({
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!isModal || !onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModal, onClose]);
 
   const handleCloudSignInAndRestore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,15 +256,10 @@ export const MasterUnlockPage = ({
     }
   };
 
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 bg-background min-h-screen relative overflow-hidden select-none">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="w-full max-w-[340px] flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200">
-        {/* Logo & Branding */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="relative mb-3 group">
+  const cardContent = (
+    <>
+      <div className="flex flex-col items-center mb-6">
+        <div className="relative mb-3 group">
             <img
               src={logoUrl}
               alt="SubTerm Logo"
@@ -455,8 +466,40 @@ export const MasterUnlockPage = ({
             <span>Support</span>
           </button>
         </div>
-      </div>
+    </>
+  );
 
+  if (isModal) {
+    return (
+      <div
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onClose) onClose();
+        }}
+      >
+        <div className="w-full max-w-[360px] bg-[#131418] border border-white/10 rounded-2xl shadow-2xl p-6 relative flex flex-col z-10 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-4 right-4 w-7 h-7 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 flex items-center justify-center transition-colors"
+            >
+              <X size={15} />
+            </button>
+          )}
+          {cardContent}
+        </div>
+        <AboutPanel isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 bg-background min-h-screen relative overflow-hidden select-none">
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="w-full max-w-[340px] flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200">
+        {cardContent}
+      </div>
       <AboutPanel isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   );

@@ -13,6 +13,8 @@ export const Sidebar = ({
   activeTab,
   setActiveTab,
   isMobile,
+  isUnlocked = true,
+  onUnlock,
   onLogout,
   onLock,
   onSwitchProfile,
@@ -174,20 +176,24 @@ export const Sidebar = ({
 
         {/* Trailing cluster (lock + switch profile + settings) */}
         <div className="flex items-center gap-1 pl-2 ml-1 border-l border-white/5">
-          {(onLock || onLogout) && (
+          {(!isUnlocked ? onUnlock : (onLock || onLogout)) && (
             <button
-              onClick={onLock || onLogout}
-              className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
-              title="Lock profile"
+              onClick={!isUnlocked ? onUnlock : (onLock || onLogout)}
+              className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
+                !isUnlocked
+                  ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                  : "text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
+              }`}
+              title={!isUnlocked ? "Sign In / Unlock Vault" : "Lock SubTerm"}
             >
               <Lock size={18} />
             </button>
           )}
-          {(onSwitchProfile || onLogout) && (
+          {isUnlocked && (onSwitchProfile || onLogout) && (
             <button
               onClick={onSwitchProfile || onLogout}
               className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
-              title="Switch profile"
+              title="Switch workspace"
             >
               <ArrowLeftRight size={18} />
             </button>
@@ -249,16 +255,20 @@ export const Sidebar = ({
 
       {/* Bottom cluster: lock, switch workspace, and settings */}
       <div className="mt-auto w-full px-2 flex flex-col gap-2">
-        {(onLock || onLogout) && (
+        {(!isUnlocked ? onUnlock : (onLock || onLogout)) && (
           <button
-            onClick={onLock || onLogout}
-            className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
-            title="Lock SubTerm"
+            onClick={!isUnlocked ? onUnlock : (onLock || onLogout)}
+            className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
+              !isUnlocked
+                ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                : "text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
+            }`}
+            title={!isUnlocked ? "Sign In / Unlock Vault" : "Lock SubTerm"}
           >
             <Lock size={18} />
           </button>
         )}
-        {(onSwitchProfile || onLogout) && (
+        {isUnlocked && (onSwitchProfile || onLogout) && (
           <button
             onClick={onSwitchProfile || onLogout}
             className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
