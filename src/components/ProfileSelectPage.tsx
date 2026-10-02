@@ -48,6 +48,8 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings, initialSelect
   const [selected, setSelected] = useState<string>(() => initialSelectedProfile || "");
   const [password, setPassword] = useState("");
   const [enableBiometric, setEnableBiometric] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
+  const [showPasswordOverride, setShowPasswordOverride] = useState(false);
 
   const [aboutOpen, setAboutOpen] = useState(false);
 
@@ -74,8 +76,12 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings, initialSelect
   const reload = async () => {
     setLoading(true); setError(null);
     try {
-      const list = await invoke<string[]>("list_profiles");
+      const [list, sessionActive] = await Promise.all([
+        invoke<string[]>("list_profiles"),
+        invoke<boolean>("has_session_password").catch(() => false),
+      ]);
       setProfiles(list);
+      setHasSession(sessionActive);
       setSelected((prev) => (prev && list.includes(prev) ? prev : list[0] || ""));
     } catch (e: any) {
       setError(String(e));
@@ -165,8 +171,31 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings, initialSelect
 
   const unlockSelected = async () => {
     if (!selected) { setError("Pick a profile first."); return; }
-    if (!password) { setError("Type your password."); return; }
     setBusy(true); setError(null);
+
+    // If master session password is active in memory and user hasn't typed an override password:
+    if (hasSession && !password) {
+      try {
+        await invoke("switch_profile_seamless", { targetName: selected });
+        onUnlocked(selected);
+        return;
+      } catch (e: any) {
+        const raw = String(e);
+        if (raw.includes("NO_SESSION_PASSWORD") || raw.toLowerCase().includes("decrypt") || raw.includes("PASSWORD")) {
+          setError("This workspace has a different password. Enter its password below to open:");
+          setShowPasswordOverride(true);
+          requestAnimationFrame(() => passwordInputRef.current?.focus());
+          setBusy(false);
+          return;
+        } else {
+          setError(cleanErr(raw));
+          setBusy(false);
+          return;
+        }
+      }
+    }
+
+    if (!password) { setError("Type your password."); setBusy(false); return; }
     try {
       await invoke("select_profile", { name: selected });
       await invoke("setup_master_db", { password });
@@ -176,7 +205,7 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings, initialSelect
       onUnlocked(selected);
     } catch (e: any) {
       const raw = String(e);
-      setError(raw.toLowerCase().includes("decrypt") ? "Wrong password." : raw);
+      setError(raw.toLowerCase().includes("decrypt") ? "Wrong password." : cleanErr(raw));
     } finally {
       setBusy(false);
     }
@@ -312,47 +341,76 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings, initialSelect
                       <div className="px-3 pb-3 pt-1 bg-black/20 space-y-2.5 animate-in fade-in">
                         {row.local ? (
                           <>
-                            {localStorage.getItem(`submarine-bio-${row.name}`) && (
-                              <button
-                                type="button"
-                                onClick={() => unlockWithBiometrics(row.name)}
-                                disabled={busy}
-                                className="w-full h-10 px-3.5 rounded-lg text-[13px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 flex items-center justify-center gap-2 transition-all shadow-inner"
-                              >
-                                <ShieldCheck size={16} />
-                                Unlock with Biometrics (Windows Hello / Fingerprint)
-                              </button>
+                            {hasSession && (
+                              <div className="space-y-2">
+                                <button
+                                  type="button"
+                                  onClick={unlockSelected}
+                                  disabled={busy}
+                                  className="w-full h-10 px-3.5 rounded-lg text-[13px] font-semibold bg-primary text-black hover:shadow-[0_0_20px_rgba(var(--primary),0.3)] disabled:opacity-40 flex items-center justify-center gap-2 transition-all shadow-md"
+                                >
+                                  {busy ? <RefreshCw size={14} className="animate-spin" /> : <>Open with Master Password <ArrowRight size={14} /></>}
+                                </button>
+                                <div className="flex items-center justify-between text-[11px] text-zinc-400 px-0.5">
+                                  <span className="flex items-center gap-1 text-emerald-400">
+                                    <ShieldCheck size={12} /> Master session active
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPasswordOverride(!showPasswordOverride)}
+                                    className="text-zinc-500 hover:text-zinc-300 underline"
+                                  >
+                                    {showPasswordOverride ? "Hide custom password" : "Enter different password"}
+                                  </button>
+                                </div>
+                              </div>
                             )}
-                            <div className="flex gap-2">
-                              <input
-                                ref={passwordInputRef}
-                                type="password"
-                                placeholder="Password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && unlockSelected()}
-                                className="flex-1 h-10 px-3.5 bg-zinc-900/50 border border-white/5 rounded-lg text-[13.5px] text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-primary/50 transition-colors"
-                              />
-                              <button
-                                onClick={unlockSelected}
-                                disabled={busy || !password}
-                                title="Open"
-                                className="h-10 px-3.5 rounded-lg text-[13px] font-semibold bg-primary text-black hover:shadow-[0_0_20px_rgba(var(--primary),0.3)] disabled:opacity-40 flex items-center gap-1.5 shrink-0 transition-all"
-                              >
-                                {busy ? <RefreshCw size={14} className="animate-spin" /> : <>Open <ArrowRight size={14} /></>}
-                              </button>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-zinc-400 hover:text-zinc-300">
-                                <input
-                                  type="checkbox"
-                                  className="accent-primary rounded"
-                                  checked={enableBiometric}
-                                  onChange={(e) => setEnableBiometric(e.target.checked)}
-                                />
-                                Save for Biometric Unlock
-                              </label>
-                            </div>
+
+                            {(!hasSession || showPasswordOverride) && (
+                              <>
+                                {localStorage.getItem(`submarine-bio-${row.name}`) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => unlockWithBiometrics(row.name)}
+                                    disabled={busy}
+                                    className="w-full h-10 px-3.5 rounded-lg text-[13px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 flex items-center justify-center gap-2 transition-all shadow-inner"
+                                  >
+                                    <ShieldCheck size={16} />
+                                    Unlock with Biometrics (Windows Hello / Fingerprint)
+                                  </button>
+                                )}
+                                <div className="flex gap-2">
+                                  <input
+                                    ref={passwordInputRef}
+                                    type="password"
+                                    placeholder={hasSession ? "Custom profile password" : "Password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && unlockSelected()}
+                                    className="flex-1 h-10 px-3.5 bg-zinc-900/50 border border-white/5 rounded-lg text-[13.5px] text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-primary/50 transition-colors"
+                                  />
+                                  <button
+                                    onClick={unlockSelected}
+                                    disabled={busy || !password}
+                                    title="Open"
+                                    className="h-10 px-3.5 rounded-lg text-[13px] font-semibold bg-primary text-black hover:shadow-[0_0_20px_rgba(var(--primary),0.3)] disabled:opacity-40 flex items-center gap-1.5 shrink-0 transition-all"
+                                  >
+                                    {busy ? <RefreshCw size={14} className="animate-spin" /> : <>Open <ArrowRight size={14} /></>}
+                                  </button>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-zinc-400 hover:text-zinc-300">
+                                    <input
+                                      type="checkbox"
+                                      className="accent-primary rounded"
+                                      checked={enableBiometric}
+                                      onChange={(e) => setEnableBiometric(e.target.checked)}
+                                    />
+                                    Save for Biometric Unlock
+                                  </label>
+                                </div>
+                              </>
+                            )}
                           </>
                         ) : (
                           <>

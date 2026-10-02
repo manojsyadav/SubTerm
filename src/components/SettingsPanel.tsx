@@ -6,7 +6,7 @@ import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 
-const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], onSync, syncing, lastSyncLabel }: any) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile }: any) => {
   const accentColors = [
     { name: 'Light Blue', value: '#60a5fa' },
     { name: 'Sky', value: '#38bdf8' },
@@ -81,7 +81,11 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
           a 2-col grid rows them up so a short card leaves a tall empty gap beside
           it. Column flow packs them, and break-inside-avoid keeps a card whole. */}
       <div className="columns-1 md:columns-2 gap-4 sm:gap-8">
-        <SettingsProfileManagement onUnlocked={onUnlocked} />
+        <SettingsProfileManagement
+          onUnlocked={onUnlocked}
+          activeProfile={activeProfile}
+          onSwitchProfile={onSwitchProfile}
+        />
 
         {/* Quick Access Servers (Top Bar) Section */}
         <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">

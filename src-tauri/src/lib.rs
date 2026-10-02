@@ -63,6 +63,9 @@ pub struct DbState {
     /// same clock instance backs both the SQL function and any Rust-side sync
     /// code (the merge engine's `observe`).
     pub hlc: StdMutex<Option<std::sync::Arc<hlc::Hlc>>>,
+    /// Unified master password cached in memory during an active app session.
+    /// Enables seamless 0-prompt profile/workspace switching. Wiped on lock or sign out.
+    pub session_password: StdMutex<Option<Zeroizing<String>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2917,17 +2920,13 @@ async fn select_profile(
     Ok(profile_path(&app_handle, &name)?.exists())
 }
 
-/// Drop in-memory state so the UI can return to the profile picker without
-/// restarting the app. This MUST tear down every piece of per-profile
-/// runtime state, not just the DB — otherwise live SSH sessions, tunnels,
-/// SFTP channels, terminal PTYs, and fingerprint waiters from the
-/// previous profile would survive the switch and (worse) attribute any
-/// `known_hosts` writes they triggered to the NEXT profile's DB.
-#[tauri::command]
-async fn close_profile(
-    state: tauri::State<'_, DbState>,
-    ssh: tauri::State<'_, SshState>,
-    monitor_map: tauri::State<'_, MonitorMap>,
+/// Helper to tear down runtime state for the currently active profile
+/// (flushes in-memory DB changes, disconnects all SSH/SFTP/PTY sessions, stops monitors,
+/// and clears active connection handles).
+async fn teardown_profile_runtime(
+    state: &DbState,
+    ssh: &SshState,
+    monitor_map: &MonitorMap,
 ) -> Result<(), String> {
     // 0. Persist any accumulated in-memory changes (chief among them:
     // cmd_history rows written by TerminalView's Enter-key handler, which
@@ -2935,12 +2934,12 @@ async fn close_profile(
     // isn't in a saveable state (partial init, crypto error) just log via
     // the returned Err and continue teardown — losing recent history is
     // preferable to leaking session state.
-    let _ = save_vault_async(&state).await;
+    let _ = save_vault_async(state).await;
 
     // 1. Stop monitor pollers. Flip `paused` first so the next loop iteration
     // releases the SSH handle, then drop the map so the Arc strong_count
     // falls to 1 and the poller exits.
-    monitor::pause_all(monitor_map.inner().clone()).await;
+    monitor::pause_all(monitor_map.clone()).await;
     monitor_map.lock().await.clear();
 
     // 2. Collect every active session id, then run the standard
@@ -3005,6 +3004,75 @@ async fn close_profile(
     *state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED_PROFILE")? = None;
     *state.hlc.lock().map_err(|_| "[STATE] LOCK_FAILED_HLC")? = None;
     Ok(())
+}
+
+/// Explicit lock / sign out. Tears down all profile state and purges
+/// the cached session master password from memory.
+#[tauri::command]
+async fn close_profile(
+    state: tauri::State<'_, DbState>,
+    ssh: tauri::State<'_, SshState>,
+    monitor_map: tauri::State<'_, MonitorMap>,
+) -> Result<(), String> {
+    teardown_profile_runtime(&state, &ssh, &monitor_map).await?;
+    *state.session_password.lock().map_err(|_| "[STATE] LOCK_FAILED_SESSION_PW")? = None;
+    Ok(())
+}
+
+/// Prepare to switch profile (returns to profile select while preserving
+/// the cached master session password).
+#[tauri::command]
+async fn prepare_switch_profile(
+    state: tauri::State<'_, DbState>,
+    ssh: tauri::State<'_, SshState>,
+    monitor_map: tauri::State<'_, MonitorMap>,
+) -> Result<(), String> {
+    teardown_profile_runtime(&state, &ssh, &monitor_map).await
+}
+
+/// Check if a valid master session password is currently cached in memory.
+#[tauri::command]
+async fn has_session_password(state: tauri::State<'_, DbState>) -> Result<bool, String> {
+    let guard = state.session_password.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    Ok(guard.is_some())
+}
+
+/// Switch active profile/workspace directly using the cached session master password.
+/// Drops existing SSH connections and runtime state of the active profile,
+/// and attempts to open the target profile using the current session's password.
+#[tauri::command]
+async fn switch_profile_seamless(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    ssh: tauri::State<'_, SshState>,
+    monitor_map: tauri::State<'_, MonitorMap>,
+    target_name: String,
+) -> Result<(), String> {
+    validate_profile_name(&target_name)?;
+    let target_path = profile_path(&app_handle, &target_name)?;
+    if !target_path.exists() {
+        return Err(format!("Profile '{}' not found on disk", target_name));
+    }
+
+    let cached_pw = {
+        let guard = state.session_password.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        match guard.as_ref() {
+            Some(pw) => (**pw).clone(),
+            None => return Err("[AUTH] NO_SESSION_PASSWORD: sign-in required".into()),
+        }
+    };
+
+    teardown_profile_runtime(&state, &ssh, &monitor_map).await?;
+
+    *state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED")? = Some(target_name.clone());
+
+    match setup_master_db_inner(app_handle, cached_pw, state.clone(), false).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            *state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED")? = None;
+            Err(e)
+        }
+    }
 }
 
 /// Permanently delete a profile's encrypted file. The caller must NOT be
@@ -3276,6 +3344,7 @@ async fn setup_master_db_inner(
     state: tauri::State<'_, DbState>,
     enforce_strength: bool,
 ) -> Result<(), String> {
+    let password_to_cache = password.clone();
     // The active profile must be picked before this command — the UI does
     // it from the picker screen. Refuse early instead of silently writing
     // to a default path.
@@ -3605,6 +3674,11 @@ async fn setup_master_db_inner(
     if needs_resave {
         save_vault_internal(&state)?;
     }
+
+    if let Ok(mut sp_guard) = state.session_password.lock() {
+        *sp_guard = Some(Zeroizing::new(password_to_cache));
+    }
+
     Ok(())
 }
 
@@ -3628,12 +3702,19 @@ async fn create_profile(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, DbState>,
     name: String,
-    password: String,
+    password: Option<String>,
 ) -> Result<(), String> {
     validate_profile_name(&name)?;
-    if password.is_empty() {
-        return Err("Password cannot be empty".into());
-    }
+    let actual_pw = match password.filter(|p| !p.trim().is_empty()) {
+        Some(p) => p,
+        None => {
+            let guard = state.session_password.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+            match guard.as_ref() {
+                Some(p) => (**p).clone(),
+                None => return Err("Password cannot be empty (no master session active)".into()),
+            }
+        }
+    };
     let dir = profiles_dir(&app_handle)?;
     fs::create_dir_all(&dir).map_err(|e| format!("[FILE] MKDIR_FAILED: {}", e))?;
     let path = profile_path(&app_handle, &name)?;
@@ -3643,7 +3724,7 @@ async fn create_profile(
     *state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED")? = Some(name);
     // Reuse setup_master_db's fresh-schema branch by deferring to it. Empty
     // profile starts with the same migrations the legacy path would do.
-    setup_master_db(app_handle.clone(), password, state).await?;
+    setup_master_db(app_handle.clone(), actual_pw, state).await?;
 
     // New profile: mint a stable UUID and partition its cloud sync by that UUID
     // rather than its name. Two vaults that happen to share a display name then
@@ -6913,7 +6994,7 @@ pub fn run() {
     // installer AND the Android APK. Capability is granted in default.json.
     let builder = builder.plugin(tauri_plugin_opener::init());
     builder
-        .manage(DbState { conn: std::sync::Arc::new(StdMutex::new(None)), master_key: StdMutex::new(None), salt: StdMutex::new(None), db_path: StdMutex::new(None), active_profile: StdMutex::new(None), hlc: StdMutex::new(None) })
+        .manage(DbState { conn: std::sync::Arc::new(StdMutex::new(None)), master_key: StdMutex::new(None), salt: StdMutex::new(None), db_path: StdMutex::new(None), active_profile: StdMutex::new(None), hlc: StdMutex::new(None), session_password: StdMutex::new(None) })
         .manage(SshState::new())
         // Docker live-log stream registry — keyed by frontend-issued stream id,
         // values are tokio AbortHandles so the user can stop tailing on demand.
@@ -6942,6 +7023,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             check_db_exists, setup_master_db, persist_vault,
             list_profiles, cloud_list_sync_profiles, cloud_delete_profile, force_push_profile, select_profile, create_profile, delete_profile, rename_profile, close_profile,
+            prepare_switch_profile, has_session_password, switch_profile_seamless,
             export_profile, import_profile_pick, import_profile_save, save_audit_log,
             cloud::cloud_set_api_base, cloud::cloud_status, cloud::cloud_signup, cloud::cloud_consume_verify_link,
             cloud::cloud_set_password, cloud::cloud_login, cloud::cloud_logout,

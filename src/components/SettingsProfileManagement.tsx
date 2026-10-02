@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Trash2, Edit2, Check, CheckCircle2, AlertTriangle, X, User } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, CheckCircle2, AlertTriangle, X, User, ShieldCheck, ArrowLeftRight } from "lucide-react";
 import { useConfirm } from "../ui/confirm";
 import {
   DEFAULT_PROFILE_ICONS,
@@ -10,7 +10,15 @@ import {
   deleteProfileIcon,
 } from "../utils/profileMetadata";
 
-export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: string) => void }) => {
+export const SettingsProfileManagement = ({
+  onUnlocked,
+  activeProfile,
+  onSwitchProfile,
+}: {
+  onUnlocked?: (name: string) => void;
+  activeProfile?: string | null;
+  onSwitchProfile?: (name: string) => void;
+}) => {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +28,7 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newIcon, setNewIcon] = useState("👤");
+  const [useCustomPassword, setUseCustomPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [newConfirmPassword, setNewConfirmPassword] = useState("");
 
@@ -51,30 +60,36 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
     setError(null);
     const trimmed = newName.trim();
     if (!trimmed) {
-      setError("Pick a name.");
+      setError("Pick a workspace name.");
       return;
     }
-    if (!newPassword) {
-      setError("Set a password.");
-      return;
-    }
-    if (newPassword.length < 8) {
-      setError("Use at least 8 characters.");
-      return;
-    }
-    if (newPassword !== newConfirmPassword) {
-      setError("Passwords don't match.");
-      return;
+    if (useCustomPassword) {
+      if (!newPassword) {
+        setError("Set a password.");
+        return;
+      }
+      if (newPassword.length < 8) {
+        setError("Use at least 8 characters.");
+        return;
+      }
+      if (newPassword !== newConfirmPassword) {
+        setError("Passwords don't match.");
+        return;
+      }
     }
     setBusy(true);
     try {
-      await invoke("create_profile", { name: trimmed, password: newPassword });
+      await invoke("create_profile", {
+        name: trimmed,
+        password: useCustomPassword ? newPassword : null,
+      });
       setProfileIcon(trimmed, newIcon || "👤");
       setCreating(false);
       setNewName("");
       setNewPassword("");
       setNewConfirmPassword("");
-      setInfo(`Profile "${trimmed}" created.`);
+      setUseCustomPassword(false);
+      setInfo(`Workspace "${trimmed}" created.`);
       if (onUnlocked) onUnlocked(trimmed);
       else await reloadProfiles();
     } catch (e: any) {
@@ -146,7 +161,7 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
 
       <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-4 shadow-xl">
         <p className="text-xs text-zinc-400 leading-relaxed">
-          Create, customize, and manage encrypted profile vaults. Each profile contains its own isolated servers, logins, and configurations.
+          Create, customize, and manage encrypted workspaces. Each profile contains its own isolated servers, logins, and configurations under your Unified Master Password.
         </p>
 
         {error && (
@@ -167,7 +182,7 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
           <div className="space-y-4 p-4 bg-black/60 border border-primary/30 rounded-xl animate-in fade-in">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Plus size={14} className="text-primary" /> Create New Profile
+                <Plus size={14} className="text-primary" /> Create New Workspace
               </span>
               <button onClick={() => setCreating(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X size={14} />
@@ -196,7 +211,7 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
                 </div>
               </div>
 
-              {/* Name & Passwords */}
+              {/* Name */}
               <div className="flex items-center gap-2">
                 <span className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-lg shrink-0">
                   {newIcon}
@@ -205,28 +220,52 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
                   ref={nameInputRef}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !useCustomPassword && createNew()}
                   placeholder="Profile Name (e.g. Work, Personal, Client-A)"
                   className="flex-1 h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary/50"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Password (min 8 chars)"
-                  className="w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary/50"
-                />
-                <input
-                  type="password"
-                  value={newConfirmPassword}
-                  onChange={(e) => setNewConfirmPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && createNew()}
-                  placeholder="Confirm password"
-                  className="w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary/50"
-                />
+              {/* Protection Notice */}
+              <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5 flex items-start gap-2.5">
+                <ShieldCheck size={16} className="text-primary shrink-0 mt-0.5" />
+                <div className="flex-1 text-[11px] leading-tight">
+                  <span className="font-semibold text-white">Protected by Master Password</span>
+                  <p className="text-zinc-400 mt-0.5">
+                    This workspace unlocks automatically whenever SubTerm is open — no extra password needed.
+                  </p>
+                </div>
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-zinc-400 hover:text-zinc-300">
+                <input
+                  type="checkbox"
+                  className="accent-primary rounded"
+                  checked={useCustomPassword}
+                  onChange={(e) => setUseCustomPassword(e.target.checked)}
+                />
+                <span>Set custom password for this workspace (advanced)</span>
+              </label>
+
+              {useCustomPassword && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in">
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Custom password (min 8 chars)"
+                    className="w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary/50"
+                  />
+                  <input
+                    type="password"
+                    value={newConfirmPassword}
+                    onChange={(e) => setNewConfirmPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && createNew()}
+                    placeholder="Confirm custom password"
+                    className="w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary/50"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-1 border-t border-white/5">
@@ -240,10 +279,10 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
               <button
                 type="button"
                 onClick={createNew}
-                disabled={busy || !newName.trim() || !newPassword}
+                disabled={busy || !newName.trim() || (useCustomPassword && !newPassword)}
                 className="h-8 px-4 rounded-lg bg-primary text-zinc-950 font-bold text-xs hover:bg-primary/90 disabled:opacity-40"
               >
-                Create Profile
+                Create Workspace
               </button>
             </div>
           </div>
@@ -253,7 +292,7 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
             onClick={() => setCreating(true)}
             className="w-full h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"
           >
-            <Plus size={14} className="text-primary" /> New Profile
+            <Plus size={14} className="text-primary" /> New Workspace / Profile
           </button>
         )}
 
@@ -261,13 +300,14 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
         {profiles.length > 0 && (
           <div className="mt-4 border-t border-white/5 pt-4 space-y-2">
             <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">
-              <span>Saved Profiles ({profiles.length})</span>
+              <span>Saved Workspaces ({profiles.length})</span>
               <span className="text-[10px] text-zinc-600 font-normal">Click pencil to rename or change icon</span>
             </div>
 
             {profiles.map((p) => {
               const isEditing = editingProfile === p;
               const currentIcon = getProfileIcon(p);
+              const isActive = activeProfile === p;
 
               if (isEditing) {
                 return (
@@ -281,7 +321,7 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
                           key={ic}
                           type="button"
                           onClick={() => setEditIcon(ic)}
-                          className={`w-6 h-6 text-xs rounded flex items-center justify-center transition-all ${
+                          className={`w-6 h-6 text-sm rounded flex items-center justify-center transition-all ${
                             editIcon === ic ? "bg-primary/30 border border-primary scale-110" : "hover:bg-white/10"
                           }`}
                         >
@@ -291,24 +331,23 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center text-sm shrink-0">
+                      <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0">
                         {editIcon}
                       </span>
                       <input
-                        type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && saveEdit(p)}
-                        placeholder="Profile name"
-                        className="flex-1 h-8 bg-black/60 border border-white/10 rounded-lg px-2.5 text-xs text-white outline-none focus:border-primary/50"
+                        placeholder="Profile Name"
+                        className="flex-1 h-8 bg-black/50 border border-white/10 rounded-lg px-2.5 text-xs text-white outline-none focus:border-primary/50"
                       />
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-1">
+                    <div className="flex justify-end gap-2 pt-1 border-t border-white/5">
                       <button
                         type="button"
                         onClick={() => setEditingProfile(null)}
-                        className="h-7 px-2.5 rounded text-xs text-zinc-400 hover:text-zinc-200"
+                        className="h-7 px-2.5 rounded text-xs text-zinc-400 hover:text-white"
                       >
                         Cancel
                       </button>
@@ -328,14 +367,34 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
               return (
                 <div
                   key={p}
-                  className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 text-sm font-medium text-zinc-300 transition-colors group"
+                  className={`flex items-center justify-between p-3 rounded-xl border text-sm font-medium transition-colors group ${
+                    isActive
+                      ? "bg-primary/10 border-primary/30 text-white"
+                      : "bg-white/[0.02] hover:bg-white/[0.04] border-white/5 text-zinc-300"
+                  }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-base select-none">{currentIcon}</span>
                     <span className="font-semibold text-white truncate">{p}</span>
+                    {isActive && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
+                        <Check size={10} /> Active Workspace
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {!isActive && onSwitchProfile && (
+                      <button
+                        type="button"
+                        onClick={() => onSwitchProfile(p)}
+                        disabled={busy}
+                        title="Switch to this workspace"
+                        className="h-7 px-2.5 rounded-lg bg-white/5 hover:bg-primary/20 text-zinc-300 hover:text-primary text-xs font-semibold flex items-center gap-1.5 transition-colors border border-white/5 hover:border-primary/30"
+                      >
+                        <ArrowLeftRight size={12} /> Switch
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => startEdit(p)}
@@ -348,9 +407,9 @@ export const SettingsProfileManagement = ({ onUnlocked }: { onUnlocked?: (name: 
                     <button
                       type="button"
                       onClick={() => removeLocal(p)}
-                      disabled={busy}
-                      title="Delete profile"
-                      className="p-1.5 rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 transition-colors"
+                      disabled={busy || isActive}
+                      title={isActive ? "Cannot delete active workspace" : "Delete profile"}
+                      className="p-1.5 rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                     >
                       <Trash2 size={13} />
                     </button>

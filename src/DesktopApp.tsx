@@ -5,10 +5,10 @@ import {
   Plus, X, RefreshCw, Terminal, Key, Trash2,
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
-  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck
+  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
-import { useProfileIcon } from "./utils/profileMetadata";
+import { useProfileIcon, getProfileIcon } from "./utils/profileMetadata";
 
 import ProfileSelectPage from "./components/ProfileSelectPage";
 import logoUrl from "./assets/logo.png";
@@ -184,11 +184,81 @@ function DesktopApp() {
     addLog(`Profile "${activeProfile}" locked.`, "info");
   };
 
-  const handleSwitchProfile = () => {
-    vaultLogout(sessions, confirm, () => {
-      setSessions([]);
-      setActiveView("nodes");
-    });
+  const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
+
+  const reloadAvailableProfiles = useCallback(async () => {
+    try {
+      const list = await invoke<string[]>("list_profiles");
+      setAvailableProfiles(list);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (isUnlocked) {
+      reloadAvailableProfiles();
+    }
+  }, [isUnlocked, reloadAvailableProfiles, activeProfile]);
+
+  const switchWorkspace = async (targetProfile: string) => {
+    if (targetProfile === activeProfile) return;
+    setProfileDropdownOpen(false);
+
+    if (sessions.length > 0) {
+      const ok = await confirm({
+        title: `Switch to "${targetProfile}"?`,
+        message: `You have ${sessions.length} open SSH session${sessions.length === 1 ? "" : "s"}. Switching workspace will disconnect them.`,
+        okLabel: "Switch Workspace",
+        cancelLabel: "Cancel",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+
+    for (const s of sessions) {
+      try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
+    }
+    setSessions([]);
+    setActiveView("nodes");
+
+    try {
+      await invoke("switch_profile_seamless", { targetName: targetProfile });
+      await handleProfileUnlocked(targetProfile);
+      addLog(`Switched to workspace "${targetProfile}".`, "success");
+    } catch (err: any) {
+      const msg = String(err);
+      if (msg.includes("NO_SESSION_PASSWORD") || msg.toLowerCase().includes("decrypt") || msg.includes("PASSWORD")) {
+        setIsUnlocked(false);
+        setActiveProfile(targetProfile);
+        addLog(`Workspace "${targetProfile}" requires password.`, "info");
+      } else {
+        addLog(`Failed to switch workspace: ${msg}`, "error");
+      }
+    }
+  };
+
+  const handleSwitchProfile = async () => {
+    if (sessions.length > 0) {
+      const ok = await confirm({
+        title: "Switch Workspace?",
+        message: `You have ${sessions.length} open SSH session${sessions.length === 1 ? "" : "s"}. Switching will disconnect them and open the workspace selector.`,
+        okLabel: "Switch",
+        cancelLabel: "Stay",
+        destructive: true,
+      });
+      if (!ok) return;
+      for (const s of sessions) {
+        try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
+      }
+    }
+    try {
+      await invoke("prepare_switch_profile");
+    } catch (e) {
+      addLog(`SWITCH_EXCEPTION: ${e}`, "error");
+    }
+    setIsUnlocked(false);
+    setSessions([]);
+    setActiveView("nodes");
+    addLog("Select a workspace to switch.", "info");
   };
 
   const handleSignOut = () => {
@@ -1175,35 +1245,73 @@ function DesktopApp() {
               {profileDropdownOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1.5 w-60 py-1.5 bg-[#141418] border border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11.5px]">
+                  <div className="absolute right-0 top-full mt-1.5 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11.5px]">
                     {/* Header info */}
                     <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0 select-none">
                         {profileIcon || "👤"}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-white text-xs truncate">{activeProfile || "Default Profile"}</div>
+                        <div className="font-bold text-white text-xs truncate">{activeProfile || "Default Workspace"}</div>
                         <div className="text-[10px] text-zinc-400 flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                          <span>Active Vault</span>
+                          <span>Active Workspace</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="py-1">
+                    {/* Workspaces list */}
+                    <div className="py-1 border-b border-white/5">
+                      <div className="px-3 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+                        <span>Workspaces</span>
+                        <span className="text-[9px] text-primary/80 font-normal">0-prompt switch</span>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto custom-scrollbar px-1 space-y-0.5">
+                        {availableProfiles.map((p) => {
+                          const isCur = p === activeProfile;
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => {
+                                if (!isCur) {
+                                  switchWorkspace(p);
+                                }
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors ${
+                                isCur
+                                  ? "bg-primary/15 text-primary font-semibold"
+                                  : "hover:bg-white/[0.06] text-zinc-300 hover:text-white"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs select-none">{getProfileIcon(p)}</span>
+                                <span className="truncate">{p}</span>
+                              </div>
+                              {isCur ? (
+                                <Check size={12} className="text-primary shrink-0" />
+                              ) : (
+                                <span className="text-[10px] text-zinc-500 font-normal">switch</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
                           setProfileDropdownOpen(false);
-                          handleSwitchProfile();
+                          setActiveView("settings");
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-400 hover:text-primary flex items-center gap-2 transition-colors border-t border-white/5 mt-1"
                       >
-                        <ArrowLeftRight size={13} className="text-primary" />
-                        <span>Switch Profile</span>
+                        <Plus size={12} />
+                        <span>Manage / Add Workspace</span>
                       </button>
+                    </div>
 
+                    {/* Actions */}
+                    <div className="py-1">
                       <button
                         type="button"
                         onClick={() => {
@@ -1237,7 +1345,7 @@ function DesktopApp() {
                         className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-amber-300 hover:text-amber-200 flex items-center gap-2 transition-colors"
                       >
                         <Lock size={13} className="text-amber-400" />
-                        <span>Lock Profile</span>
+                        <span>Lock SubTerm</span>
                       </button>
                     </div>
 
@@ -1541,9 +1649,12 @@ function DesktopApp() {
                 isMobile={isMobile}
                 onOpenLogs={() => setActiveView("logs")}
                 onClose={() => setActiveView("nodes")}
+                onUnlocked={handleProfileUnlocked}
                 onSync={handleCloudSync}
                 syncing={cloudSyncing}
                 lastSyncLabel={lastSyncLabel}
+                activeProfile={activeProfile}
+                onSwitchProfile={switchWorkspace}
               />
             )}
 
