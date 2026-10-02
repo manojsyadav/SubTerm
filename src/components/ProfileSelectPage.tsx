@@ -9,6 +9,7 @@ import AboutPanel from "./AboutPanel";
 import logoUrl from "../assets/logo.png";
 import { IS_ANDROID } from "../util/platform";
 import { useTextPrompt, useConfirm } from "../ui/confirm";
+import { getProfileIcon } from "../utils/profileMetadata";
 
 interface CloudStatus { signed_in: boolean; email: string | null; }
 // One personal profile as reported by the cloud (GET /sync/profiles). Names +
@@ -32,9 +33,10 @@ interface Props {
   onUnlocked: (profileName: string) => void;
   autoSync?: boolean;
   onOpenSettings?: () => void;
+  initialSelectedProfile?: string | null;
 }
 
-const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings }: Props) => {
+const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings, initialSelectedProfile }: Props) => {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings }: Props) => {
 
   // The expanded row (by display name). A local row expands to a password +
   // Open + actions; a cloud-only row expands to Get + Delete-from-cloud.
-  const [selected, setSelected] = useState<string>("");
+  const [selected, setSelected] = useState<string>(() => initialSelectedProfile || "");
   const [password, setPassword] = useState("");
   const [enableBiometric, setEnableBiometric] = useState(false);
 
@@ -297,10 +299,11 @@ const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings }: Props) => {
                       onClick={() => toggle(row)}
                       className={`w-full flex items-center gap-2.5 px-3 h-11 text-left transition-colors ${open ? "bg-white/[0.03]" : "hover:bg-white/[0.02]"}`}
                     >
+                      <span className="text-base shrink-0 select-none">{getProfileIcon(row.name)}</span>
                       {row.local
                         ? <HardDrive size={13} className="text-zinc-500 shrink-0" />
                         : <Cloud size={13} className="text-primary/70 shrink-0" />}
-                      <span className="flex-1 min-w-0 truncate text-[13.5px] text-zinc-100">{row.name}</span>
+                      <span className="flex-1 min-w-0 truncate text-[13.5px] text-zinc-100 font-medium">{row.name}</span>
                       <StatusChip row={row} />
                       <ChevronDown size={13} className={`text-zinc-600 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
                     </button>

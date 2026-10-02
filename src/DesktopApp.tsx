@@ -5,9 +5,10 @@ import {
   Plus, X, RefreshCw, Terminal, Key, Trash2,
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
-  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command
+  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
+import { useProfileIcon } from "./utils/profileMetadata";
 
 import ProfileSelectPage from "./components/ProfileSelectPage";
 import logoUrl from "./assets/logo.png";
@@ -147,6 +148,8 @@ function DesktopApp() {
 
   const [availableShells, setAvailableShells] = useState<{ id: string; name: string; command: string }[]>([]);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const { icon: profileIcon } = useProfileIcon(activeProfile);
 
   useEffect(() => {
     invoke<{ id: string; name: string; command: string }[]>("get_available_local_shells")
@@ -160,6 +163,41 @@ function DesktopApp() {
     setSessions([]);
     setActiveView("nodes");
   });
+
+  const handleLockProfile = async () => {
+    if (sessions.length > 0) {
+      const ok = await confirm({
+        title: "Lock profile?",
+        message: `You have ${sessions.length} open SSH session${sessions.length === 1 ? "" : "s"}. Locking will disconnect ${sessions.length === 1 ? "it" : "them all"} and return to the unlock screen.`,
+        okLabel: "Lock Profile",
+        cancelLabel: "Cancel",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    for (const s of sessions) {
+      try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
+    }
+    try { await invoke("close_profile"); } catch {}
+    setIsUnlocked(false);
+    setSessions([]);
+    setActiveView("nodes");
+    addLog(`Profile "${activeProfile}" locked.`, "info");
+  };
+
+  const handleSwitchProfile = () => {
+    vaultLogout(sessions, confirm, () => {
+      setSessions([]);
+      setActiveView("nodes");
+    });
+  };
+
+  const handleSignOut = () => {
+    vaultLogout(sessions, confirm, () => {
+      setSessions([]);
+      setActiveView("nodes");
+    });
+  };
 
   const handleOpenMultipleServers = (serversToOpen: any[]) => {
     openMultipleServers(serversToOpen, (newIds) => {
@@ -1121,6 +1159,106 @@ function DesktopApp() {
                 {getActiveShortcut("commandPalette")}
               </kbd>
             </button>
+
+            {/* Profile Dropdown Button: After Palette and before Minimize */}
+            <div className="relative mr-1">
+              <button
+                type="button"
+                onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                title={`Profile: ${activeProfile || "Default"}`}
+                className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-300 hover:text-white text-[11px] flex items-center gap-1.5 transition-colors no-drag"
+              >
+                <span className="text-xs select-none">{profileIcon || "👤"}</span>
+                <span className="font-semibold max-w-[90px] truncate hidden md:inline">{activeProfile || "Profile"}</span>
+                <ChevronDown size={11} className={`text-zinc-500 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {profileDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 w-60 py-1.5 bg-[#141418] border border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11.5px]">
+                    {/* Header info */}
+                    <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0 select-none">
+                        {profileIcon || "👤"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-white text-xs truncate">{activeProfile || "Default Profile"}</div>
+                        <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          <span>Active Vault</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          handleSwitchProfile();
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
+                      >
+                        <ArrowLeftRight size={13} className="text-primary" />
+                        <span>Switch Profile</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          setActiveView("logs");
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
+                      >
+                        <Activity size={13} className="text-primary" />
+                        <span>View Recent Activities</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          setActiveView("profile");
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
+                      >
+                        <UserCheck size={13} className="text-primary" />
+                        <span>Profile & Cloud Sync</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          handleLockProfile();
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-amber-300 hover:text-amber-200 flex items-center gap-2 transition-colors"
+                      >
+                        <Lock size={13} className="text-amber-400" />
+                        <span>Lock Profile</span>
+                      </button>
+                    </div>
+
+                    <div className="border-t border-white/5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          handleSignOut();
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 flex items-center gap-2 transition-colors"
+                      >
+                        <LogOut size={13} />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
         <button
@@ -1322,7 +1460,12 @@ function DesktopApp() {
         activeView === "settings" ? (
           <SettingsPanel settings={appSettings} setSettings={setAppSettings} servers={servers} onOpenLogs={() => setActiveView("logs")} onClose={() => setActiveView("profile")} onUnlocked={handleProfileUnlocked} />
         ) : (
-          <ProfileSelectPage onUnlocked={handleProfileUnlocked} autoSync={appSettings.autoSync} onOpenSettings={() => setActiveView("settings")} />
+          <ProfileSelectPage
+            onUnlocked={handleProfileUnlocked}
+            autoSync={appSettings.autoSync}
+            onOpenSettings={() => setActiveView("settings")}
+            initialSelectedProfile={activeProfile}
+          />
         )
       ) : (
         // Layout swap: on desktop the sidebar is a left rail (row).
@@ -1336,6 +1479,8 @@ function DesktopApp() {
             setActiveTab={setActiveView}
             isMobile={isMobile}
             onLogout={handleLogout}
+            onLock={handleLockProfile}
+            onSwitchProfile={handleSwitchProfile}
             profileName={activeProfile}
             syncing={cloudSyncing}
             enableMonitoring={appSettings.enableMonitoring}

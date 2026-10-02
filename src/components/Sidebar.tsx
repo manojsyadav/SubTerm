@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Server, KeyRound, Library, Activity, Settings, LogOut, UserCircle } from "lucide-react";
+import { Server, KeyRound, Library, Activity, Settings, LogOut, UserCircle, Lock, ArrowLeftRight } from "lucide-react";
+import { useProfileIcon } from "../utils/profileMetadata";
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
 // driven by `isMobile` so the terminal/session views can use the full screen
@@ -9,7 +10,18 @@ import { Server, KeyRound, Library, Activity, Settings, LogOut, UserCircle } fro
 // a 360px-wide viewport. The parent in DesktopApp uses `flex-col-reverse` on
 // mobile so this component visually lands at the bottom while staying first
 // in DOM order (keyboard tab-order stays intuitive).
-export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileName, syncing, enableMonitoring = true }: any) => {
+export const Sidebar = ({
+  activeTab,
+  setActiveTab,
+  isMobile,
+  onLogout,
+  onLock,
+  onSwitchProfile,
+  profileName,
+  syncing,
+  enableMonitoring = true,
+}: any) => {
+  const { icon: profileIcon } = useProfileIcon(profileName);
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
   const [alertSummary, setAlertSummary] = useState<string | null>(null);
@@ -111,7 +123,9 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
       }`}
       title={profileName ? `Profile — ${profileName}` : 'Profile'}
     >
-      <UserCircle size={20} className={activeTab === 'profile' ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
+      <div className="w-5 h-5 flex items-center justify-center text-lg leading-none select-none">
+        {profileIcon || <UserCircle size={20} className={activeTab === 'profile' ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />}
+      </div>
       {/* Sync moved into the panel, so the rail carries the only cue that it's
           running — otherwise a background sync would be completely invisible. */}
       {syncing && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />}
@@ -184,18 +198,25 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
           ))}
         </nav>
 
-        {/* Trailing cluster (logout + settings) — kept at the right edge of
-            the horizontal bar so the muscle-memory mapping "settings is the
-            last icon" still holds, just now read left-to-right. */}
+        {/* Trailing cluster (lock + switch profile + settings) */}
         <div className="flex items-center gap-1 pl-2 ml-1 border-l border-white/5">
           {profileRail}
-          {onLogout && (
+          {(onLock || onLogout) && (
             <button
-              onClick={onLogout}
-              className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-300 hover:text-amber-300 hover:bg-amber-500/10"
-              title="Lock & switch profile"
+              onClick={onLock || onLogout}
+              className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
+              title="Lock profile"
             >
-              <LogOut size={20} />
+              <Lock size={18} />
+            </button>
+          )}
+          {(onSwitchProfile || onLogout) && (
+            <button
+              onClick={onSwitchProfile || onLogout}
+              className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
+              title="Switch profile"
+            >
+              <ArrowLeftRight size={18} />
             </button>
           )}
           <button
@@ -259,18 +280,24 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
         ))}
       </nav>
 
-      {/* Bottom cluster: logout (lock current profile, return to picker)
-          and settings. Logout sits above settings so the gear stays as the
-          last-most icon — matches the muscle memory from when it was the
-          only bottom action. */}
+      {/* Bottom cluster: lock, switch profile, and settings */}
       <div className="mt-auto w-full px-2 flex flex-col gap-2">
-        {onLogout && (
+        {(onLock || onLogout) && (
           <button
-            onClick={onLogout}
-            className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-300 hover:text-amber-300 hover:bg-amber-500/10"
-            title="Lock & switch profile"
+            onClick={onLock || onLogout}
+            className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
+            title="Lock profile"
           >
-            <LogOut size={20} />
+            <Lock size={18} />
+          </button>
+        )}
+        {(onSwitchProfile || onLogout) && (
+          <button
+            onClick={onSwitchProfile || onLogout}
+            className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
+            title="Switch profile"
+          >
+            <ArrowLeftRight size={18} />
           </button>
         )}
         <button

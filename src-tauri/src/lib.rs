@@ -3022,6 +3022,47 @@ async fn delete_profile(app_handle: tauri::AppHandle, name: String) -> Result<()
     Ok(())
 }
 
+/// Rename a profile's encrypted file on disk. If the profile was active,
+/// its active state and db_path are updated in memory.
+#[tauri::command]
+async fn rename_profile(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    old_name: String,
+    new_name: String,
+) -> Result<(), String> {
+    validate_profile_name(&old_name)?;
+    validate_profile_name(&new_name)?;
+    if old_name == new_name {
+        return Ok(());
+    }
+
+    let src = profile_path(&app_handle, &old_name)?;
+    if !src.exists() {
+        return Err(format!("Profile '{}' not found on disk", old_name));
+    }
+
+    let dir = profiles_dir(&app_handle)?;
+    let dest_subterm = dir.join(format!("{}.subterm", new_name));
+    let dest_submarine = dir.join(format!("{}.submarine", new_name));
+    if dest_subterm.exists() || dest_submarine.exists() {
+        return Err(format!("A profile named '{}' already exists", new_name));
+    }
+
+    fs::rename(&src, &dest_subterm)
+        .map_err(|e| format!("[FILE] RENAME_PROFILE_FAILED: {}", e))?;
+
+    // If this profile was the active one in memory, update state
+    let mut active = state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    if active.as_deref() == Some(&old_name) {
+        *active = Some(new_name.clone());
+        let mut path_guard = state.db_path.lock().map_err(|_| "[STATE] LOCK_FAILED_PATH")?;
+        *path_guard = Some(dest_subterm);
+    }
+
+    Ok(())
+}
+
 /// Copy a profile's encrypted file to a user-chosen location so it can be
 /// backed up or moved between machines. The file is already encrypted at
 /// rest — we just copy bytes; we never decrypt or re-encrypt.
@@ -6900,7 +6941,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             check_db_exists, setup_master_db, persist_vault,
-            list_profiles, cloud_list_sync_profiles, cloud_delete_profile, force_push_profile, select_profile, create_profile, delete_profile, close_profile,
+            list_profiles, cloud_list_sync_profiles, cloud_delete_profile, force_push_profile, select_profile, create_profile, delete_profile, rename_profile, close_profile,
             export_profile, import_profile_pick, import_profile_save, save_audit_log,
             cloud::cloud_set_api_base, cloud::cloud_status, cloud::cloud_signup, cloud::cloud_consume_verify_link,
             cloud::cloud_set_password, cloud::cloud_login, cloud::cloud_logout,
