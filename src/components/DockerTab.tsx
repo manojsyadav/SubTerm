@@ -151,6 +151,12 @@ function parseComposeText(raw: string): ComposeProject[] {
 
 function describeError(err: string, ctx?: string): { title: string; hint?: string } {
   const e = (err || "").toLowerCase();
+  if (e.includes("a password is required") || e.includes("sudo:") || e.includes("sudo: a password is required")) {
+    return {
+      title: "Sudo Password Required",
+      hint: "Your SSH user requires root/sudo privileges to access the Docker daemon socket (/var/run/docker.sock). Either add your user to the docker group or grant passwordless sudo.",
+    };
+  }
   if (e.includes("session is not connected") || e.includes("session not connected")) {
     return { title: "Session is disconnected", hint: "Reconnect to fetch fresh data." };
   }
@@ -455,7 +461,7 @@ const ContainersView = ({
   };
 
   if (state.loading && !state.data) return <Spinner label="Loading containers…" />;
-  if (state.error) return <ErrorBanner err={state.error} />;
+  if (state.error) return <ErrorBanner err={state.error} onRetry={onRefresh} sessionId={sessionId} />;
   if (!state.data) return null;
 
   const filtered = state.data.filter(c => {
@@ -1550,23 +1556,71 @@ const Spinner = ({ label }: { label: string }) => (
   </div>
 );
 
-const ErrorBanner = ({ err, onRetry }: { err: string; onRetry?: () => void }) => {
+const ErrorBanner = ({ err, onRetry, sessionId }: { err: string; onRetry?: () => void; sessionId?: string }) => {
   const e = describeError(err);
+  const isSudo = (err || "").toLowerCase().includes("a password is required") || (err || "").toLowerCase().includes("sudo:");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyCmd = (cmd: string, key: string) => {
+    navigator.clipboard.writeText(cmd);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 3000);
+  };
+
+  const pasteToTerminal = (cmd: string) => {
+    if (sessionId) {
+      window.dispatchEvent(new CustomEvent(`submarine-paste-text-${sessionId}`, { detail: `${cmd}\n` }));
+    }
+  };
+
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20 text-red-300 text-[11px]">
-      <AlertCircle size={14} className="mt-0.5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <div className="font-bold uppercase tracking-wider">{e.title}</div>
-        {e.hint && <div className="text-red-200/80 mt-0.5">{e.hint}</div>}
-        <div className="opacity-70 mt-0.5 font-mono break-all">{err}</div>
+    <div className="flex flex-col gap-2 p-3 rounded-lg bg-red-500/5 border border-red-500/20 text-red-300 text-[11px]">
+      <div className="flex items-start gap-2">
+        <AlertCircle size={14} className="mt-0.5 shrink-0 text-red-400" />
+        <div className="min-w-0 flex-1">
+          <div className="font-bold uppercase tracking-wider">{e.title}</div>
+          {e.hint && <div className="text-red-200/90 mt-0.5 leading-relaxed">{e.hint}</div>}
+          <div className="opacity-70 mt-1 font-mono text-[10px] break-all bg-black/30 p-1.5 rounded border border-white/5">{err}</div>
+        </div>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="shrink-0 h-6 px-2 rounded-md text-[10px] font-bold uppercase tracking-wider text-red-200 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 flex items-center gap-1"
+          >
+            <RefreshCw size={10} /> Retry
+          </button>
+        )}
       </div>
-      {onRetry && (
-        <button
-          onClick={onRetry}
-          className="shrink-0 h-6 px-2 rounded-md text-[10px] font-bold uppercase tracking-wider text-red-200 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 flex items-center gap-1"
-        >
-          <RefreshCw size={10} /> Retry
-        </button>
+
+      {isSudo && (
+        <div className="mt-1 pt-2 border-t border-red-500/15 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Quick Fix:</span>
+          <button
+            onClick={() => copyCmd("sudo usermod -aG docker $USER && newgrp docker", "group")}
+            className="h-6 px-2 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-[10.5px] font-mono flex items-center gap-1 transition-colors"
+            title="Add current user to docker group"
+          >
+            <Copy size={10} />
+            {copied === "group" ? "Copied!" : "sudo usermod -aG docker $USER"}
+          </button>
+          <button
+            onClick={() => copyCmd("echo \"$USER ALL=(ALL) NOPASSWD: /usr/bin/docker\" | sudo tee /etc/sudoers.d/docker", "sudoers")}
+            className="h-6 px-2 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-[10.5px] font-mono flex items-center gap-1 transition-colors"
+            title="Allow passwordless sudo for docker"
+          >
+            <Copy size={10} />
+            {copied === "sudoers" ? "Copied NOPASSWD fix!" : "Grant NOPASSWD"}
+          </button>
+          {sessionId && (
+            <button
+              onClick={() => pasteToTerminal("sudo usermod -aG docker $USER")}
+              className="h-6 px-2 rounded bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-[10.5px] font-medium flex items-center gap-1 transition-colors ml-auto"
+              title="Send command directly to the active terminal tab"
+            >
+              <Terminal size={10} /> Run in Terminal
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
