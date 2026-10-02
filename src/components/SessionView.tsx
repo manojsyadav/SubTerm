@@ -3,15 +3,18 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server } from "lucide-react";
 import TerminalView from "./TerminalView";
 import SftpWorkspace from "./SftpWorkspace";
 import TunnelsPanel from "./TunnelsPanel";
 import InfoPanel from "./InfoPanel";
 import { CmdsPanel } from "./CmdsPanel";
 import { GitDrawer, GitRepoInfo } from "./GitDrawer";
+import { QuickEditorModal } from "./QuickEditorModal";
+import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
+import { useTextPrompt } from "../ui/confirm";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -88,6 +91,16 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
   const [customPassword, setCustomPassword] = useState("");
   const sessionStartTimeRef = useRef<number>(Date.now());
   const [sessionEndedAudit, setSessionEndedAudit] = useState<AuditLogEntry | null>(null);
+
+  const textPrompt = useTextPrompt();
+  const [editorFile, setEditorFile] = useState<{ path: string; name: string } | null>(null);
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
+  const [filePickerPath, setFilePickerPath] = useState<string>("");
+
+  const openFilePicker = (initial?: string) => {
+    setFilePickerPath(initial || "");
+    setFilePickerOpen(true);
+  };
 
   useEffect(() => {
     if (!sessionEndedAudit) return;
@@ -432,7 +445,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       onTerminalsChange(session.id, terminals, activeTab);
     }
   }, [session?.id, terminals, activeTab, onTerminalsChange]);
-  const [activeTool, setActiveTool] = useState<'sftp' | 'tunnels' | 'mirrors' | 'cmds' | 'info' | null>(() => session?.initialTool || null);
+  const [activeTool, setActiveTool] = useState<'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'mirrors' | 'cmds' | 'info' | null>(() => session?.initialTool || null);
   useEffect(() => {
     if (!session?.id) return;
     const handleSetTool = (e: any) => {
@@ -511,8 +524,60 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       const bytes = Array.from(new TextEncoder().encode(text));
       invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
     };
-    const handleOpenEditor = () => {
-      setActiveTool('sftp');
+    const handleOpenEditor = async (e: any) => {
+      const p = e.detail?.path;
+      const cwd = e.detail?.cwd;
+      if (!p) {
+        setFilePickerPath(cwd || "");
+        setFilePickerOpen(true);
+        return;
+      }
+
+      let cleanPath = p.trim().replace(/:\d+$/, '').replace(/[:,\s"'`]+$/, '').replace(/^["'`]+/, '');
+      if (!cleanPath.startsWith('/') && !cleanPath.startsWith('~') && cwd) {
+        cleanPath = cwd.endsWith('/') ? `${cwd}${cleanPath}` : `${cwd}/${cleanPath}`;
+      }
+
+      // If clicked path ends with slash, it is a directory — open in SFTP
+      if (cleanPath.endsWith('/')) {
+        setActiveTool('sftp');
+        window.dispatchEvent(new CustomEvent(`submarine-navigate-path-${session.id}`, { detail: { path: cleanPath } }));
+        return;
+      }
+
+      // If no file extension or ends with slash, verify if directory before opening in editor
+      if (!cleanPath.includes('.') || cleanPath.endsWith('/')) {
+        try {
+          const res = await invoke<any>('sftp_list_dir', { sessionId: session.id, path: cleanPath });
+          if (res && Array.isArray(res.entries)) {
+            // It is a directory! Open in SFTP panel rather than text editor
+            setActiveTool('sftp');
+            window.dispatchEvent(new CustomEvent(`submarine-navigate-path-${session.id}`, { detail: { path: cleanPath } }));
+            return;
+          }
+        } catch {
+          // Not a directory, proceed to open in editor
+        }
+      }
+
+      const name = cleanPath.split(/[\\/]/).filter(Boolean).pop() || cleanPath;
+      setEditorFile({ path: cleanPath, name });
+    };
+
+    const handleQuickOpenFile = () => {
+      setFilePickerOpen(true);
+    };
+
+    const handleEditorKey = (e: KeyboardEvent) => {
+      if (
+        (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'e' || e.key === 'E')) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'O' || e.key === 'o')) ||
+        ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'e' || e.key === 'E'))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFilePickerOpen(true);
+      }
     };
 
     window.addEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
@@ -521,6 +586,9 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
     window.addEventListener(`submarine-terminal-cd-${session.id}`, handleTerminalCd);
     window.addEventListener(`submarine-terminal-exec-${session.id}`, handleTerminalExec);
     window.addEventListener(`submarine-open-editor-${session.id}`, handleOpenEditor);
+    window.addEventListener(`submarine-quick-open-file-${session.id}`, handleQuickOpenFile);
+    window.addEventListener(`submarine-quick-open-file-session-${session.id}`, handleQuickOpenFile);
+    window.addEventListener("keydown", handleEditorKey, { capture: true });
 
     return () => {
       window.removeEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
@@ -529,6 +597,9 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       window.removeEventListener(`submarine-terminal-cd-${session.id}`, handleTerminalCd);
       window.removeEventListener(`submarine-terminal-exec-${session.id}`, handleTerminalExec);
       window.removeEventListener(`submarine-open-editor-${session.id}`, handleOpenEditor);
+      window.removeEventListener(`submarine-quick-open-file-${session.id}`, handleQuickOpenFile);
+      window.removeEventListener(`submarine-quick-open-file-session-${session.id}`, handleQuickOpenFile);
+      window.removeEventListener("keydown", handleEditorKey, { capture: true });
     };
   }, [session?.id, activeTab, splitTerminals]);
 
@@ -1349,11 +1420,24 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
             horizontal real estate when space is tight; the full description
             stays in the tooltip either way. */}
         <div className="flex items-center gap-1 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
+          <button
+            type="button"
+            onClick={() => setFilePickerOpen(true)}
+            title="Quick Open / Edit Remote File (Alt+E) — search files or enter path"
+            aria-label="Edit Remote File"
+            className="h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
+          >
+            <FileCode size={14} className="shrink-0 text-amber-400" />
+            <span className="hidden md:inline text-[11px] font-semibold tracking-tight">Edit File</span>
+          </button>
           {([
-            { id: 'sftp',    icon: Folder,  label: 'SFTP',    hint: 'SFTP — file browser' },
-            { id: 'tunnels', icon: Network, label: 'Ports',   hint: 'Ports — port forwarding' },
-            { id: 'cmds',    icon: Library, label: 'Library', hint: 'Library — commands & notes' },
-            { id: 'info',    icon: Info,    label: 'Info',    hint: 'Info — server overview' },
+            { id: 'sftp',      icon: Folder,   label: 'SFTP',      hint: 'SFTP — file browser' },
+            { id: 'tunnels',   icon: Network,  label: 'Ports',     hint: 'Ports — port forwarding' },
+            { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
+            { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
+            { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
+            { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
+            { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
           ] as const).map(({ id, icon: Icon, label, hint }) => {
             const on = activeTool === id;
             return (
@@ -1918,13 +2002,59 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
             />
           )}
 
-          {/* InfoPanel stays mounted across tool switches so its cached
-              probe result survives a SFTP-and-back trip — the user
-              explicitly asked for "cache while session is alive", and a
-              fresh remount would re-fire the probe every tab swap. */}
+          {/* Docker Panel */}
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'docker' ? '' : 'hidden'}`}>
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Docker Containers & Images</span>
+              <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+            <InfoPanel
+              sessionId={session.id}
+              disabled={status !== 'connected'}
+              visible={activeTool === 'docker'}
+              mode="docker"
+              onOpenContainerTerminal={openContainerTerminal}
+            />
+          </div>
+
+          {/* Processes Panel */}
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'processes' ? '' : 'hidden'}`}>
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Process Manager</span>
+              <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+            <InfoPanel
+              sessionId={session.id}
+              disabled={status !== 'connected'}
+              visible={activeTool === 'processes'}
+              mode="processes"
+            />
+          </div>
+
+          {/* Services Panel */}
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'services' ? '' : 'hidden'}`}>
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">System Services</span>
+              <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+            <InfoPanel
+              sessionId={session.id}
+              disabled={status !== 'connected'}
+              visible={activeTool === 'services'}
+              mode="services"
+            />
+          </div>
+
+          {/* InfoPanel (System, Network, Ports) */}
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'info' ? '' : 'hidden'}`}>
-            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Server Info</span>
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">System & Network Info</span>
               <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors">
                 <X size={14} />
               </button>
@@ -1933,6 +2063,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
               sessionId={session.id}
               disabled={status !== 'connected'}
               visible={activeTool === 'info'}
+              mode="info"
               onOpenContainerTerminal={openContainerTerminal}
             />
           </div>
@@ -1947,6 +2078,29 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
         gitInfo={gitInfo}
         onRefresh={refreshGitInfo}
       />
+      {/* Quick File Picker Modal */}
+      <QuickFilePickerModal
+        isOpen={filePickerOpen}
+        onClose={() => setFilePickerOpen(false)}
+        sessionId={session.id}
+        initialPath={filePickerPath}
+        onSelectFile={(file) => setEditorFile(file)}
+      />
+      {/* Inbuilt Quick Code Editor Modal */}
+      {editorFile && (
+        <QuickEditorModal
+          isOpen={Boolean(editorFile)}
+          onClose={() => setEditorFile(null)}
+          entry={{
+            name: editorFile.name,
+            path: editorFile.path,
+            isDir: false,
+            size: 0,
+          }}
+          provider={{ id: "remote", label: "Remote SFTP" }}
+          sessionId={session.id}
+        />
+      )}
     </div>
   );
 
