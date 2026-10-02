@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import {
@@ -60,6 +60,13 @@ function DesktopApp() {
     showAuditDownload: localStorage.getItem('subterm-show-audit-download') !== 'false',
     showAuditCopy: localStorage.getItem('subterm-show-audit-copy') !== 'false',
     enableMonitoring: (localStorage.getItem('subterm-enable-monitoring') || localStorage.getItem('submarine-enable-monitoring')) !== 'false',
+    quickAccessServerIds: (() => {
+      try {
+        const raw = localStorage.getItem('subterm-quick-access-servers');
+        if (raw) return JSON.parse(raw);
+      } catch {}
+      return [];
+    })() as number[],
   });
 
   const wallManager = useWallManager();
@@ -263,6 +270,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-show-audit-copy', appSettings.showAuditCopy ? 'true' : 'false');
     localStorage.setItem('subterm-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
     localStorage.setItem('submarine-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
+    localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {
         setActiveView('nodes');
@@ -377,6 +385,17 @@ function DesktopApp() {
   // away tab-strip scroll position and focus, and re-doing all that DOM work,
   // on every connect/reconnect and tab switch. Calling it inlines its JSX into
   // DesktopApp's own output with no component boundary, so React reconciles in
+  const quickAccessServersList = useMemo(() => {
+    const ids: number[] = appSettings.quickAccessServerIds || [];
+    if (ids.length > 0) {
+      return ids
+        .map(id => servers.find(s => s.id === id))
+        .filter((s): s is NonNullable<typeof s> => Boolean(s))
+        .slice(0, 5);
+    }
+    return servers.slice(0, Math.min(3, servers.length));
+  }, [appSettings.quickAccessServerIds, servers]);
+
   // place. It closes over DesktopApp scope and uses no hooks, so a plain call
   // is safe. Do NOT convert this to `<TitleBar />`.
   const TitleBar = () => (
@@ -397,10 +416,77 @@ function DesktopApp() {
       {/* Logo + product name: hidden on phones to give the tab strip the
           whole row. Desktop keeps the original 75 px left padding for
           macOS traffic lights, plus the icon and brand. */}
-      <div className="hidden sm:flex items-center gap-2 pr-4 pl-[75px] md:pl-2" data-tauri-drag-region>
+      <div className="hidden sm:flex items-center gap-2 pr-2 pl-[75px] md:pl-2 shrink-0" data-tauri-drag-region>
         <img src={logoUrl} alt="" draggable={false} className="h-6 w-auto max-w-[24px] object-contain select-none" />
         <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
       </div>
+
+      {/* Top Bar Quick Access Server List (Max 5) */}
+      {quickAccessServersList.length > 0 && (
+        <div className="hidden sm:flex items-center gap-1.5 px-2 no-drag shrink-0">
+          {quickAccessServersList.map((server: any) => {
+            const sess = sessions.find((s) => s.serverId === server.id || s.serverName === server.name);
+            const isCurrent = Boolean(sess && activeView === sess.id);
+            const isConn = Boolean(sess && sessionStatuses[sess.id] === "connected");
+            const isConnIng = Boolean(sess && sessionStatuses[sess.id] === "connecting");
+
+            return (
+              <div key={server.id} className="group relative flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sess) {
+                      if (!mergedSessionIds.includes(sess.id)) setMergedSessionIds([]);
+                      setActiveView(sess.id);
+                    } else {
+                      openServer(server);
+                    }
+                  }}
+                  title={
+                    isCurrent
+                      ? `${server.name} (Active Session)`
+                      : sess
+                      ? `Switch to ${server.name}`
+                      : `Connect to ${server.name}`
+                  }
+                  className={`h-7 px-2.5 rounded-full flex items-center gap-1.5 text-xs font-medium transition-all ${
+                    isCurrent
+                      ? "bg-[#182338] border border-blue-500/50 text-blue-200 shadow-sm"
+                      : isConn
+                      ? "bg-white/[0.05] border border-white/10 text-zinc-300 hover:bg-white/[0.09] hover:text-white"
+                      : "bg-white/[0.02] border border-white/5 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      isCurrent || isConn
+                        ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                        : isConnIng
+                        ? "bg-amber-400 animate-pulse"
+                        : "bg-zinc-600"
+                    }`}
+                  />
+                  <span className="truncate max-w-[110px]">{server.name}</span>
+                  {sess && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeSession(sess.id);
+                      }}
+                      title="Disconnect session"
+                      className="ml-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-white/10 opacity-60 hover:opacity-100 transition-opacity"
+                    >
+                      <X size={10} />
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Mobile session picker — replaces the horizontal tab strip on
           narrow viewports so a phone doesn't spend its whole title row
@@ -581,7 +667,9 @@ function DesktopApp() {
         className={`${isMobile ? 'hidden' : 'flex'} flex-1 gap-1 overflow-x-auto no-scrollbar h-full items-end pb-1`}
         onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY; }}
       >
-        {sessions.map(s => {
+        {sessions
+          .filter((s) => !quickAccessServersList.some((qs: any) => qs.id === s.serverId || qs.name === s.serverName))
+          .map(s => {
           const st = sessionStatuses[s.id] ?? "connecting";
           // Dot palette: green = connected, amber = connecting, red = failed
           // or disconnected. The pulse animation only runs while connecting
@@ -1108,7 +1196,7 @@ function DesktopApp() {
       {TitleBar()}
       {!isUnlocked ? (
         activeView === "settings" ? (
-          <SettingsPanel settings={appSettings} setSettings={setAppSettings} onOpenLogs={() => setActiveView("logs")} onClose={() => setActiveView("profile")} onUnlocked={handleProfileUnlocked} />
+          <SettingsPanel settings={appSettings} setSettings={setAppSettings} servers={servers} onOpenLogs={() => setActiveView("logs")} onClose={() => setActiveView("profile")} onUnlocked={handleProfileUnlocked} />
         ) : (
           <ProfileSelectPage onUnlocked={handleProfileUnlocked} autoSync={appSettings.autoSync} onOpenSettings={() => setActiveView("settings")} />
         )
@@ -1184,6 +1272,7 @@ function DesktopApp() {
               <SettingsPanel
                 settings={appSettings}
                 setSettings={setAppSettings}
+                servers={servers}
                 isMobile={isMobile}
                 onOpenLogs={() => setActiveView("logs")}
               />

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft, Activity } from "lucide-react";
+import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2, Plus } from "lucide-react";
 import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 
-const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked }: any) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [] }: any) => {
   const accentColors = [
     { name: 'Light Blue', value: '#60a5fa' },
     { name: 'Sky', value: '#38bdf8' },
@@ -23,6 +23,36 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked 
   ];
 
   const [cloudOpen, setCloudOpen] = useState(false);
+
+  // Quick access server IDs (up to 5)
+  const quickAccessIds: number[] = settings.quickAccessServerIds || [];
+  const currentQuickServers = quickAccessIds
+    .map((id: number) => servers.find((s: any) => s.id === id))
+    .filter(Boolean);
+
+  const availableToAdd = servers.filter((s: any) => !quickAccessIds.includes(s.id));
+  const [selectedToAdd, setSelectedToAdd] = useState("");
+
+  const handleAddServer = () => {
+    const numId = parseInt(selectedToAdd, 10);
+    if (!numId || quickAccessIds.length >= 5) return;
+    const next = [...quickAccessIds, numId];
+    setSettings({ ...settings, quickAccessServerIds: next });
+    setSelectedToAdd("");
+  };
+
+  const removeQuickServer = (id: number) => {
+    const next = quickAccessIds.filter((i: number) => i !== id);
+    setSettings({ ...settings, quickAccessServerIds: next });
+  };
+
+  const moveQuickServer = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= quickAccessIds.length) return;
+    const next = [...quickAccessIds];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setSettings({ ...settings, quickAccessServerIds: next });
+  };
 
   return (
     <div className="flex-1 p-4 sm:p-10 overflow-y-auto custom-scrollbar animate-in">
@@ -49,6 +79,108 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked 
           it. Column flow packs them, and break-inside-avoid keeps a card whole. */}
       <div className="columns-1 md:columns-2 gap-4 sm:gap-8">
         <SettingsProfileManagement onUnlocked={onUnlocked} />
+
+        {/* Quick Access Servers (Top Bar) Section */}
+        <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">
+          <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
+            <Server size={14} className="text-primary" /> Top Bar Quick Access Servers
+          </div>
+
+          <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-6 shadow-xl">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-white">Pinned Servers ({currentQuickServers.length}/5)</span>
+                <span className="text-[11px] text-zinc-500">Maximum 5 servers</span>
+              </div>
+              <p className="text-xs text-zinc-400">
+                Display up to 5 quick access servers directly in the top titlebar. Active servers display a bright green indicator.
+              </p>
+            </div>
+
+            {/* List of current quick access servers */}
+            <div className="space-y-2">
+              {currentQuickServers.map((srv: any, idx: number) => (
+                <div
+                  key={srv.id}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                    <span className="text-xs font-semibold text-white truncate">{srv.name}</span>
+                    <span className="text-[11px] text-zinc-500 font-mono truncate hidden sm:inline">
+                      {srv.host || srv.ip || "SSH"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveQuickServer(idx, idx - 1)}
+                      className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+                      title="Move up"
+                    >
+                      <ArrowUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === currentQuickServers.length - 1}
+                      onClick={() => moveQuickServer(idx, idx + 1)}
+                      className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+                      title="Move down"
+                    >
+                      <ArrowDown size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeQuickServer(srv.id)}
+                      className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 ml-1"
+                      title="Remove from top bar"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {currentQuickServers.length === 0 && (
+                <div className="p-4 text-center rounded-xl border border-dashed border-white/10 text-xs text-zinc-500">
+                  No quick access servers configured. Select and add servers below to show them in the top bar.
+                </div>
+              )}
+            </div>
+
+            {/* Add Server Dropdown */}
+            {currentQuickServers.length < 5 && availableToAdd.length > 0 && (
+              <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                <select
+                  value={selectedToAdd}
+                  onChange={(e) => setSelectedToAdd(e.target.value)}
+                  className="flex-1 bg-[#18181f] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary/50"
+                >
+                  <option value="">Select a server to add...</option>
+                  {availableToAdd.map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.host || s.ip || "SSH"})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!selectedToAdd}
+                  onClick={handleAddServer}
+                  className="px-3 py-2 bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:hover:bg-primary/10"
+                >
+                  <Plus size={13} /> Add
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Appearance Section */}
         <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">
           <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
