@@ -22,7 +22,6 @@ import AddNodePanel from "./components/AddNodePanel";
 import { renderServerIcon } from "./components/ServerIcon";
 import TerminalView from "./components/TerminalView";
 import SettingsPanel from "./components/SettingsPanel";
-import ProfilePanel from "./components/ProfilePanel";
 import { SessionView } from "./components/SessionView";
 import MonitoringPanel from "./components/MonitoringPanel";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
@@ -1221,7 +1220,7 @@ function DesktopApp() {
                         type="button"
                         onClick={() => {
                           setProfileDropdownOpen(false);
-                          setActiveView("profile");
+                          setActiveView("settings");
                         }}
                         className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white flex items-center gap-2 transition-colors"
                       >
@@ -1458,7 +1457,17 @@ function DesktopApp() {
       {TitleBar()}
       {!isUnlocked ? (
         activeView === "settings" ? (
-          <SettingsPanel settings={appSettings} setSettings={setAppSettings} servers={servers} onOpenLogs={() => setActiveView("logs")} onClose={() => setActiveView("profile")} onUnlocked={handleProfileUnlocked} />
+          <SettingsPanel
+            settings={appSettings}
+            setSettings={setAppSettings}
+            servers={servers}
+            onOpenLogs={() => setActiveView("logs")}
+            onClose={() => setActiveView("nodes")}
+            onUnlocked={handleProfileUnlocked}
+            onSync={handleCloudSync}
+            syncing={cloudSyncing}
+            lastSyncLabel={lastSyncLabel}
+          />
         ) : (
           <ProfileSelectPage
             onUnlocked={handleProfileUnlocked}
@@ -1481,8 +1490,6 @@ function DesktopApp() {
             onLogout={handleLogout}
             onLock={handleLockProfile}
             onSwitchProfile={handleSwitchProfile}
-            profileName={activeProfile}
-            syncing={cloudSyncing}
             enableMonitoring={appSettings.enableMonitoring}
           />
 
@@ -1526,18 +1533,6 @@ function DesktopApp() {
               />
             )}
 
-            {activeView === "profile" && (
-              <ProfilePanel
-                onSync={handleCloudSync}
-                syncing={cloudSyncing}
-                lastSyncLabel={lastSyncLabel}
-                autoSync={appSettings.autoSync}
-                syncIntervalMin={appSettings.syncIntervalMin}
-                onSetInterval={(m: number) => setAppSettings((s: any) => ({ ...s, syncIntervalMin: m }))}
-                onToggleAutoSync={() => setAppSettings((s: any) => ({ ...s, autoSync: !s.autoSync }))}
-              />
-            )}
-
             {activeView === "settings" && (
               <SettingsPanel
                 settings={appSettings}
@@ -1545,6 +1540,10 @@ function DesktopApp() {
                 servers={servers}
                 isMobile={isMobile}
                 onOpenLogs={() => setActiveView("logs")}
+                onClose={() => setActiveView("nodes")}
+                onSync={handleCloudSync}
+                syncing={cloudSyncing}
+                lastSyncLabel={lastSyncLabel}
               />
             )}
 

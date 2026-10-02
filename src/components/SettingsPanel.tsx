@@ -4,8 +4,9 @@ import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
+import { SettingsCloudSync } from "./SettingsCloudSync";
 
-const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [] }: any) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], onSync, syncing, lastSyncLabel }: any) => {
   const accentColors = [
     { name: 'Light Blue', value: '#60a5fa' },
     { name: 'Sky', value: '#38bdf8' },
@@ -486,62 +487,17 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
           </section>
         )}
 
-        {/* Cloud Section */}
-        <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">
-          <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
-            <Cloud size={14} /> Cloud Sync
-          </div>
-
-          <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-zinc-100">Auto-sync</div>
-                <p className="text-[12px] text-zinc-400 leading-relaxed mt-1">
-                  Keep open profiles synced in the background — shortly after you make a change, when
-                  you return to the window, and every few minutes to pull in others' edits on shared
-                  profiles. Turn off to sync only with the manual button.
-                </p>
-              </div>
-              <button
-                role="switch"
-                aria-checked={settings.autoSync !== false}
-                onClick={() => setSettings((s: any) => ({ ...s, autoSync: !(s.autoSync !== false) }))}
-                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${settings.autoSync !== false ? 'bg-primary' : 'bg-zinc-700'}`}
-              >
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${settings.autoSync !== false ? 'left-[22px]' : 'left-0.5'}`} />
-              </button>
-            </div>
-
-            {settings.autoSync !== false && (
-              <div className="border-t border-white/5 pt-4 text-[12px] text-zinc-400 space-y-4">
-                <div>
-                  Currently checking every{' '}
-                  <span className="text-zinc-100 font-semibold">{settings.syncIntervalMin ?? 5} min</span>. Change it
-                  on the Profile tab, next to Sync now.
-                </div>
-                <div>
-                  <div className="text-zinc-100 font-semibold mb-1">Custom API Endpoint</div>
-                  <input
-                    type="text"
-                    value={settings.cloudApiBase || ""}
-                    onChange={(e) => setSettings((s: any) => ({ ...s, cloudApiBase: e.target.value }))}
-                    placeholder="https://api.subterm.com"
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 h-9 text-zinc-200 outline-none focus:border-primary/50 placeholder:text-zinc-600 transition-colors"
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-500">Leave blank to use the default backend.</p>
-                </div>
-                <div className="pt-2 border-t border-white/5">
-                  <button
-                    onClick={() => setCloudOpen(true)}
-                    className="h-9 px-4 rounded-xl text-xs font-bold text-zinc-900 bg-primary hover:bg-primary/90 transition-colors flex items-center gap-2"
-                  >
-                    <User size={14} /> Manage Cloud Account
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+        {/* Cloud Sync & Team Collaboration Section */}
+        <div className="break-inside-avoid mb-4 sm:mb-8">
+          <SettingsCloudSync
+            settings={settings}
+            setSettings={setSettings}
+            onOpenCloudAccount={() => setCloudOpen(true)}
+            onSync={onSync}
+            syncing={syncing}
+            lastSyncLabel={lastSyncLabel}
+          />
+        </div>
 
         {/* Quick Commands by OS/Environment Section */}
         <div className="break-inside-avoid mb-4 sm:mb-8">
