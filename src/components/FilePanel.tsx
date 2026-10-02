@@ -346,6 +346,18 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     }
   };
 
+  useEffect(() => {
+    if (!sessionId) return;
+    const handleNavigate = (e: any) => {
+      const p = e.detail?.path;
+      if (p) fetch(p);
+    };
+    window.addEventListener(`submarine-navigate-path-${sessionId}`, handleNavigate);
+    return () => {
+      window.removeEventListener(`submarine-navigate-path-${sessionId}`, handleNavigate);
+    };
+  }, [sessionId]);
+
   // Initial load: try the caller-supplied `initialPath` first (the
   // per-server-saved directory), and fall back to the provider's home if it
   // no longer exists — that way a saved path being removed doesn't strand

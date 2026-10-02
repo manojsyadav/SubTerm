@@ -21,8 +21,23 @@ export function useGlobalShortcuts({
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 0. Global Command Palette: Ctrl+K / Cmd+K
-      if ((e.ctrlKey || e.metaKey) && (e.key === "K" || e.key === "k")) {
+      // 0. Global Command Palette: Ctrl+K / Cmd+K / Ctrl+Shift+P / F1
+      const isCmdPaletteKey =
+        ((e.ctrlKey || e.metaKey) && (e.key === "K" || e.key === "k")) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "P" || e.key === "p")) ||
+        e.key === "F1";
+
+      if (isCmdPaletteKey) {
+        // If it's plain Ctrl+K (without Shift) and focus is currently in a terminal (xterm),
+        // do NOT intercept! Pass it through so nano can cut lines and bash/readline can kill lines.
+        const isTerminalFocused = !!(
+          document.activeElement?.classList?.contains("xterm-helper-textarea") ||
+          document.activeElement?.closest?.(".xterm")
+        );
+        if ((e.key === "k" || e.key === "K") && !e.shiftKey && isTerminalFocused) {
+          return;
+        }
+
         e.preventDefault();
         e.stopPropagation();
         onOpenCommandPalette?.();
@@ -109,6 +124,20 @@ export function useGlobalShortcuts({
           e.stopPropagation();
           window.dispatchEvent(
             new CustomEvent(`submarine-toggle-sftp-${activeView}`)
+          );
+          return;
+        }
+
+        // 8. Quick Open / Edit Remote File: Alt+E, Ctrl+Shift+O, or Ctrl+Alt+E
+        if (
+          (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "e" || e.key === "E")) ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o")) ||
+          ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === "e" || e.key === "E"))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.dispatchEvent(
+            new CustomEvent(`submarine-quick-open-file-${activeView}`)
           );
           return;
         }

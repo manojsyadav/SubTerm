@@ -187,6 +187,8 @@ const TerminalView = ({
   // Small tail of recent remote OUTPUT, kept only to detect no-echo password
   // prompts (see looksLikePasswordPrompt) — never persisted or displayed.
   const recentOutputRef = useRef<string>("");
+  // Track terminal's current working directory (via OSC 7 or shell prompt parsing)
+  const currentCwdRef = useRef<string>("");
 
   const toggleModifier = (m: ModKey) => {
     setModifiers(prev => ({ ...prev, [m]: cycleMod(prev[m]) }));
@@ -496,6 +498,40 @@ const TerminalView = ({
       console.warn("OSC 133 handler registration failed:", e);
     }
 
+    // OSC 7 (Current Working Directory)
+    try {
+      term.parser.registerOscHandler(7, (data: string) => {
+        let p = data.trim();
+        if (p.startsWith("file://")) {
+          try {
+            const url = new URL(p);
+            p = decodeURIComponent(url.pathname);
+          } catch {}
+        }
+        if (p) currentCwdRef.current = p;
+        return true;
+      });
+    } catch (e) {
+      console.warn("OSC 7 registration failed:", e);
+    }
+
+    // Custom Key Event Handler: intercept file quick-open shortcuts BEFORE xterm generates or sends chars to PTY
+    term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (
+        (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "e" || e.key === "E")) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o")) ||
+        ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === "e" || e.key === "E"))
+      ) {
+        if (e.type === "keydown") {
+          window.dispatchEvent(
+            new CustomEvent(`submarine-quick-open-file-session-${sessionId}`)
+          );
+        }
+        return false; // Prevent xterm from sending character (e.g. ē) to shell
+      }
+      return true;
+    });
+
     // Clickable links for URLs and file paths in output
     try {
       term.registerLinkProvider({
@@ -514,7 +550,7 @@ const TerminalView = ({
           while ((match = urlRegex.exec(lineText)) !== null) {
             const url = match[1];
             const startX = match.index + 1;
-            const endX = startX + url.length;
+            const endX = startX + url.length - 1;
             links.push({
               range: {
                 start: { x: startX, y: bufferLineNumber },
@@ -529,13 +565,13 @@ const TerminalView = ({
             });
           }
 
-          // 2. Absolute or home-relative file paths
+          // 2. Absolute or home-relative file paths (/path/to/file or ~/file)
           const pathRegex = /(?:^|[\s"'`])((?:\/[\w.-]+)+\/?|~\/[\w.-]+(?:\/[\w.-]+)*)/g;
           while ((match = pathRegex.exec(lineText)) !== null) {
             const fullPath = match[1];
-            if (fullPath.length >= 4 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
+            if (fullPath.length >= 3 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
               const startX = match.index + (match[0].length - fullPath.length) + 1;
-              const endX = startX + fullPath.length;
+              const endX = startX + fullPath.length - 1;
               links.push({
                 range: {
                   start: { x: startX, y: bufferLineNumber },
@@ -544,9 +580,41 @@ const TerminalView = ({
                 text: fullPath,
                 activate: (_ev, pathText) => {
                   window.dispatchEvent(
-                    new CustomEvent(`submarine-open-editor-${sessionId}`, { detail: { path: pathText } })
+                    new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                      detail: { path: pathText, cwd: currentCwdRef.current },
+                    })
                   );
-                  notify(`Opening ${pathText.split('/').filter(Boolean).pop() || pathText}...`);
+                },
+              });
+            }
+          }
+
+          // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
+          const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
+          while ((match = fileRegex.exec(lineText)) !== null) {
+            const fileName = match[1];
+            const startX = match.index + (match[0].length - fileName.length) + 1;
+            const endX = startX + fileName.length - 1;
+
+            const overlaps = links.some(
+              (l) =>
+                l.range.start.y === bufferLineNumber &&
+                !(endX < l.range.start.x || startX > l.range.end.x)
+            );
+
+            if (!overlaps) {
+              links.push({
+                range: {
+                  start: { x: startX, y: bufferLineNumber },
+                  end: { x: endX, y: bufferLineNumber },
+                },
+                text: fileName,
+                activate: (_ev, pathText) => {
+                  window.dispatchEvent(
+                    new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                      detail: { path: pathText, cwd: currentCwdRef.current },
+                    })
+                  );
                 },
               });
             }
@@ -1008,6 +1076,12 @@ const TerminalView = ({
         const txt = new TextDecoder().decode(data);
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
+
+        // Best-effort prompt CWD detection (e.g. user@hostname:path$ or user@hostname:path#)
+        const promptMatch = /(?:^|[\r\n])(?:[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+):([/~][^\$#\s\)]*)[\$#]/.exec(txt);
+        if (promptMatch && promptMatch[1]) {
+          currentCwdRef.current = promptMatch[1];
+        }
       } catch { /* decode hiccup on a split multibyte chunk — ignore */ }
 
       // If a command was started without OSC 133 shell integration, detect output settling

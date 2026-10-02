@@ -10,7 +10,7 @@ interface QuickEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   entry: FileEntry | null;
-  provider: FileProvider;
+  provider: Pick<FileProvider, "id" | "label"> | FileProvider;
   sessionId?: string;
   onSaved?: () => void;
 }

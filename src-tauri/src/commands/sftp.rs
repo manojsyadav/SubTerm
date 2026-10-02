@@ -52,10 +52,19 @@ pub async fn get_sftp_session(
         }
     };
 
-    let session = session_arc.lock().await;
-    let channel = session.channel_open_session().await.map_err(|e| e.to_string())?;
+    let channel = {
+        let session = session_arc.lock().await;
+        session.channel_open_session().await.map_err(|e| e.to_string())?
+    };
     channel.request_subsystem(true, "sftp").await.map_err(|e| e.to_string())?;
-    let sftp = russh_sftp::client::SftpSession::new(channel.into_stream()).await.map_err(|e| e.to_string())?;
+    let sftp = match tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        russh_sftp::client::SftpSession::new(channel.into_stream())
+    ).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => return Err(format!("SFTP handshake error: {}", e)),
+        Err(_) => return Err("SFTP initialization timed out (subsystem not available on host)".into()),
+    };
     let arc = Arc::new(sftp);
 
     let mut cache = state.sftp_sessions.lock().await;
@@ -89,50 +98,173 @@ pub async fn get_sftp_session(
     Ok(arc)
 }
 
+/// Fallback command runner directly over an SSH channel without needing the SFTP subsystem.
+pub async fn exec_ssh_cmd(
+    state: &SshState,
+    session_id: &str,
+    command: &str,
+) -> Result<String, String> {
+    use tokio::io::AsyncReadExt;
+    let connections = state.connections.lock().await;
+    let session_arc = connections
+        .get(session_id)
+        .cloned()
+        .ok_or_else(|| "Session not found".to_string())?;
+    drop(connections);
+
+    let channel = {
+        let session = session_arc.lock().await;
+        session.channel_open_session().await.map_err(|e| e.to_string())?
+    };
+    channel.exec(true, command.as_bytes()).await.map_err(|e| e.to_string())?;
+    let mut stream = channel.into_stream();
+    let mut output = Vec::new();
+    let mut buf = [0u8; 4096];
+    while let Ok(n) = tokio::time::timeout(std::time::Duration::from_secs(6), stream.read(&mut buf)).await {
+        match n {
+            Ok(0) => break,
+            Ok(bytes_read) => {
+                output.extend_from_slice(&buf[..bytes_read]);
+                if output.len() > 4 * 1024 * 1024 { break; }
+            }
+            Err(_) => break,
+        }
+    }
+    Ok(String::from_utf8_lossy(&output).to_string())
+}
+
 #[tauri::command]
 pub async fn sftp_list_dir(
     state: tauri::State<'_, SshState>,
     session_id: String,
     path: String,
 ) -> Result<SftpListResult, String> {
-    let sftp = get_sftp_session(&state, &session_id).await?;
-    let target_path = if path.is_empty() { ".".to_string() } else { path.clone() };
-    let canonical_path = sftp.canonicalize(&target_path).await.map_err(|e| e.to_string())?;
+    // 1. Try SFTP if available with a 3-second timeout
+    let sftp_attempt: Result<SftpListResult, String> = async {
+        let sftp = get_sftp_session(&state, &session_id).await?;
+        let target_path = if path.is_empty() { ".".to_string() } else { path.clone() };
+        let canonical_path = tokio::time::timeout(std::time::Duration::from_secs(3), sftp.canonicalize(&target_path))
+            .await
+            .map_err(|_| "Canonicalize timeout".to_string())?
+            .map_err(|e| e.to_string())?;
+        
+        let mut read_dir = tokio::time::timeout(std::time::Duration::from_secs(3), sftp.read_dir(&canonical_path))
+            .await
+            .map_err(|_| "Read dir timeout".to_string())?
+            .map_err(|e| e.to_string())?;
+        let mut entries = Vec::new();
+        while let Some(entry) = read_dir.next() {
+            let name = entry.file_name();
+            if name == "." || name == ".." {
+                continue;
+            }
+            let is_dir = entry.file_type().is_dir();
+            let metadata = entry.metadata();
+            let size = metadata.size.unwrap_or(0);
+            let permissions = metadata.permissions;
+            let uid = metadata.uid;
+            let gid = metadata.gid;
+            let modified = metadata.mtime.map(|t| t as u64);
+            
+            let entry_path = if canonical_path.ends_with('/') {
+                format!("{}{}", canonical_path, name)
+            } else {
+                format!("{}/{}", canonical_path, name)
+            };
+            
+            entries.push(SftpFileEntry {
+                name,
+                path: entry_path,
+                is_dir,
+                size,
+                permissions,
+                uid,
+                gid,
+                modified,
+            });
+        }
+        
+        entries.sort_by(|a, b| {
+            if a.is_dir != b.is_dir {
+                b.is_dir.cmp(&a.is_dir)
+            } else {
+                a.name.to_lowercase().cmp(&b.name.to_lowercase())
+            }
+        });
+        
+        Ok(SftpListResult {
+            current_path: canonical_path,
+            entries,
+        })
+    }.await;
+
+    if let Ok(res) = sftp_attempt {
+        return Ok(res);
+    }
+
+    // 2. Fallback to SSH command execution (ls -la)
+    // Works reliably on any Linux/Unix machine even without sftp-server installed
+    let target = if path.is_empty() || path == "." { "" } else { path.as_str() };
+    let escaped = target.replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
+    let cmd = format!(
+        "TARGET=\"{}\"; [ -n \"$TARGET\" ] && cd \"$TARGET\" 2>/dev/null; echo \"__SUBTERM_CWD__$(pwd)\"; ls -la --time-style=+%s 2>/dev/null || ls -la",
+        escaped
+    );
+    let output = exec_ssh_cmd(&state, &session_id, &cmd).await?;
     
-    let mut read_dir = sftp.read_dir(&canonical_path).await.map_err(|e| e.to_string())?;
+    let mut current_path = if !path.is_empty() { path.clone() } else { "/".to_string() };
     let mut entries = Vec::new();
-    while let Some(entry) = read_dir.next() {
-        let name = entry.file_name();
-        if name == "." || name == ".." {
+
+    for line in output.lines() {
+        let t = line.trim();
+        if t.is_empty() { continue; }
+        if let Some(cwd_str) = t.strip_prefix("__SUBTERM_CWD__") {
+            let p = cwd_str.trim();
+            if !p.is_empty() {
+                current_path = p.to_string();
+            }
             continue;
         }
-        let is_dir = entry.file_type().is_dir();
-        let metadata = entry.metadata();
-        let size = metadata.size.unwrap_or(0);
-        let permissions = metadata.permissions;
-        let uid = metadata.uid;
-        let gid = metadata.gid;
-        let modified = metadata.mtime.map(|t| t as u64);
+        if t.starts_with("total ") {
+            continue;
+        }
+
+        let parts: Vec<&str> = t.split_whitespace().collect();
+        if parts.len() < 8 { continue; }
+        let perms = parts[0];
+        let is_dir = perms.starts_with('d');
+        let size = parts[4].parse::<u64>().unwrap_or(0);
         
-        let entry_path = if canonical_path.ends_with('/') {
-            format!("{}{}", canonical_path, name)
+        let name = if parts.len() >= 7 && parts[5].chars().all(|c| c.is_ascii_digit()) {
+            parts[6..].join(" ")
+        } else if parts.len() >= 9 {
+            parts[8..].join(" ")
         } else {
-            format!("{}/{}", canonical_path, name)
+            parts.last().copied().unwrap_or("").to_string()
         };
-        
+
+        if name == "." || name == ".." || name.is_empty() {
+            continue;
+        }
+
+        let entry_path = if current_path.ends_with('/') {
+            format!("{}{}", current_path, name)
+        } else {
+            format!("{}/{}", current_path, name)
+        };
+
         entries.push(SftpFileEntry {
             name,
             path: entry_path,
             is_dir,
             size,
-            permissions,
-            uid,
-            gid,
-            modified,
+            permissions: None,
+            uid: None,
+            gid: None,
+            modified: None,
         });
     }
-    
-    // Sort: directories first, then alphabetically
+
     entries.sort_by(|a, b| {
         if a.is_dir != b.is_dir {
             b.is_dir.cmp(&a.is_dir)
@@ -140,9 +272,9 @@ pub async fn sftp_list_dir(
             a.name.to_lowercase().cmp(&b.name.to_lowercase())
         }
     });
-    
+
     Ok(SftpListResult {
-        current_path: canonical_path,
+        current_path,
         entries,
     })
 }
@@ -1495,13 +1627,63 @@ pub async fn sftp_read_file_text(
     remote_path: String,
     max_bytes: Option<usize>,
 ) -> Result<String, String> {
-    let sftp = get_sftp_session(&state, &session_id).await?;
     let limit = max_bytes.unwrap_or(2 * 1024 * 1024);
-    let data = sftp.read(&remote_path).await.map_err(|e| format!("Failed to read remote file: {}", e))?;
-    if data.len() > limit {
-        return Err(format!("File is too large ({} bytes, limit is {} bytes)", data.len(), limit));
+
+    // 1. Try SFTP with a 3-second timeout
+    let sftp_attempt: Result<String, String> = async {
+        let sftp = get_sftp_session(&state, &session_id).await?;
+        let data = tokio::time::timeout(std::time::Duration::from_secs(3), sftp.read(&remote_path))
+            .await
+            .map_err(|_| "SFTP read timed out".to_string())?
+            .map_err(|e| format!("Failed to read remote file: {}", e))?;
+        if data.len() > limit {
+            return Err(format!("File is too large ({} bytes, limit is {} bytes)", data.len(), limit));
+        }
+        String::from_utf8(data).map_err(|_| "File contains binary data and cannot be opened as text.".to_string())
+    }.await;
+
+    if let Ok(text) = sftp_attempt {
+        return Ok(text);
     }
-    String::from_utf8(data).map_err(|_| "File contains binary data and cannot be opened as text.".to_string())
+
+    // 2. Fallback to SSH command execution (cat / base64)
+    let escaped = remote_path.replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
+    let cmd = format!(
+        "FILE=\"{}\"; if [ ! -e \"$FILE\" ] && [ -e \"$HOME/$FILE\" ]; then FILE=\"$HOME/$FILE\"; fi; if [ -e \"$FILE\" ]; then echo \"__SUBTERM_FILE_FOUND__\"; if command -v base64 >/dev/null 2>&1; then echo \"__SUBTERM_B64__\"; base64 -w 0 \"$FILE\" 2>/dev/null; else echo \"__SUBTERM_RAW__\"; cat \"$FILE\" 2>/dev/null; fi; else echo \"__SUBTERM_NOT_FOUND__\"; fi",
+        escaped
+    );
+    let output = exec_ssh_cmd(&state, &session_id, &cmd).await?;
+    
+    if output.contains("__SUBTERM_NOT_FOUND__") {
+        return Err(format!("File '{}' not found on remote server", remote_path));
+    }
+
+    if let Some(idx) = output.find("__SUBTERM_B64__") {
+        let b64_part = &output[idx + "__SUBTERM_B64__".len()..];
+        let cleaned = b64_part.trim().replace("\r", "").replace("\n", "");
+        use base64::Engine;
+        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(cleaned) {
+            if bytes.len() > limit {
+                return Err(format!("File is too large ({} bytes, limit is {} bytes)", bytes.len(), limit));
+            }
+            return String::from_utf8(bytes).map_err(|_| "File contains binary data and cannot be opened as text.".to_string());
+        }
+    }
+
+    if let Some(idx) = output.find("__SUBTERM_RAW__") {
+        let raw_part = &output[idx + "__SUBTERM_RAW__".len()..];
+        if raw_part.len() > limit {
+            return Err(format!("File is too large ({} bytes, limit is {} bytes)", raw_part.len(), limit));
+        }
+        return Ok(raw_part.to_string());
+    }
+
+    // Fallback: If output has content
+    if output.contains("__SUBTERM_FILE_FOUND__") {
+        return Ok(String::new()); // Legitimately empty file
+    }
+
+    Err(format!("Could not read file: {}", remote_path))
 }
 
 #[tauri::command]
@@ -1511,25 +1693,46 @@ pub async fn sftp_write_file_text(
     remote_path: String,
     content: String,
 ) -> Result<(), String> {
-    use russh_sftp::protocol::OpenFlags;
-    use tokio::io::AsyncWriteExt;
-    let sftp = get_sftp_session(&state, &session_id).await?;
-    let mut remote_file = sftp
-        .open_with_flags(
-            &remote_path,
-            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
-        )
+    // 1. Try SFTP with a 3-second timeout
+    let sftp_attempt: Result<(), String> = async {
+        use russh_sftp::protocol::OpenFlags;
+        use tokio::io::AsyncWriteExt;
+        let sftp = get_sftp_session(&state, &session_id).await?;
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            let mut remote_file = sftp
+                .open_with_flags(
+                    &remote_path,
+                    OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
+                )
+                .await
+                .map_err(|e| format!("Failed to open remote file: {}", e))?;
+            remote_file
+                .write_all(content.as_bytes())
+                .await
+                .map_err(|e| format!("Failed to write to remote: {}", e))?;
+            remote_file
+                .shutdown()
+                .await
+                .map_err(|e| format!("Failed to flush remote file: {}", e))?;
+            Ok::<(), String>(())
+        })
         .await
-        .map_err(|e| format!("Failed to open remote file: {}", e))?;
-    remote_file
-        .write_all(content.as_bytes())
-        .await
-        .map_err(|e| format!("Failed to write to remote: {}", e))?;
-    remote_file
-        .shutdown()
-        .await
-        .map_err(|e| format!("Failed to flush remote file: {}", e))?;
-    Ok(())
+        .map_err(|_| "SFTP write timed out".to_string())?
+    }.await;
+
+    if sftp_attempt.is_ok() {
+        return Ok(());
+    }
+
+    // 2. Fallback to SSH command execution via base64 pipe
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(content.as_bytes());
+    let escaped = remote_path.replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
+    let cmd = format!(
+        "FILE=\"{}\"; if [ ! -e \"$FILE\" ] && [ -e \"$HOME/$FILE\" ]; then FILE=\"$HOME/$FILE\"; fi; echo \"{}\" | base64 -d > \"$FILE\"",
+        escaped, b64
+    );
+    exec_ssh_cmd(&state, &session_id, &cmd).await.map(|_| ())
 }
 
 #[tauri::command]
@@ -1562,28 +1765,7 @@ pub async fn sftp_exec_command(
     session_id: String,
     command: String,
 ) -> Result<String, String> {
-    use tokio::io::AsyncReadExt;
-    let connections = state.connections.lock().await;
-    let session_arc = connections
-        .get(&session_id)
-        .cloned()
-        .ok_or_else(|| "Session not found".to_string())?;
-    drop(connections);
-
-    let channel = {
-        let session = session_arc.lock().await;
-        session.channel_open_session().await.map_err(|e| e.to_string())?
-    };
-    channel.exec(true, command.as_bytes()).await.map_err(|e| e.to_string())?;
-    let mut stream = channel.into_stream();
-    let mut output = Vec::new();
-    let mut buf = [0u8; 4096];
-    while let Ok(n) = stream.read(&mut buf).await {
-        if n == 0 { break; }
-        output.extend_from_slice(&buf[..n]);
-        if output.len() > 512 * 1024 { break; }
-    }
-    Ok(String::from_utf8_lossy(&output).to_string())
+    exec_ssh_cmd(&state, &session_id, &command).await
 }
 
 #[derive(serde::Serialize)]
