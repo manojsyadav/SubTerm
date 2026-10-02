@@ -24,6 +24,7 @@ This fork diverges from the original Submarine repository by adding a massive su
 - **In-App Quick File Editor & Picker**: 1-click terminal file path editing, `Alt+E` quick file search with interactive picker, and a resilient SSH execution fallback engine (supports minimal Linux/DietPi environments without `sftp-server`).
 - **Parallel Tool Tabs**: Dedicated first-class tabs on the session rail for **Docker** (containers & images), **Processes** (real-time task manager), and **Services** (systemd service control), cleanly decoupled from System Info.
 - **Top Bar Quick Access Servers**: Pin up to 5 quick-access servers next to the logo in the top bar with active green dot status indicators, direct switching/connecting without tab duplication, and settings page management (add, reorder, delete).
+- **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager in Settings with interactive key recording, conflict detection, category filters, and factory reset. Built with an xterm-safe interceptor so custom keys never clash with shell tools (`nano`, `vim`, `bash`).
 - **Advanced SFTP**: Clickable breadcrumbs, side-by-side visual diffs before overwriting, Smart Tar transfer acceleration for high-speed directory sync, and an in-app code editor.
 - **Universal Command Palette**: A universal Ctrl+K command palette for cluster fleet operations and quick actions.
 - **Docker & Git Integration**: 1-click container port tunneling, browser launch, and a dedicated Git drawer for branch inspection, diffs, and commits.

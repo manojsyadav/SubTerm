@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { 
   Search, Server, Terminal, Folder, SplitSquareHorizontal, 
   Columns, Rows, Settings, Plus, X, Command, Play, Bookmark,
-  Layers, LogOut, ArrowRight
+  Layers, LogOut, ArrowRight, FileCode
 } from "lucide-react";
+import { getActiveShortcut } from "../shortcuts";
 
 export interface PaletteItem {
   id: string;
@@ -68,12 +69,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     // 1. Session Actions (if in a session)
     if (isSessionActive) {
       list.push({
+        id: "act-quick-open",
+        category: "Action",
+        title: "Quick Open / Edit Remote File",
+        subtitle: "Search and open remote files in built-in editor",
+        icon: <FileCode size={14} className="text-amber-400" />,
+        shortcut: getActiveShortcut("quickOpenFile"),
+        action: () => {
+          window.dispatchEvent(new CustomEvent(`submarine-quick-open-file-${activeView}`));
+        },
+      });
+      list.push({
         id: "act-new-term",
         category: "Action",
         title: "New Terminal Tab",
         subtitle: "Open additional shell in active session",
         icon: <Terminal size={14} className="text-primary" />,
-        shortcut: "Ctrl+Shift+T",
+        shortcut: getActiveShortcut("newTerminal"),
         action: () => {
           window.dispatchEvent(new CustomEvent(`submarine-new-terminal-${activeView}`));
         },
@@ -84,7 +96,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         title: "Split Terminal Horizontally",
         subtitle: "Side-by-side terminal split",
         icon: <Columns size={14} className="text-indigo-400" />,
-        shortcut: "Ctrl+Shift+D",
+        shortcut: getActiveShortcut("splitHorizontal"),
         action: () => {
           window.dispatchEvent(new CustomEvent(`submarine-split-terminal-${activeView}`, { detail: { orientation: "h" } }));
         },
@@ -95,7 +107,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         title: "Split Terminal Vertically",
         subtitle: "Stacked terminal split",
         icon: <Rows size={14} className="text-indigo-400" />,
-        shortcut: "Ctrl+Shift+E",
+        shortcut: getActiveShortcut("splitVertical"),
         action: () => {
           window.dispatchEvent(new CustomEvent(`submarine-split-terminal-${activeView}`, { detail: { orientation: "v" } }));
         },
@@ -106,7 +118,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         title: "Toggle SFTP File Explorer",
         subtitle: "Open or close SFTP workspace",
         icon: <Folder size={14} className="text-emerald-400" />,
-        shortcut: "Ctrl+Shift+F",
+        shortcut: getActiveShortcut("toggleSftp"),
         action: () => {
           window.dispatchEvent(new CustomEvent(`submarine-toggle-sftp-${activeView}`));
         },
@@ -117,7 +129,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         title: "Close Current Session",
         subtitle: "Disconnect and close tab",
         icon: <LogOut size={14} className="text-rose-400" />,
-        shortcut: "Ctrl+Shift+W",
+        shortcut: getActiveShortcut("closeSession"),
         action: () => {
           onCloseSession(activeView);
         },
@@ -147,7 +159,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       title: "Go to: Servers & Hosts",
       subtitle: "Switch to servers grid view",
       icon: <Server size={14} className="text-primary" />,
-      shortcut: "Alt+0",
+      shortcut: getActiveShortcut("serversView"),
       action: () => onSelectView("nodes"),
     });
     list.push({

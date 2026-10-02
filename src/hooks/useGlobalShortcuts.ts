@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { matchesKeyCombo, getActiveShortcut } from "../shortcuts";
 
 interface GlobalShortcutsProps {
   enabled: boolean;
@@ -21,11 +22,9 @@ export function useGlobalShortcuts({
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 0. Global Command Palette: Ctrl+K / Cmd+K / Ctrl+Shift+P / F1
-      const isCmdPaletteKey =
-        ((e.ctrlKey || e.metaKey) && (e.key === "K" || e.key === "k")) ||
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "P" || e.key === "p")) ||
-        e.key === "F1";
+      // 0. Global Command Palette: e.g. Ctrl+Shift+P / custom (or F1)
+      const cmdPaletteCombo = getActiveShortcut("commandPalette");
+      const isCmdPaletteKey = matchesKeyCombo(e, cmdPaletteCombo) || e.key === "F1";
 
       if (isCmdPaletteKey) {
         // If it's plain Ctrl+K (without Shift) and focus is currently in a terminal (xterm),
@@ -44,16 +43,26 @@ export function useGlobalShortcuts({
         return;
       }
 
-      // 1. Session cycling: Ctrl+Tab / Ctrl+Shift+Tab
-      if (e.ctrlKey && e.key === "Tab") {
+      // 1. Session cycling: Next/Previous session
+      const nextSessionCombo = getActiveShortcut("nextSession");
+      const prevSessionCombo = getActiveShortcut("prevSession");
+      if (matchesKeyCombo(e, nextSessionCombo) || (e.ctrlKey && !e.shiftKey && e.key === "Tab")) {
         e.preventDefault();
         e.stopPropagation();
         if (sessions.length === 0) return;
         const views = ["nodes", ...sessions.map((s) => s.id)];
         const currentIndex = views.indexOf(activeView);
-        const nextIndex = e.shiftKey
-          ? (currentIndex - 1 + views.length) % views.length
-          : (currentIndex + 1) % views.length;
+        const nextIndex = (currentIndex + 1) % views.length;
+        setActiveView(views[nextIndex]);
+        return;
+      }
+      if (matchesKeyCombo(e, prevSessionCombo) || (e.ctrlKey && e.shiftKey && e.key === "Tab")) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (sessions.length === 0) return;
+        const views = ["nodes", ...sessions.map((s) => s.id)];
+        const currentIndex = views.indexOf(activeView);
+        const nextIndex = (currentIndex - 1 + views.length) % views.length;
         setActiveView(views[nextIndex]);
         return;
       }
@@ -69,8 +78,9 @@ export function useGlobalShortcuts({
         }
       }
 
-      // Alt+0 or Alt+` jumps to Servers grid
-      if (e.altKey && (e.key === "0" || e.key === "`")) {
+      // Alt+0 or custom: Jump to Servers grid
+      const serversCombo = getActiveShortcut("serversView");
+      if (matchesKeyCombo(e, serversCombo) || (e.altKey && e.key === "`")) {
         e.preventDefault();
         e.stopPropagation();
         setActiveView("nodes");
@@ -79,17 +89,16 @@ export function useGlobalShortcuts({
 
       // Session-scoped shortcuts (only when viewing an active server session)
       if (activeView.startsWith("session-")) {
-        // 3. Close active session: Ctrl+Shift+W
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "W" || e.key === "w")) {
+        // Close active session
+        if (matchesKeyCombo(e, getActiveShortcut("closeSession"))) {
           e.preventDefault();
           e.stopPropagation();
           onCloseSession(activeView);
           return;
         }
 
-        // 4. Split terminal horizontally: Ctrl+\ or Ctrl+Shift+D
-        if (((e.ctrlKey || e.metaKey) && e.key === "\\") ||
-            ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "D" || e.key === "d"))) {
+        // Split terminal horizontally
+        if (matchesKeyCombo(e, getActiveShortcut("splitHorizontal"))) {
           e.preventDefault();
           e.stopPropagation();
           window.dispatchEvent(
@@ -98,8 +107,8 @@ export function useGlobalShortcuts({
           return;
         }
 
-        // 5. Split terminal vertically: Ctrl+Shift+E
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "E" || e.key === "e")) {
+        // Split terminal vertically
+        if (matchesKeyCombo(e, getActiveShortcut("splitVertical"))) {
           e.preventDefault();
           e.stopPropagation();
           window.dispatchEvent(
@@ -108,8 +117,8 @@ export function useGlobalShortcuts({
           return;
         }
 
-        // 6. New terminal tab: Ctrl+Shift+T
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "T" || e.key === "t")) {
+        // New terminal tab
+        if (matchesKeyCombo(e, getActiveShortcut("newTerminal"))) {
           e.preventDefault();
           e.stopPropagation();
           window.dispatchEvent(
@@ -118,8 +127,8 @@ export function useGlobalShortcuts({
           return;
         }
 
-        // 7. Toggle SFTP workspace: Ctrl+Shift+F
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+        // Toggle SFTP workspace
+        if (matchesKeyCombo(e, getActiveShortcut("toggleSftp"))) {
           e.preventDefault();
           e.stopPropagation();
           window.dispatchEvent(
@@ -128,12 +137,48 @@ export function useGlobalShortcuts({
           return;
         }
 
-        // 8. Quick Open / Edit Remote File: Alt+E, Ctrl+Shift+O, or Ctrl+Alt+E
-        if (
-          (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "e" || e.key === "E")) ||
-          ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o")) ||
-          ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === "e" || e.key === "E"))
-        ) {
+        // Toggle Docker
+        if (matchesKeyCombo(e, getActiveShortcut("toggleDocker"))) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.dispatchEvent(
+            new CustomEvent(`subterm-toggle-tool-${activeView}`, { detail: { tool: "docker" } })
+          );
+          return;
+        }
+
+        // Toggle Processes
+        if (matchesKeyCombo(e, getActiveShortcut("toggleProcesses"))) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.dispatchEvent(
+            new CustomEvent(`subterm-toggle-tool-${activeView}`, { detail: { tool: "processes" } })
+          );
+          return;
+        }
+
+        // Toggle Services
+        if (matchesKeyCombo(e, getActiveShortcut("toggleServices"))) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.dispatchEvent(
+            new CustomEvent(`subterm-toggle-tool-${activeView}`, { detail: { tool: "services" } })
+          );
+          return;
+        }
+
+        // Toggle System Info
+        if (matchesKeyCombo(e, getActiveShortcut("toggleInfo"))) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.dispatchEvent(
+            new CustomEvent(`subterm-toggle-tool-${activeView}`, { detail: { tool: "info" } })
+          );
+          return;
+        }
+
+        // Quick Open / Edit Remote File
+        if (matchesKeyCombo(e, getActiveShortcut("quickOpenFile"))) {
           e.preventDefault();
           e.stopPropagation();
           window.dispatchEvent(
@@ -148,5 +193,5 @@ export function useGlobalShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [enabled, sessions, activeView, setActiveView, onCloseSession]);
+  }, [enabled, sessions, activeView, setActiveView, onCloseSession, onOpenCommandPalette]);
 }

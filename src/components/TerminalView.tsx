@@ -11,6 +11,7 @@ import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
 import { useBroadcast } from '../ui/broadcast';
 import HistorySearchOverlay from './HistorySearchOverlay';
 import { AiCopilotModal } from './AiCopilotModal';
+import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
 
@@ -515,13 +516,10 @@ const TerminalView = ({
       console.warn("OSC 7 registration failed:", e);
     }
 
-    // Custom Key Event Handler: intercept file quick-open shortcuts BEFORE xterm generates or sends chars to PTY
+    // Custom Key Event Handler: intercept configured shortcuts BEFORE xterm generates or sends chars to PTY
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (
-        (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "e" || e.key === "E")) ||
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o")) ||
-        ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === "e" || e.key === "E"))
-      ) {
+      // 1. Quick open file
+      if (matchesKeyCombo(e, getActiveShortcut("quickOpenFile"))) {
         if (e.type === "keydown") {
           window.dispatchEvent(
             new CustomEvent(`submarine-quick-open-file-session-${sessionId}`)
@@ -529,6 +527,23 @@ const TerminalView = ({
         }
         return false; // Prevent xterm from sending character (e.g. ē) to shell
       }
+
+      // 2. Prevent xterm from sending control sequences for other configured SubTerm actions
+      if (
+        matchesKeyCombo(e, getActiveShortcut("commandPalette")) ||
+        matchesKeyCombo(e, getActiveShortcut("newTerminal")) ||
+        matchesKeyCombo(e, getActiveShortcut("splitHorizontal")) ||
+        matchesKeyCombo(e, getActiveShortcut("splitVertical")) ||
+        matchesKeyCombo(e, getActiveShortcut("toggleSftp")) ||
+        matchesKeyCombo(e, getActiveShortcut("toggleDocker")) ||
+        matchesKeyCombo(e, getActiveShortcut("toggleProcesses")) ||
+        matchesKeyCombo(e, getActiveShortcut("toggleServices")) ||
+        matchesKeyCombo(e, getActiveShortcut("toggleInfo")) ||
+        matchesKeyCombo(e, getActiveShortcut("closeSession"))
+      ) {
+        return false;
+      }
+
       return true;
     });
 

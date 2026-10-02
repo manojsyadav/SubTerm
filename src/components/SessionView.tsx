@@ -580,9 +580,17 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       }
     };
 
+    const handleToggleTool = (e: any) => {
+      const tool = e.detail?.tool;
+      if (tool) {
+        setActiveTool((prev) => (prev === tool ? null : tool));
+      }
+    };
+
     window.addEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
     window.addEventListener(`submarine-new-terminal-${session.id}`, handleNewTerm);
     window.addEventListener(`submarine-toggle-sftp-${session.id}`, handleToggleSftp);
+    window.addEventListener(`subterm-toggle-tool-${session.id}`, handleToggleTool);
     window.addEventListener(`submarine-terminal-cd-${session.id}`, handleTerminalCd);
     window.addEventListener(`submarine-terminal-exec-${session.id}`, handleTerminalExec);
     window.addEventListener(`submarine-open-editor-${session.id}`, handleOpenEditor);
@@ -594,6 +602,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       window.removeEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
       window.removeEventListener(`submarine-new-terminal-${session.id}`, handleNewTerm);
       window.removeEventListener(`submarine-toggle-sftp-${session.id}`, handleToggleSftp);
+      window.removeEventListener(`subterm-toggle-tool-${session.id}`, handleToggleTool);
       window.removeEventListener(`submarine-terminal-cd-${session.id}`, handleTerminalCd);
       window.removeEventListener(`submarine-terminal-exec-${session.id}`, handleTerminalExec);
       window.removeEventListener(`submarine-open-editor-${session.id}`, handleOpenEditor);

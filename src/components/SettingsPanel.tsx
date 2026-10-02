@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2, Plus } from "lucide-react";
 import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
+import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [] }: any) => {
   const accentColors = [
@@ -540,6 +541,11 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
             )}
           </div>
         </section>
+
+        {/* Keyboard Shortcuts Section */}
+        <div className="break-inside-avoid mb-4 sm:mb-8">
+          <SettingsKeyboardShortcuts />
+        </div>
 
         {/* Maintenance Section */}
         <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">
