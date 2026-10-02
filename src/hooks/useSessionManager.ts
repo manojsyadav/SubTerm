@@ -11,9 +11,17 @@ export type Session = {
   quickAuth?: QuickAuth | null;
   initialTool?: "sftp" | "tunnels" | "mirrors" | "cmds" | "info" | null;
   isLocal?: boolean;
+  localShell?: string;
   isProduction?: boolean;
   icon?: string;
   color?: string | null;
+  osInfo?: {
+    os_type: string;
+    distro: string;
+    distro_id: string;
+    version: string;
+    kernel: string;
+  };
 };
 
 interface UseSessionManagerOptions {
@@ -173,19 +181,32 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     [options]
   );
 
-  const openLocalTerminal = useCallback(() => {
-    const sessionId = `session-local-${Date.now()}`;
-    setSessions((prev) => [
-      ...prev,
-      {
-        id: sessionId,
-        serverId: -1,
-        serverName: "Local Terminal",
-        isLocal: true,
-      },
-    ]);
-    setActiveView(sessionId);
-    options?.onAddLog?.("Opened local terminal", "info");
+  const openLocalTerminal = useCallback((preferredShell?: string, forceNew = false) => {
+    setSessions((prev) => {
+      if (!forceNew) {
+        // If an existing local session is open (matching preferred shell if specified), switch to it!
+        const existing = prev.find((s) => s.isLocal && (!preferredShell || s.localShell === preferredShell));
+        if (existing) {
+          setActiveView(existing.id);
+          return prev;
+        }
+      }
+      const sessionId = `session-local-${Date.now()}`;
+      setActiveView(sessionId);
+      const shellLabel = preferredShell ? `Local (${preferredShell})` : "Local Shell";
+      options?.onAddLog?.(`Opened local terminal${preferredShell ? ` (${preferredShell})` : ""}`, "info");
+      return [
+        ...prev,
+        {
+          id: sessionId,
+          serverId: -1,
+          serverName: shellLabel,
+          isLocal: true,
+          localShell: preferredShell,
+          icon: "shell",
+        },
+      ];
+    });
   }, [options]);
 
   return {

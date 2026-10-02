@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useRef, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -70,6 +70,90 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
     }
   }, [status, session?.id, onStatusChange]);
   const [disconnectReason, setDisconnectReason] = useState<string>("");
+
+  const [detectedOs, setDetectedOs] = useState<{
+    os_type: string;
+    distro: string;
+    distro_id: string;
+    version: string;
+    kernel: string;
+  } | null>(() => {
+    if ((session as any)?.osInfo) return (session as any).osInfo;
+    if (session?.isLocal) {
+      if (session.localShell === "wsl") {
+        return { os_type: "linux", distro: "WSL Linux", distro_id: "wsl", version: "", kernel: "" };
+      }
+      const isWin = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
+      const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
+      return {
+        os_type: isWin ? "windows" : isMac ? "darwin" : "linux",
+        distro: isWin ? (session.localShell === "cmd" ? "Windows (CMD)" : "PowerShell") : isMac ? "macOS" : "Linux",
+        distro_id: isWin ? "windows" : isMac ? "macos" : "linux",
+        version: "",
+        kernel: "",
+      };
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (status === "connected" && !session?.isLocal) {
+      invoke<{ os_type: string; distro: string; distro_id: string; version: string; kernel: string }>("detect_session_os", { sessionId: session.id })
+        .then((info) => {
+          if (info && info.os_type) {
+            setDetectedOs(info);
+            if (session.serverId && session.serverId > 0) {
+              invoke("update_server_os_info", { id: session.serverId, osInfo: JSON.stringify(info) }).catch(() => {});
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [status, session?.id, session?.isLocal, session?.serverId]);
+
+  const quickCommands = useMemo(() => {
+    const osType = detectedOs?.os_type || (session?.isLocal ? "windows" : "linux");
+    const isCmd = session?.isLocal && session?.localShell === "cmd";
+
+    if (osType === "windows") {
+      if (isCmd) {
+        return [
+          { label: "ipconfig", cmd: "ipconfig\r" },
+          { label: "tasklist", cmd: "tasklist\r" },
+          { label: "netstat", cmd: "netstat -ano\r" },
+          { label: "dir", cmd: "dir\r" },
+          { label: "systeminfo", cmd: "systeminfo\r" },
+        ];
+      }
+      return [
+        { label: "ipconfig", cmd: "ipconfig\r" },
+        { label: "Get-Process", cmd: "Get-Process | Select-Object -First 15\r" },
+        { label: "Get-Service", cmd: "Get-Service | Where-Object Status -eq 'Running' | Select-Object -First 10\r" },
+        { label: "dir", cmd: "dir\r" },
+        { label: "netstat", cmd: "netstat -ano\r" },
+        { label: "systeminfo", cmd: "systeminfo\r" },
+      ];
+    }
+    if (osType === "darwin") {
+      return [
+        { label: "top", cmd: "top\r" },
+        { label: "df -h", cmd: "df -h\r" },
+        { label: "ifconfig", cmd: "ifconfig\r" },
+        { label: "ps aux", cmd: "ps aux | head -20\r" },
+        { label: "brew list", cmd: "brew list\r" },
+        { label: "git status", cmd: "git status\r" },
+      ];
+    }
+    const isTrueNas = detectedOs?.distro_id === "truenas" || /truenas/i.test(detectedOs?.distro || "");
+    return [
+      { label: "docker ps", cmd: "docker ps\r" },
+      { label: "htop", cmd: "htop\r" },
+      { label: "df -h", cmd: "df -h\r" },
+      { label: "free -m", cmd: "free -m\r" },
+      { label: "git status", cmd: "git status\r" },
+      { label: isTrueNas ? "tail messages" : "tail syslog", cmd: isTrueNas ? "tail -n 50 -f /var/log/messages\r" : "journalctl -n 50 -f\r" },
+    ];
+  }, [detectedOs, session?.isLocal, session?.localShell]);
   const [logs, setLogs] = useState<{ msg: string, type: string, time?: string }[]>([]);
   // Cap to keep a chatty session (monitors, mirrors, MOTD spam) from
   // ballooning React state — each render copies the whole array, so an
@@ -1434,15 +1518,15 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
             narrow viewports (below md) so the terminal tab strip keeps its
             horizontal real estate when space is tight; the full description
             stays in the tooltip either way. */}
-        {session?.isLocal ? (
-          <div className="flex items-center gap-2 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
-            <span className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold tracking-tight">
+        <div className="flex items-center gap-1 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
+          {session?.isLocal && (
+            <span className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold tracking-tight mr-1">
               <TerminalSquare size={13} className="shrink-0" />
-              Local Shell
+              <span className="hidden sm:inline">{session.localShell ? `Local (${session.localShell})` : "Local Shell"}</span>
             </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
+          )}
+
+          {!session?.isLocal && (
             <button
               type="button"
               onClick={() => setFilePickerOpen(true)}
@@ -1453,36 +1537,46 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
               <FileCode size={14} className="shrink-0 text-amber-400" />
               <span className="hidden md:inline text-[11px] font-semibold tracking-tight">Edit File</span>
             </button>
-            {([
-              { id: 'sftp',      icon: Folder,   label: 'SFTP',      hint: 'SFTP — file browser' },
-              { id: 'tunnels',   icon: Network,  label: 'Ports',     hint: 'Ports — port forwarding' },
-              { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
-              { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
-              { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
-              { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
-              { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
-            ] as const).map(({ id, icon: Icon, label, hint }) => {
-              const on = activeTool === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setActiveTool(on ? null : id)}
-                  title={hint}
-                  aria-label={hint}
-                  aria-pressed={on}
-                  className={`h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all ${
-                    on
-                      ? 'bg-primary/10 text-primary border border-primary/20 shadow-inner'
-                      : 'text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white'
-                  }`}
-                >
-                  <Icon size={14} className="shrink-0" />
-                  <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+          )}
+
+          {(session?.isLocal
+            ? [
+                { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
+                { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
+                { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
+                { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
+                { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
+              ]
+            : [
+                { id: 'sftp',      icon: Folder,   label: 'SFTP',      hint: 'SFTP — file browser' },
+                { id: 'tunnels',   icon: Network,  label: 'Ports',     hint: 'Ports — port forwarding' },
+                { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
+                { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
+                { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
+                { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
+                { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
+              ]
+          ).map(({ id, icon: Icon, label, hint }) => {
+            const on = activeTool === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTool(on ? null : id as any)}
+                title={hint}
+                aria-label={hint}
+                aria-pressed={on}
+                className={`h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                  on
+                    ? 'bg-primary/10 text-primary border border-primary/20 shadow-inner'
+                    : 'text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white'
+                }`}
+              >
+                <Icon size={14} className="shrink-0" />
+                <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       )}
 
@@ -1519,15 +1613,21 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
             <span>Copilot</span>
           </button>
           <div className="h-3 w-px bg-white/10 shrink-0" />
-          <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold mr-1 shrink-0 select-none">Quick:</span>
-          {[
-            { label: "docker ps", cmd: "docker ps\r" },
-            { label: "htop", cmd: "htop\r" },
-            { label: "df -h", cmd: "df -h\r" },
-            { label: "free -m", cmd: "free -m\r" },
-            { label: "git status", cmd: "git status\r" },
-            { label: "tail syslog", cmd: "journalctl -n 50 -f\r" },
-          ].map((item) => (
+
+          {/* Detected OS Badge Pill */}
+          {detectedOs && (
+            <div
+              title={`Detected OS: ${detectedOs.distro} ${detectedOs.version} ${detectedOs.kernel ? `| Kernel: ${detectedOs.kernel}` : ""}`}
+              className="h-5 px-2 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1 shrink-0 text-[10px] select-none font-sans"
+            >
+              <span>{detectedOs.os_type === "windows" ? "🪟" : detectedOs.os_type === "darwin" ? "🍎" : detectedOs.distro_id === "truenas" ? "🐡" : "🐧"}</span>
+              <span className="font-semibold text-zinc-200">{detectedOs.distro || detectedOs.os_type}</span>
+              {detectedOs.version && <span className="text-zinc-500 font-normal">{detectedOs.version}</span>}
+            </div>
+          )}
+
+          <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold ml-1 mr-0.5 shrink-0 select-none">Quick:</span>
+          {quickCommands.map((item: { label: string; cmd: string }) => (
             <button
               key={item.label}
               onClick={() => {
@@ -1814,6 +1914,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                       serverName={session.serverName}
                       isProd={isProd}
                       isLocal={session.isLocal}
+                      localShell={session?.localShell}
                       onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                     />
                     {/* Per-pane detach affordance — pulls the pane out of
@@ -1922,6 +2023,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                     serverName={session.serverName}
                     isProd={isProd}
                     isLocal={session.isLocal}
+                    localShell={session?.localShell}
                     onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                   />
                 ))}
@@ -1941,6 +2043,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                   serverName={session.serverName}
                   isProd={isProd}
                   isLocal={session.isLocal}
+                  localShell={session?.localShell}
                   onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                 />
               </div>

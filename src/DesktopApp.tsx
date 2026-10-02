@@ -145,6 +145,15 @@ function DesktopApp() {
     handleProfileUnlocked, handleLogout: vaultLogout,
   } = vault;
 
+  const [availableShells, setAvailableShells] = useState<{ id: string; name: string; command: string }[]>([]);
+  const [shellMenuOpen, setShellMenuOpen] = useState(false);
+
+  useEffect(() => {
+    invoke<{ id: string; name: string; command: string }[]>("get_available_local_shells")
+      .then((shells) => setAvailableShells(shells || []))
+      .catch(() => {});
+  }, []);
+
   vaultRef.current = vault;
 
   const handleLogout = () => vaultLogout(sessions, confirm, () => {
@@ -430,21 +439,82 @@ function DesktopApp() {
 
       {/* Top Bar Bookmarks Strip: Local Shell + Quick Access Servers */}
       <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.03] border border-white/5 rounded-lg no-drag shrink-0 mx-1">
-        {/* Pinned Bookmark: Local Shell */}
+        {/* Pinned Bookmark: Local Shell with Shell Flavor Selector */}
         {isUnlocked && (
-          <button
-            type="button"
-            onClick={openLocalTerminal}
-            title={`Open Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
-            className={`h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
-              activeView.startsWith("session-local-")
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm font-semibold"
-                : "text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20"
-            }`}
-          >
-            <Terminal size={12} className={activeView.startsWith("session-local-") ? "text-emerald-400" : "text-emerald-500/80"} />
-            <span className="whitespace-nowrap tracking-tight font-medium">Local Shell</span>
-          </button>
+          <div className="relative flex items-center">
+            <button
+              type="button"
+              onClick={() => openLocalTerminal()}
+              title={`Open or Focus Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
+              className={`h-7 pl-2.5 pr-1.5 rounded-l-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
+                activeView.startsWith("session-local-")
+                  ? "bg-emerald-500/20 text-emerald-300 border-y border-l border-emerald-500/40 shadow-sm font-semibold"
+                  : "text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-l border-transparent hover:border-emerald-500/20"
+              }`}
+            >
+              <Terminal size={12} className={activeView.startsWith("session-local-") ? "text-emerald-400" : "text-emerald-500/80"} />
+              <span className="whitespace-nowrap tracking-tight font-medium">Local Shell</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShellMenuOpen((v) => !v);
+              }}
+              title="Select Shell (PowerShell, CMD, Git Bash, WSL)"
+              className={`h-7 px-1.5 rounded-r-md flex items-center justify-center transition-all ${
+                activeView.startsWith("session-local-")
+                  ? "bg-emerald-500/20 text-emerald-300 border-y border-r border-emerald-500/40 hover:bg-emerald-500/30"
+                  : "text-zinc-500 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-r border-transparent hover:border-emerald-500/20"
+              }`}
+            >
+              <ChevronDown size={11} className={`transition-transform duration-150 ${shellMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {shellMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShellMenuOpen(false)} />
+                <div className="absolute left-0 top-full mt-1 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-lg shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11px]">
+                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border-b border-white/5 mb-1 flex items-center justify-between">
+                    <span>Installed Shells</span>
+                    <span className="text-[9px] text-zinc-500 font-normal">Choose flavor</span>
+                  </div>
+                  {availableShells.length > 0 ? (
+                    availableShells.map((sh) => (
+                      <button
+                        key={sh.id}
+                        type="button"
+                        onClick={() => {
+                          setShellMenuOpen(false);
+                          openLocalTerminal(sh.id, false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-300 flex items-center justify-between group transition-colors"
+                      >
+                        <span className="font-medium truncate">{sh.name}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono group-hover:text-emerald-400/80 shrink-0 ml-2">{sh.id}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-1.5 text-zinc-500 italic text-[10.5px]">Default OS Shell</div>
+                  )}
+                  <div className="border-t border-white/5 mt-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShellMenuOpen(false);
+                        openLocalTerminal(undefined, true);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-white/5 text-zinc-400 hover:text-white flex items-center gap-2 transition-colors font-medium"
+                    >
+                      <Plus size={12} className="text-zinc-500" />
+                      <span>+ New Tab (Default Shell)</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Separator if quick access servers exist */}

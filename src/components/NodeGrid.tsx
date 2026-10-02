@@ -317,9 +317,29 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
             <Globe size={10} className="text-zinc-400 shrink-0" />
             <span className="text-[10.5px] text-zinc-300 font-mono truncate">{s.host}</span>
+            {(() => {
+              if (!s.os_info) return null;
+              try {
+                const info = typeof s.os_info === "string" ? JSON.parse(s.os_info) : s.os_info;
+                const icon = info.os_type === "windows" ? "🪟" : info.os_type === "darwin" ? "🍎" : info.distro_id === "truenas" ? "🐡" : "🐧";
+                const label = info.distro || info.os_type;
+                if (!label) return null;
+                return (
+                  <span
+                    title={`OS: ${info.distro} ${info.version || ""}`}
+                    className="ml-auto text-[9.5px] px-1.5 py-0.2 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1 font-sans shrink-0 font-medium"
+                  >
+                    <span>{icon}</span>
+                    <span className="truncate max-w-[100px]">{label}</span>
+                  </span>
+                );
+              } catch {
+                return null;
+              }
+            })()}
           </div>
         </div>
 

@@ -719,7 +719,7 @@ pub async fn get_servers(state: tauri::State<'_, DbState>) -> Result<Vec<serde_j
     // ORDER BY (position, id): `position` is the manual drag-to-reorder rank
     // (default 0 for never-reordered rows), and id breaks ties so the order is
     // stable and, before any reorder, identical to the old rowid order.
-    let mut stmt = conn.prepare("SELECT id, name, host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, autostart, mirrors, color, notes, run_on_connect, jump_host_id, updated_at, edited_by, position, is_production, icon FROM servers ORDER BY position, id")
+    let mut stmt = conn.prepare("SELECT id, name, host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, autostart, mirrors, color, notes, run_on_connect, jump_host_id, updated_at, edited_by, position, is_production, icon, os_info FROM servers ORDER BY position, id")
         .map_err(|e| format!("[DATABASE] PREPARE_FAILED: {}", e))?;
 
     let rows = stmt.query_map([], |row| {
@@ -752,6 +752,7 @@ pub async fn get_servers(state: tauri::State<'_, DbState>) -> Result<Vec<serde_j
             "position": row.get::<_, i64>(22).unwrap_or(0),
             "is_production": row.get::<_, Option<i32>>(23)?.unwrap_or(0) != 0,
             "icon": row.get::<_, Option<String>>(24)?.unwrap_or_else(|| "server".to_string()),
+            "os_info": row.get::<_, Option<String>>(25)?.unwrap_or_default(),
         }))
     }).map_err(|e| format!("[DATABASE] QUERY_MAPPING_FAILED: {}", e))?;
 
@@ -1239,4 +1240,22 @@ pub async fn get_notes(state: tauri::State<'_, DbState>) -> Result<Vec<serde_jso
         list.push(r.map_err(|e| format!("[DATABASE] ROW_FETCH_FAILED: {}", e))?);
     }
     Ok(list)
+}
+
+#[tauri::command]
+pub async fn update_server_os_info(
+    state: tauri::State<'_, DbState>,
+    id: i32,
+    os_info: String,
+) -> Result<(), String> {
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    conn.execute(
+        "UPDATE servers SET os_info = ?1 WHERE id = ?2",
+        rusqlite::params![os_info, id],
+    )
+    .map_err(|e| format!("[DATABASE] UPDATE_SERVER_OS_INFO_FAILED: {}", e))?;
+    drop(conn_guard);
+    save_vault_internal(&state)?;
+    Ok(())
 }

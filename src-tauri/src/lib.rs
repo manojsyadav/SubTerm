@@ -2310,7 +2310,7 @@ mod sync_engine_tests {
             "CREATE TABLE folders(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, parent_id INTEGER, color TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE ssh_keys(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, public_key TEXT, private_key TEXT, passphrase TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE credentials(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, auth_type TEXT, username TEXT, password TEXT, key_id INTEGER, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
-             CREATE TABLE servers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT, proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT, key_id INTEGER, autostart INTEGER, mirrors TEXT, color TEXT, notes TEXT, run_on_connect TEXT, jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
+             CREATE TABLE servers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT, proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT, key_id INTEGER, autostart INTEGER, mirrors TEXT, color TEXT, notes TEXT, run_on_connect TEXT, jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', os_info TEXT DEFAULT '', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE commands(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE notes(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE monitor_configs(node_id INTEGER PRIMARY KEY, enabled_metrics TEXT, custom_metrics TEXT, paused INTEGER, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);",
@@ -3431,6 +3431,7 @@ async fn setup_master_db_inner(
             "ALTER TABLE servers ADD COLUMN position INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE servers ADD COLUMN is_production INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE servers ADD COLUMN icon TEXT DEFAULT 'server'",
+            "ALTER TABLE servers ADD COLUMN os_info TEXT DEFAULT ''",
         ] {
             if let Err(e) = conn.execute(stmt, []) {
                 let s = e.to_string();
@@ -3473,7 +3474,7 @@ async fn setup_master_db_inner(
             "CREATE TABLE folders (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, parent_id INTEGER, color TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE ssh_keys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, public_key TEXT, private_key TEXT, passphrase TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, auth_type TEXT, username TEXT, password TEXT, key_id INTEGER, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, FOREIGN KEY(key_id) REFERENCES ssh_keys(id));
-             CREATE TABLE servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT DEFAULT 'none', proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT DEFAULT 'vault', key_id INTEGER, autostart INTEGER NOT NULL DEFAULT 0, mirrors TEXT NOT NULL DEFAULT '[]', color TEXT, notes TEXT NOT NULL DEFAULT '', run_on_connect TEXT NOT NULL DEFAULT '', jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, FOREIGN KEY(folder_id) REFERENCES folders(id));
+             CREATE TABLE servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT DEFAULT 'none', proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT DEFAULT 'vault', key_id INTEGER, autostart INTEGER NOT NULL DEFAULT 0, mirrors TEXT NOT NULL DEFAULT '[]', color TEXT, notes TEXT NOT NULL DEFAULT '', run_on_connect TEXT NOT NULL DEFAULT '', jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', os_info TEXT DEFAULT '', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, FOREIGN KEY(folder_id) REFERENCES folders(id));
              CREATE TABLE commands (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE known_hosts (id INTEGER PRIMARY KEY AUTOINCREMENT, host TEXT, port INTEGER, fingerprint TEXT, key_type TEXT);
@@ -5818,6 +5819,65 @@ async fn ssh_info_probe_section(
     run_info_script(&state, &session_id, script, timeout).await
 }
 
+#[tauri::command]
+async fn detect_session_os(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+) -> Result<serde_json::Value, String> {
+    let probe = r#"if [ -f /etc/os-release ]; then echo "OSTYPE:linux"; grep -E '^(ID|VERSION_ID|PRETTY_NAME)=' /etc/os-release; uname -r 2>/dev/null; elif command -v uname >/dev/null 2>&1; then echo "OSTYPE:$(uname -s)"; uname -r 2>/dev/null; [ -f /etc/version ] && cat /etc/version; else echo "OSTYPE:windows"; cmd.exe /c "ver" 2>/dev/null; fi"#;
+    let out = run_exec_capture(&state, &session_id, probe, 8).await.unwrap_or_default();
+
+    let mut os_type = "linux".to_string();
+    let mut distro = "Linux".to_string();
+    let mut distro_id = "linux".to_string();
+    let mut version = "".to_string();
+    let mut kernel = "".to_string();
+
+    for line in out.lines().map(str::trim) {
+        if line.starts_with("OSTYPE:") {
+            let val = line.trim_start_matches("OSTYPE:").to_lowercase();
+            if val.contains("darwin") {
+                os_type = "darwin".to_string();
+                distro = "macOS".to_string();
+                distro_id = "macos".to_string();
+            } else if val.contains("bsd") {
+                os_type = "bsd".to_string();
+                distro = "FreeBSD".to_string();
+                distro_id = "freebsd".to_string();
+            } else if val.contains("windows") {
+                os_type = "windows".to_string();
+                distro = "Windows".to_string();
+                distro_id = "windows".to_string();
+            } else {
+                os_type = "linux".to_string();
+            }
+        } else if line.starts_with("PRETTY_NAME=") {
+            distro = line.trim_start_matches("PRETTY_NAME=").trim_matches('"').trim_matches('\'').to_string();
+        } else if line.starts_with("ID=") {
+            distro_id = line.trim_start_matches("ID=").trim_matches('"').trim_matches('\'').to_lowercase();
+        } else if line.starts_with("VERSION_ID=") {
+            version = line.trim_start_matches("VERSION_ID=").trim_matches('"').trim_matches('\'').to_string();
+        } else if !line.is_empty() && !line.contains('=') && kernel.is_empty() && !line.starts_with("OSTYPE") {
+            kernel = line.to_string();
+        }
+    }
+
+    if distro.to_lowercase().contains("truenas") || distro_id.contains("truenas") {
+        distro_id = "truenas".to_string();
+        if distro.is_empty() || distro == "Linux" {
+            distro = "TrueNAS".to_string();
+        }
+    }
+
+    Ok(serde_json::json!({
+        "os_type": os_type,
+        "distro": distro,
+        "distro_id": distro_id,
+        "version": version,
+        "kernel": kernel,
+    }))
+}
+
 // Validate an iptables/nft table/chain identifier — strict allow-list.
 // Chain names on real hosts are alphanumeric plus `-` `_` `.` and occasional
 // `@`; anything else would risk shell injection when we splice into the
@@ -6852,7 +6912,7 @@ pub fn run() {
             accept_share, import_shared_profile, restore_personal_profile, share_set_role, share_revoke, share_leave, share_delete,
             profile_share_status, stop_sharing, profile_sync_stats,
             set_editor_label,
-            commands::servers::add_server, commands::servers::save_quick_connect_node, commands::servers::edit_server, commands::servers::delete_server, commands::servers::add_mirror_to_server, commands::servers::get_servers, commands::servers::get_ssh_keys, commands::servers::set_server_color, commands::servers::set_folder_color, commands::servers::set_server_notes, commands::servers::set_server_run_on_connect, commands::servers::set_server_jump_host, commands::servers::set_server_is_production, commands::servers::set_server_icon, commands::servers::reorder_servers, commands::servers::clone_server, commands::servers::reveal_server_password, commands::servers::reveal_credential_password, commands::servers::reveal_ssh_key,
+            commands::servers::add_server, commands::servers::save_quick_connect_node, commands::servers::edit_server, commands::servers::delete_server, commands::servers::add_mirror_to_server, commands::servers::get_servers, commands::servers::get_ssh_keys, commands::servers::set_server_color, commands::servers::set_folder_color, commands::servers::set_server_notes, commands::servers::set_server_run_on_connect, commands::servers::set_server_jump_host, commands::servers::set_server_is_production, commands::servers::set_server_icon, commands::servers::update_server_os_info, commands::servers::reorder_servers, commands::servers::clone_server, commands::servers::reveal_server_password, commands::servers::reveal_credential_password, commands::servers::reveal_ssh_key,
             commands::servers::get_credentials, commands::servers::generate_ssh_key,
             commands::servers::add_folder, commands::servers::rename_folder, commands::servers::delete_folder, commands::servers::get_folders,
             commands::servers::add_command, commands::servers::edit_command, commands::servers::delete_command, commands::servers::get_commands,
@@ -6864,7 +6924,7 @@ pub fn run() {
             initiate_connection, verify_fingerprint_response, submit_kbi_response, disconnect_session,
             commands::tunnels::start_tunnel, commands::tunnels::stop_tunnel, commands::tunnels::list_tunnels, commands::tunnels::restart_session_tunnels, commands::tunnels::persist_session_tunnels,
             commands::terminal::open_terminal, commands::terminal::open_local_terminal, commands::terminal::get_available_local_shells, commands::terminal::write_terminal_data, commands::terminal::resize_terminal, commands::terminal::close_terminal,
-            ssh_info_probe_section, ssh_systemctl_action, ssh_kill_process,
+            ssh_info_probe_section, ssh_systemctl_action, ssh_kill_process, detect_session_os,
             ssh_iptables_chain, ssh_nft_chain,
             docker::ssh_docker_container_action,
             docker::ssh_docker_inspect,
