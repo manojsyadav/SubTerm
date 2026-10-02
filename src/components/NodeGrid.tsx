@@ -2,6 +2,7 @@ import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, C
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../ui/confirm";
+import { renderServerIcon } from "./ServerIcon";
 
 export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
   const [search, setSearch] = useState("");
@@ -285,11 +286,22 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           </button>
         )}
 
-        {/* Monogram avatar. */}
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/25 to-primary/[0.03] border border-primary/20 flex items-center justify-center text-primary shadow-inner shrink-0">
-          {monogram
-            ? <span className="font-black text-[14px] leading-none">{monogram}</span>
-            : <Server size={14} />}
+        {/* Icon / Monogram avatar with tag colour. */}
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-inner shrink-0 border transition-all"
+          style={{
+            backgroundColor: s.color ? `${s.color}15` : 'rgba(var(--primary), 0.12)',
+            borderColor: s.color ? `${s.color}35` : 'rgba(var(--primary), 0.25)',
+            color: s.color || 'rgb(var(--primary))',
+          }}
+        >
+          {s.icon && s.icon !== "server" ? (
+            renderServerIcon(s.icon, 16)
+          ) : monogram ? (
+            <span className="font-black text-[14px] leading-none">{monogram}</span>
+          ) : (
+            <Server size={15} />
+          )}
         </div>
 
         {/* Name + host — flex-1 + min-w-0 so long values truncate cleanly. */}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio } from "lucide-react";
+import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal } from "lucide-react";
 import PasswordField from "./PasswordField";
 
 // Compact "2h ago" style relative time for the attribution line.
@@ -282,6 +282,42 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                   <button onClick={() => setIsCreatingFolder(false)} className="w-9 h-9 bg-white/5 text-zinc-400 rounded-lg hover:bg-white/10 transition-all flex justify-center items-center shrink-0"><X size={14} /></button>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-zinc-400 ml-1">Node Icon & Type</label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { id: "server",   label: "Server",     icon: Server },
+                  { id: "nas",      label: "Storage/NAS",icon: HardDrive },
+                  { id: "docker",   label: "Docker/VM",  icon: Box },
+                  { id: "database", label: "Database",   icon: Database },
+                  { id: "cloud",    label: "Cloud/VPS",  icon: Cloud },
+                  { id: "cpu",      label: "Compute",    icon: Cpu },
+                  { id: "router",   label: "Router/IoT", icon: Wifi },
+                  { id: "shield",   label: "Security",   icon: Shield },
+                  { id: "desktop",  label: "Desktop",    icon: Monitor },
+                  { id: "terminal", label: "Shell",      icon: Terminal },
+                ].map(({ id, label, icon: IconComp }) => {
+                  const selected = (newNode.icon || "server") === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      title={label}
+                      onClick={() => setNewNode({ ...newNode, icon: id })}
+                      className={`h-7 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-medium border transition-all ${
+                        selected
+                          ? "bg-primary/20 border-primary/50 text-primary shadow-sm font-semibold"
+                          : "bg-[#1a1a1e] border-white/10 text-zinc-400 hover:text-zinc-200 hover:border-white/20"
+                      }`}
+                    >
+                      <IconComp size={12} className={selected ? "text-primary" : "text-zinc-400"} />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-1.5">

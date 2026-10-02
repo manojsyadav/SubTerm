@@ -12,6 +12,8 @@ export type Session = {
   initialTool?: "sftp" | "tunnels" | "mirrors" | "cmds" | "info" | null;
   isLocal?: boolean;
   isProduction?: boolean;
+  icon?: string;
+  color?: string | null;
 };
 
 interface UseSessionManagerOptions {
@@ -98,6 +100,8 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
               runOnConnect: server.run_on_connect || "",
               initialTool: initialTool || null,
               isProduction: Boolean(server.is_production || /prod|production|live/i.test(server.name || "")),
+              icon: server.icon || "server",
+              color: server.color ?? null,
             },
           ];
         } else if (initialTool) {
@@ -126,6 +130,8 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
           runOnConnect: srv.run_on_connect || "",
           initialTool: null,
           isProduction: Boolean(srv.is_production || /prod|production|live/i.test(srv.name || "")),
+          icon: srv.icon || "server",
+          color: srv.color ?? null,
         });
       });
       setSessions((prev) => {

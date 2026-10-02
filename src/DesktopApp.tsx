@@ -18,6 +18,7 @@ import { useIsNarrow } from "./hooks/useViewport";
 import { Sidebar } from "./components/Sidebar";
 import { NodeGrid } from "./components/NodeGrid";
 import AddNodePanel from "./components/AddNodePanel";
+import { renderServerIcon } from "./components/ServerIcon";
 import TerminalView from "./components/TerminalView";
 import SettingsPanel from "./components/SettingsPanel";
 import ProfilePanel from "./components/ProfilePanel";
@@ -238,6 +239,7 @@ function DesktopApp() {
     // wipe the stored secret.
     password_dirty: false,
     is_production: false,
+    icon: "server",
   };
 
   // Live width-based "narrow viewport" flag. Replaces a one-shot UA check
@@ -377,6 +379,7 @@ function DesktopApp() {
       // and a real overwrite.
       password_dirty: false,
       is_production: Boolean(server.is_production),
+      icon: server.icon || "server",
     });
     setIsPanelOpen(true);
   };
@@ -484,14 +487,11 @@ function DesktopApp() {
                     : "bg-white/[0.02] border border-white/5 text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] hover:border-white/10"
                 }`}
               >
-                {server.color && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-sm shrink-0"
-                    style={{ backgroundColor: server.color }}
-                  />
-                )}
+                <span className="shrink-0" style={server.color ? { color: server.color } : {}}>
+                  {renderServerIcon(server.icon || "server", 11)}
+                </span>
                 <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     isCurrent || isConn
                       ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
                       : isConnIng
@@ -805,6 +805,9 @@ function DesktopApp() {
                   the same tab pill roughly 30% more legible characters per
                   pixel (uppercase is wider per glyph) without changing the
                   strip height, which stays h-7. */}
+              <span className="shrink-0 mr-1.5 opacity-80" style={s.color ? { color: s.color } : {}}>
+                {renderServerIcon(s.icon || "server", 11)}
+              </span>
               <span className="text-[11px] font-semibold whitespace-nowrap tracking-tight">{s.serverName}</span>
               {s.isProduction && (
                 <span className="ml-1.5 px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
@@ -2181,6 +2184,11 @@ function DesktopApp() {
               await invoke("set_server_is_production", { id: savedId, value: !!newNode.is_production });
             } catch (e) {
               addLog(`SAVE_IS_PRODUCTION_FAILED: ${e}`, "error");
+            }
+            try {
+              await invoke("set_server_icon", { id: savedId, icon: newNode.icon || "server" });
+            } catch (e) {
+              addLog(`SAVE_ICON_FAILED: ${e}`, "error");
             }
             setIsPanelOpen(false);
             setFormError("");
