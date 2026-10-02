@@ -1675,6 +1675,7 @@ function DesktopApp() {
                               onTerminalsChange={handleTerminalsChange}
                               chromeless={isVisible && isTiled && !isFocused}
                               isSessionActive={isFocused && viewIsSession}
+                              onOpenSettings={() => setActiveView("settings")}
                             />
                           </ErrorBoundary>
                         </div>

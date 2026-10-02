@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal } from "lucide-react";
 import TerminalView from "./TerminalView";
 import SftpWorkspace from "./SftpWorkspace";
 import TunnelsPanel from "./TunnelsPanel";
@@ -15,6 +15,7 @@ import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
 import { useTextPrompt } from "../ui/confirm";
+import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -56,7 +57,7 @@ const SepToggle = ({ on, onToggle, status, title, onReconnect }: {
   </span>
 );
 
-const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true }: any) => {
+const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: any) => {
   const isProd = Boolean((session as any)?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>(() => session?.isLocal ? 'connected' : 'connecting');
 
@@ -111,49 +112,8 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
     }
   }, [status, session?.id, session?.isLocal, session?.serverId]);
 
-  const quickCommands = useMemo(() => {
-    const osType = detectedOs?.os_type || (session?.isLocal ? "windows" : "linux");
-    const isCmd = session?.isLocal && session?.localShell === "cmd";
-
-    if (osType === "windows") {
-      if (isCmd) {
-        return [
-          { label: "ipconfig", cmd: "ipconfig\r" },
-          { label: "tasklist", cmd: "tasklist\r" },
-          { label: "netstat", cmd: "netstat -ano\r" },
-          { label: "dir", cmd: "dir\r" },
-          { label: "systeminfo", cmd: "systeminfo\r" },
-        ];
-      }
-      return [
-        { label: "ipconfig", cmd: "ipconfig\r" },
-        { label: "Get-Process", cmd: "Get-Process | Select-Object -First 15\r" },
-        { label: "Get-Service", cmd: "Get-Service | Where-Object Status -eq 'Running' | Select-Object -First 10\r" },
-        { label: "dir", cmd: "dir\r" },
-        { label: "netstat", cmd: "netstat -ano\r" },
-        { label: "systeminfo", cmd: "systeminfo\r" },
-      ];
-    }
-    if (osType === "darwin") {
-      return [
-        { label: "top", cmd: "top\r" },
-        { label: "df -h", cmd: "df -h\r" },
-        { label: "ifconfig", cmd: "ifconfig\r" },
-        { label: "ps aux", cmd: "ps aux | head -20\r" },
-        { label: "brew list", cmd: "brew list\r" },
-        { label: "git status", cmd: "git status\r" },
-      ];
-    }
-    const isTrueNas = detectedOs?.distro_id === "truenas" || /truenas/i.test(detectedOs?.distro || "");
-    return [
-      { label: "docker ps", cmd: "docker ps\r" },
-      { label: "htop", cmd: "htop\r" },
-      { label: "df -h", cmd: "df -h\r" },
-      { label: "free -m", cmd: "free -m\r" },
-      { label: "git status", cmd: "git status\r" },
-      { label: isTrueNas ? "tail messages" : "tail syslog", cmd: isTrueNas ? "tail -n 50 -f /var/log/messages\r" : "journalctl -n 50 -f\r" },
-    ];
-  }, [detectedOs, session?.isLocal, session?.localShell]);
+  const envKey = useMemo(() => resolveEnvKey(detectedOs, session), [detectedOs, session?.isLocal, session?.localShell]);
+  const { commands: quickCommands } = useQuickCommands(envKey);
   const [logs, setLogs] = useState<{ msg: string, type: string, time?: string }[]>([]);
   // Cap to keep a chatty session (monitors, mirrors, MOTD spam) from
   // ballooning React state — each render copies the whole array, so an
@@ -1626,10 +1586,22 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
             </div>
           )}
 
-          <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold ml-1 mr-0.5 shrink-0 select-none">Quick:</span>
-          {quickCommands.map((item: { label: string; cmd: string }) => (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold ml-1 mr-0.5 select-none">Quick:</span>
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                title="Customize Quick Commands by OS/Environment in Settings"
+                className="h-4 w-4 rounded hover:bg-white/10 text-zinc-500 hover:text-primary transition-colors flex items-center justify-center mr-0.5"
+              >
+                <SlidersHorizontal size={10} />
+              </button>
+            )}
+          </div>
+          {quickCommands.map((item: any) => (
             <button
-              key={item.label}
+              key={item.id || item.label}
               onClick={() => {
                 invoke("write_terminal_data", {
                   terminalId: activeTab,
@@ -1637,7 +1609,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                 }).catch(console.error);
               }}
               title={`Run: ${item.cmd.replace('\r', '')}`}
-              className="h-5 px-1.5 rounded bg-white/[0.03] hover:bg-primary/10 border border-white/5 hover:border-primary/25 hover:text-primary transition-all shrink-0 flex items-center"
+              className="h-5 px-1.5 rounded bg-white/[0.03] hover:bg-primary/10 border border-white/5 hover:border-primary/25 hover:text-primary transition-all shrink-0 flex items-center text-[10.5px]"
             >
               {item.label}
             </button>

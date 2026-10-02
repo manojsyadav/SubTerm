@@ -3,6 +3,7 @@ import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft, Ac
 import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
+import { SettingsQuickCommands } from "./SettingsQuickCommands";
 
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [] }: any) => {
   const accentColors = [
@@ -541,6 +542,11 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
             )}
           </div>
         </section>
+
+        {/* Quick Commands by OS/Environment Section */}
+        <div className="break-inside-avoid mb-4 sm:mb-8">
+          <SettingsQuickCommands />
+        </div>
 
         {/* Keyboard Shortcuts Section */}
         <div className="break-inside-avoid mb-4 sm:mb-8">
