@@ -26,6 +26,7 @@ import MonitoringPanel from "./components/MonitoringPanel";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { CommandPalette } from "./components/CommandPalette";
+import { getActiveShortcut } from "./shortcuts";
 import { useProfileVault } from "./hooks/useProfileVault";
 import { useSessionManager, Session } from "./hooks/useSessionManager";
 import { useWallManager, WallItem, SessionTerm } from "./hooks/useWallManager";
@@ -991,12 +992,14 @@ function DesktopApp() {
           <button
             type="button"
             onClick={() => setIsCommandPaletteOpen(true)}
-            title="Command Palette (Ctrl+K)"
+            title={`Command Palette (${getActiveShortcut("commandPalette")})`}
             className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
           >
             <Command size={11} className="text-primary" />
             <span className="hidden md:inline font-medium">Palette</span>
-            <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">Ctrl+K</kbd>
+            <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">
+              {getActiveShortcut("commandPalette")}
+            </kbd>
           </button>
         )}
         <button
