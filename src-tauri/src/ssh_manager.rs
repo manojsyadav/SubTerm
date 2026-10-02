@@ -92,6 +92,10 @@ pub struct SshState {
     /// double-firing `session-disconnected-{id}` after the user has
     /// already reconnected.
     pub session_generation: Arc<Mutex<HashMap<String, u64>>>,
+    /// Saved passwords for active sessions, used to silently elevate background
+    /// probes (e.g. docker, systemctl, process management) via `sudo -S -p ''`
+    /// on appliance systems like TrueNAS where users have sudo rights with password.
+    pub session_passwords: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl SshState {
@@ -109,6 +113,7 @@ impl SshState {
             transfer_cancels: Arc::new(Mutex::new(HashMap::new())),
             session_tunnel_specs: Arc::new(Mutex::new(HashMap::new())),
             session_generation: Arc::new(Mutex::new(HashMap::new())),
+            session_passwords: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

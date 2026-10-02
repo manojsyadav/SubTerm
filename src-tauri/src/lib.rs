@@ -4197,6 +4197,7 @@ async fn initiate_connection(
     // closes the old jump connection so the reconnect opens a fresh one.
     state.jump_connections.lock().await.remove(&session_id);
     state.sftp_sessions.lock().await.remove(&session_id);
+    state.session_passwords.lock().await.remove(&session_id);
     // Terminal IDs are `${session_id}-term-N` (see SessionView.tsx), so we
     // sweep every PTY task tied to the old handle. Match by the exact
     // `${session_id}-term-` prefix so id `session-1` doesn't sweep the
@@ -4238,6 +4239,7 @@ async fn initiate_connection(
     let state_tunnels = Arc::clone(&state.tunnels);
     let state_session_tunnel_specs = Arc::clone(&state.session_tunnel_specs);
     let state_session_generation = Arc::clone(&state.session_generation);
+    let state_session_passwords = Arc::clone(&state.session_passwords);
     let fp_txs_clone = Arc::clone(&state.fp_txs);
     let kbi_txs_clone = Arc::clone(&state.kbi_txs);
     let state_jump_connections = Arc::clone(&state.jump_connections);
@@ -4699,6 +4701,7 @@ async fn initiate_connection(
                 emit_log("SSH Handshake complete. Authenticating user...", "info");
                 
                 let final_pass = custom_password.or(password);
+                let saved_pass_for_sudo = final_pass.clone();
                 
                 let mut auth_res = if let Some((private_key, passphrase)) = key_data {
                     emit_log("Attempting Private Key Authentication...", "info");
@@ -4784,6 +4787,12 @@ async fn initiate_connection(
                                     .lock()
                                     .await
                                     .insert(session_id_clone.clone(), Arc::clone(&session_arc));
+                                if let Some(ref p) = saved_pass_for_sudo {
+                                    state_session_passwords
+                                        .lock()
+                                        .await
+                                        .insert(session_id_clone.clone(), p.clone());
+                                }
                                 true
                             } else {
                                 false
@@ -5396,6 +5405,7 @@ async fn disconnect_session(
     // underlying SSH handle.
     state.sftp_sessions.lock().await.remove(&session_id);
     state.connections.lock().await.remove(&session_id);
+    state.session_passwords.lock().await.remove(&session_id);
     // Drop any ProxyJump bastion handle for this session — closes the jump
     // connection once the target it was carrying is gone.
     state.jump_connections.lock().await.remove(&session_id);
@@ -5884,13 +5894,14 @@ struct SystemctlActionResult {
     used_sudo: bool,
 }
 
-async fn run_exec_capture(
+async fn run_exec_capture_with_stdin(
     state: &SshState,
     session_id: &str,
     cmd: &str,
     timeout_secs: u64,
+    stdin_data: Option<&str>,
 ) -> Result<String, String> {
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use std::sync::Arc;
 
     let session_arc = {
@@ -5904,6 +5915,10 @@ async fn run_exec_capture(
     };
     channel.exec(true, cmd.as_bytes()).await.map_err(|e| e.to_string())?;
     let mut stream = channel.into_stream();
+    if let Some(input) = stdin_data {
+        let _ = stream.write_all(input.as_bytes()).await;
+        let _ = stream.flush().await;
+    }
     let mut buf: Vec<u8> = Vec::with_capacity(4096);
     let read_fut = async {
         let mut tmp = [0u8; 4096];
@@ -5921,6 +5936,15 @@ async fn run_exec_capture(
         .await
         .map_err(|_| format!("exec timed out after {}s", timeout_secs))?;
     Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+async fn run_exec_capture(
+    state: &SshState,
+    session_id: &str,
+    cmd: &str,
+    timeout_secs: u64,
+) -> Result<String, String> {
+    run_exec_capture_with_stdin(state, session_id, cmd, timeout_secs, None).await
 }
 
 fn parse_exit_marker(raw: &str) -> (i32, String) {
@@ -5984,7 +6008,22 @@ async fn ssh_systemctl_action(
 
     let sudo_cmd = format!("sudo -n systemctl {} {} 2>&1; echo __SUB_EXITCODE:$?", action, unit);
     let raw2 = run_exec_capture(&state, &session_id, &sudo_cmd, 30).await?;
-    let (code2, out2) = parse_exit_marker(&raw2);
+    let (mut code2, mut out2) = parse_exit_marker(&raw2);
+    if code2 != 0 {
+        let saved_password = {
+            let pwds = state.session_passwords.lock().await;
+            pwds.get(&session_id).cloned()
+        };
+        if let Some(pass) = saved_password {
+            let sudo_stdin_cmd = format!("sudo -S -p '' systemctl {} {} 2>&1; echo __SUB_EXITCODE:$?", action, unit);
+            let stdin_payload = format!("{}\n", pass);
+            if let Ok(raw3) = run_exec_capture_with_stdin(&state, &session_id, &sudo_stdin_cmd, 30, Some(&stdin_payload)).await {
+                let (code3, out3) = parse_exit_marker(&raw3);
+                code2 = code3;
+                out2 = out3;
+            }
+        }
+    }
     Ok(SystemctlActionResult {
         success: code2 == 0,
         exit_code: code2,
@@ -6036,7 +6075,22 @@ async fn ssh_kill_process(
 
     let sudo_cmd = format!("sudo -n kill -{} {} 2>&1; echo __SUB_EXITCODE:$?", sig, pid);
     let raw2 = run_exec_capture(&state, &session_id, &sudo_cmd, 15).await?;
-    let (code2, out2) = parse_exit_marker(&raw2);
+    let (mut code2, mut out2) = parse_exit_marker(&raw2);
+    if code2 != 0 {
+        let saved_password = {
+            let pwds = state.session_passwords.lock().await;
+            pwds.get(&session_id).cloned()
+        };
+        if let Some(pass) = saved_password {
+            let sudo_stdin_cmd = format!("sudo -S -p '' kill -{} {} 2>&1; echo __SUB_EXITCODE:$?", sig, pid);
+            let stdin_payload = format!("{}\n", pass);
+            if let Ok(raw3) = run_exec_capture_with_stdin(&state, &session_id, &sudo_stdin_cmd, 15, Some(&stdin_payload)).await {
+                let (code3, out3) = parse_exit_marker(&raw3);
+                code2 = code3;
+                out2 = out3;
+            }
+        }
+    }
     Ok(SystemctlActionResult {
         success: code2 == 0,
         exit_code: code2,

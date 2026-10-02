@@ -62,12 +62,14 @@ fn is_safe_path(s: &str) -> bool {
     ))
 }
 
-async fn run_capture(
+async fn run_capture_with_stdin(
     state: &SshState,
     session_id: &str,
     cmd: &str,
     timeout_secs: u64,
+    stdin_data: Option<&str>,
 ) -> Result<(i32, String), String> {
+    use tokio::io::AsyncWriteExt;
     let session_arc = {
         let connections = state.connections.lock().await;
         connections
@@ -88,6 +90,10 @@ async fn run_capture(
         .await
         .map_err(|e| e.to_string())?;
     let mut stream = channel.into_stream();
+    if let Some(input) = stdin_data {
+        let _ = stream.write_all(input.as_bytes()).await;
+        let _ = stream.flush().await;
+    }
     let mut buf: Vec<u8> = Vec::with_capacity(8192);
     let read_fut = async {
         let mut tmp = [0u8; 8192];
@@ -123,6 +129,15 @@ async fn run_capture(
     Ok((code, out))
 }
 
+async fn run_capture(
+    state: &SshState,
+    session_id: &str,
+    cmd: &str,
+    timeout_secs: u64,
+) -> Result<(i32, String), String> {
+    run_capture_with_stdin(state, session_id, cmd, timeout_secs, None).await
+}
+
 // Run a docker command, sudo-retry if the daemon-socket permission failed.
 // Returns (success, output, used_sudo). Output is stdout+stderr merged.
 async fn run_docker_smart(
@@ -138,13 +153,33 @@ async fn run_docker_smart(
         && (lower.contains("permission denied")
             || lower.contains("cannot connect to the docker daemon")
             || lower.contains("dial unix /var/run/docker.sock")
-            || lower.contains("/var/run/docker.sock: connect: permission"));
+            || lower.contains("/var/run/docker.sock: connect: permission")
+            || lower.contains("a password is required"));
     if code1 == 0 || !needs_sudo {
         return Ok((code1 == 0, out1, false));
     }
+
+    // 1) Try non-interactive sudo -n first (fast path for NOPASSWD users)
     let sudo_cmd = format!("sudo -n {}", cmd);
     let (code2, out2) = run_capture(state, session_id, &sudo_cmd, timeout).await?;
-    Ok((code2 == 0, out2, true))
+    if code2 == 0 {
+        return Ok((true, out2, true));
+    }
+
+    // 2) If sudo -n failed (e.g. TrueNAS non-root user requiring password),
+    // check if we have a saved password for this session to silently elevate via `sudo -S -p ''`.
+    let saved_password = {
+        let pwds = state.session_passwords.lock().await;
+        pwds.get(session_id).cloned()
+    };
+    if let Some(pass) = saved_password {
+        let sudo_stdin_cmd = format!("sudo -S -p '' {}", cmd);
+        let stdin_payload = format!("{}\n", pass);
+        let (code3, out3) = run_capture_with_stdin(state, session_id, &sudo_stdin_cmd, timeout, Some(&stdin_payload)).await?;
+        return Ok((code3 == 0, out3, true));
+    }
+
+    Ok((false, out2, true))
 }
 
 #[derive(Serialize)]
