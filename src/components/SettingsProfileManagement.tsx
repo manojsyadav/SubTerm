@@ -17,10 +17,14 @@ export const SettingsProfileManagement = ({
   onUnlocked,
   activeProfile,
   onSwitchProfile,
+  isUnlocked = false,
+  onRequestUnlock,
 }: {
   onUnlocked?: (name: string) => void;
   activeProfile?: string | null;
   onSwitchProfile?: (name: string) => void;
+  isUnlocked?: boolean;
+  onRequestUnlock?: () => void;
 }) => {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [syncStatusMap, setSyncStatusMap] = useState<Record<string, boolean>>({});
@@ -229,17 +233,28 @@ export const SettingsProfileManagement = ({
         <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
           <User size={14} className="text-primary" /> Profile & Workspace Management
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setChangingMasterPw(!changingMasterPw);
-            setCreating(false);
-            setEditingProfile(null);
-          }}
-          className="text-[11px] font-semibold text-zinc-400 hover:text-primary flex items-center gap-1.5 transition-colors"
-        >
-          <Lock size={12} /> Change Master Password
-        </button>
+        {isUnlocked ? (
+          <button
+            type="button"
+            onClick={() => {
+              setChangingMasterPw(!changingMasterPw);
+              setCreating(false);
+              setEditingProfile(null);
+            }}
+            className="text-[11px] font-semibold text-zinc-400 hover:text-primary flex items-center gap-1.5 transition-colors"
+          >
+            <Lock size={12} /> Change Master Password
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onRequestUnlock}
+            className="text-[11px] font-semibold text-amber-400/70 hover:text-amber-300 flex items-center gap-1.5 transition-colors"
+            title="Unlock vault to access this option"
+          >
+            <Lock size={12} /> Locked
+          </button>
+        )}
       </div>
 
       <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-4 shadow-xl">
@@ -260,8 +275,28 @@ export const SettingsProfileManagement = ({
           </div>
         )}
 
+        {/* Change Master Password Drawer — requires unlock */}
+        {!isUnlocked && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3">
+            <Lock size={15} className="text-amber-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11.5px] text-amber-200 font-semibold">Vault is locked</p>
+              <p className="text-[11px] text-amber-300/70 mt-0.5">Unlock SubTerm to rename, delete, or change passwords for workspaces.</p>
+            </div>
+            {onRequestUnlock && (
+              <button
+                type="button"
+                onClick={onRequestUnlock}
+                className="shrink-0 h-7 px-3 rounded-lg bg-amber-400 text-zinc-950 font-bold text-xs hover:bg-amber-300 transition-colors"
+              >
+                Unlock
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Change Master Password Drawer */}
-        {changingMasterPw && (
+        {isUnlocked && changingMasterPw && (
           <div className="space-y-3 p-4 bg-black/60 border border-amber-500/30 rounded-xl animate-in fade-in">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -565,18 +600,18 @@ export const SettingsProfileManagement = ({
                     <button
                       type="button"
                       onClick={() => startEdit(p)}
-                      disabled={busy}
-                      title="Rename or change icon"
-                      className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                      disabled={busy || !isUnlocked}
+                      title={!isUnlocked ? "Unlock vault to rename" : "Rename or change icon"}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                     >
                       <Edit2 size={13} />
                     </button>
                     <button
                       type="button"
                       onClick={() => removeLocal(p)}
-                      disabled={busy || isActive}
-                      title={isActive ? "Cannot delete active workspace" : "Delete profile"}
-                      className="p-1.5 rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                      disabled={busy || isActive || !isUnlocked}
+                      title={isActive ? "Cannot delete active workspace" : !isUnlocked ? "Unlock vault to delete" : "Delete profile"}
+                      className="p-1.5 rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
                     >
                       <Trash2 size={13} />
                     </button>
