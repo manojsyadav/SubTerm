@@ -304,7 +304,7 @@ export const MasterUnlockPage = ({
               <span>Restore from Cloud</span>
             </div>
             <p className="text-[11px] text-zinc-400">
-              Sign in with your SubTerm Cloud account to restore your workspaces.
+              Connect your SubTerm Cloud account to restore your workspaces.
             </p>
             <input
               type="email"

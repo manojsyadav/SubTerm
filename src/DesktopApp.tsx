@@ -51,7 +51,7 @@ function LockedVaultNotice({ onUnlock, onOpenLocal }: { onUnlock: () => void; on
       </div>
       <h3 className="text-lg font-bold text-white tracking-tight mb-1.5">Vault is Locked</h3>
       <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
-        Your remote servers, SSH credentials, and snippets are protected by your master password. Sign in to unlock your workspace.
+        Your remote servers, SSH credentials, and snippets are protected by your master password. Enter your Master Password to unlock your workspace.
       </p>
       <div className="flex items-center gap-3">
         <button
@@ -59,7 +59,7 @@ function LockedVaultNotice({ onUnlock, onOpenLocal }: { onUnlock: () => void; on
           className="h-9 px-5 rounded-xl bg-primary text-black font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98]"
         >
           <Lock size={13} />
-          <span>Sign In / Unlock Vault</span>
+          <span>Unlock Vault</span>
         </button>
         <button
           onClick={onOpenLocal}
@@ -576,17 +576,17 @@ function DesktopApp() {
         <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
       </div>
 
-      {/* Profile / Sign In Pill (Top Left) */}
+      {/* Profile / Unlock Pill (Top Left) */}
       <div className="hidden sm:flex items-center no-drag mr-1">
         {!isUnlocked ? (
           <button
             type="button"
             onClick={() => setIsUnlockModalOpen(true)}
-            title="Sign In / Unlock Vault"
+            title="Unlock Vault"
             className="h-7 px-2.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/5 group"
           >
             <Lock size={12} className="text-amber-400 group-hover:scale-110 transition-transform" />
-            <span>Sign In</span>
+            <span>Unlock</span>
           </button>
         ) : (
           <div className="relative">
@@ -1622,6 +1622,8 @@ function DesktopApp() {
                 lastSyncLabel={lastSyncLabel}
                 activeProfile={activeProfile}
                 onSwitchProfile={switchWorkspace}
+                isUnlocked={isUnlocked}
+                onRequestUnlock={() => setIsUnlockModalOpen(true)}
               />
             )}
 
