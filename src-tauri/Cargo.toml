@@ -1,8 +1,8 @@
 [package]
-name = "submarine"
+name = "subterm"
 version = "0.4.0"
-description = "Submarine SSH Client"
-authors = ["Sina Xhpm (sinaxhpm.com)"]
+description = "SubTerm SSH Client"
+authors = ["Manoj Yadav"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.70"
@@ -13,7 +13,7 @@ rust-version = "1.70"
 # Tauri's `#[mobile_entry_point]` attr on `run()` generates the JNI glue and
 # the bin is never built. `cdylib` is what Gradle dlopens from the APK.
 [lib]
-name = "submarine_lib"
+name = "subterm_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

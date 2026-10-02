@@ -289,7 +289,9 @@ export default function ProfilePanel({ onSync, syncing, lastSyncLabel, autoSync,
             <>
               <CloudOff size={14} className="text-zinc-500 shrink-0" />
               <span className="text-[12.5px] text-zinc-400">
-                Not signed in — lock this profile and sign in from the Cloud button on the picker.
+                {autoSync 
+                  ? "Not signed in — sign in from the Cloud Sync section in the Settings tab." 
+                  : "Not signed in — enable Auto-sync in Settings to sign in."}
               </span>
             </>
           )}

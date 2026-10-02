@@ -52,6 +52,7 @@ function DesktopApp() {
     terminalFontSize: parseInt(localStorage.getItem('submarine-terminal-font-size') || '14'),
     autoSync: localStorage.getItem('submarine-auto-sync') !== 'off',
     syncIntervalMin: Math.max(1, parseInt(localStorage.getItem('submarine-sync-interval-min') || '5', 10) || 5),
+    cloudApiBase: localStorage.getItem('submarine-cloud-api-base') || '',
   });
 
   const wallManager = useWallManager();
@@ -240,6 +241,8 @@ function DesktopApp() {
     localStorage.setItem('submarine-terminal-font-size', appSettings.terminalFontSize.toString());
     localStorage.setItem('submarine-auto-sync', appSettings.autoSync ? 'on' : 'off');
     localStorage.setItem('submarine-sync-interval-min', String(appSettings.syncIntervalMin));
+    localStorage.setItem('submarine-cloud-api-base', appSettings.cloudApiBase);
+    invoke('cloud_set_api_base', { url: appSettings.cloudApiBase }).catch(console.error);
     // Tell already-mounted terminals to re-fit with the new font size.
     // Without this dispatch the listener in TerminalView is dead code and
     // users have to close+reopen every terminal to see a size change.
@@ -252,7 +255,7 @@ function DesktopApp() {
     activeView,
     setActiveView,
     onCloseSession: (sessId) => getCloseHandler(sessId)(),
-    onOpenCommandPalette: () => setIsCommandPaletteOpen(prev => !prev),
+    onOpenCommandPalette: () => isUnlocked && setIsCommandPaletteOpen(prev => !prev),
   });
 
   // Window-close guard. Keep `sessions` mirrored into a ref so the close
@@ -368,7 +371,7 @@ function DesktopApp() {
           macOS traffic lights, plus the icon and brand. */}
       <div className="hidden sm:flex items-center gap-2 pr-4 pl-[75px] md:pl-2" data-tauri-drag-region>
         <img src={logoUrl} alt="" draggable={false} className="h-6 w-auto max-w-[24px] object-contain select-none" />
-        <span className="text-[12px] font-bold text-white tracking-tight">Submarine</span>
+        <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
       </div>
 
       {/* Mobile session picker — replaces the horizontal tab strip on
@@ -868,16 +871,18 @@ function DesktopApp() {
           maximise affordance to surface — so we hide the whole cluster on
           phone and reclaim ~120 px of titlebar for the tab strip. */}
       <div className="hidden sm:flex items-center h-full gap-1 no-drag">
-        <button
-          type="button"
-          onClick={() => setIsCommandPaletteOpen(true)}
-          title="Command Palette (Ctrl+K)"
-          className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
-        >
-          <Command size={11} className="text-primary" />
-          <span className="hidden md:inline font-medium">Palette</span>
-          <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">Ctrl+K</kbd>
-        </button>
+        {isUnlocked && (
+          <button
+            type="button"
+            onClick={() => setIsCommandPaletteOpen(true)}
+            title="Command Palette (Ctrl+K)"
+            className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
+          >
+            <Command size={11} className="text-primary" />
+            <span className="hidden md:inline font-medium">Palette</span>
+            <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">Ctrl+K</kbd>
+          </button>
+        )}
         <button
           onClick={() => appWindow.minimize()}
           title="Minimize"
@@ -1074,7 +1079,11 @@ function DesktopApp() {
     <div className="h-full w-full bg-background flex flex-col overflow-hidden text-zinc-200 select-none">
       {TitleBar()}
       {!isUnlocked ? (
-        <ProfileSelectPage onUnlocked={handleProfileUnlocked} />
+        activeView === "settings" ? (
+          <SettingsPanel settings={appSettings} setSettings={setAppSettings} onOpenLogs={() => setActiveView("logs")} onClose={() => setActiveView("profile")} onUnlocked={handleProfileUnlocked} />
+        ) : (
+          <ProfileSelectPage onUnlocked={handleProfileUnlocked} autoSync={appSettings.autoSync} onOpenSettings={() => setActiveView("settings")} />
+        )
       ) : (
         // Layout swap: on desktop the sidebar is a left rail (row).
         // On mobile we flip to flex-col-reverse so the sidebar component
@@ -2019,7 +2028,8 @@ function DesktopApp() {
         onConnect={openQuickConnect}
       />
 
-      <CommandPalette
+      {isUnlocked && (
+        <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         servers={servers}
@@ -2056,6 +2066,7 @@ function DesktopApp() {
           }
         }}
       />
+      )}
 
 
       <div className={`fixed inset-0 z-50 transition-all duration-500 flex justify-end ${isCommandPanelOpen ? 'bg-black/80 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsCommandPanelOpen(false)}>

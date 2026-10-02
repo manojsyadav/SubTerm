@@ -1,6 +1,9 @@
-import { Settings, Palette, RefreshCw, Pipette, List, Cloud } from "lucide-react";
+import { useState } from "react";
+import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft } from "lucide-react";
+import CloudPanel from "./CloudPanel";
+import { SettingsProfileManagement } from "./SettingsProfileManagement";
 
-const SettingsPanel = ({ settings, setSettings, onOpenLogs }: any) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked }: any) => {
   const accentColors = [
     { name: 'Light Blue', value: '#60a5fa' },
     { name: 'Sky', value: '#38bdf8' },
@@ -19,23 +22,33 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs }: any) => {
     { name: 'Deep Space', value: '#0d0d10' },
   ];
 
+  const [cloudOpen, setCloudOpen] = useState(false);
+
   return (
     <div className="flex-1 p-4 sm:p-10 overflow-y-auto custom-scrollbar animate-in">
-      <header className="mb-6 sm:mb-10">
-        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-          <Settings size={24} className="text-primary" /> Settings
-        </h2>
+      <header className="mb-6 sm:mb-10 flex items-center gap-4">
+        {onClose && (
+          <button onClick={onClose} className="h-9 w-9 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 flex items-center justify-center transition-colors">
+            <ArrowLeft size={16} />
+          </button>
+        )}
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+            <Settings size={24} className="text-primary" /> Settings
+          </h2>
         <p className="text-[13px] text-zinc-400 mt-2">
           Tweak how Submarine looks and feels.
           {' '}
           <span className="text-zinc-500 italic">Per-device — preferences live in this machine's local storage and don't sync with your cloud profile.</span>
         </p>
+        </div>
       </header>
 
       {/* Columns rather than a grid: the sections are very different heights, and
           a 2-col grid rows them up so a short card leaves a tall empty gap beside
           it. Column flow packs them, and break-inside-avoid keeps a card whole. */}
       <div className="columns-1 md:columns-2 gap-4 sm:gap-8">
+        <SettingsProfileManagement onUnlocked={onUnlocked} />
         {/* Appearance Section */}
         <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">
           <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
@@ -189,10 +202,31 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs }: any) => {
             </div>
 
             {settings.autoSync !== false && (
-              <div className="border-t border-white/5 pt-4 text-[12px] text-zinc-400">
-                Currently checking every{' '}
-                <span className="text-zinc-100 font-semibold">{settings.syncIntervalMin ?? 5} min</span>. Change it
-                on the Profile tab, next to Sync now.
+              <div className="border-t border-white/5 pt-4 text-[12px] text-zinc-400 space-y-4">
+                <div>
+                  Currently checking every{' '}
+                  <span className="text-zinc-100 font-semibold">{settings.syncIntervalMin ?? 5} min</span>. Change it
+                  on the Profile tab, next to Sync now.
+                </div>
+                <div>
+                  <div className="text-zinc-100 font-semibold mb-1">Custom API Endpoint</div>
+                  <input
+                    type="text"
+                    value={settings.cloudApiBase || ""}
+                    onChange={(e) => setSettings((s: any) => ({ ...s, cloudApiBase: e.target.value }))}
+                    placeholder="https://api.subterm.com"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 h-9 text-zinc-200 outline-none focus:border-primary/50 placeholder:text-zinc-600 transition-colors"
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-500">Leave blank to use the default backend.</p>
+                </div>
+                <div className="pt-2 border-t border-white/5">
+                  <button
+                    onClick={() => setCloudOpen(true)}
+                    className="h-9 px-4 rounded-xl text-xs font-bold text-zinc-900 bg-primary hover:bg-primary/90 transition-colors flex items-center gap-2"
+                  >
+                    <User size={14} /> Manage Cloud Account
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -221,6 +255,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs }: any) => {
           </div>
         </section>
       </div>
+      <CloudPanel isOpen={cloudOpen} onClose={() => setCloudOpen(false)} onLocalProfilesChanged={() => {}} />
     </div>
   );
 };

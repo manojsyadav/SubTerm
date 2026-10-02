@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  Plus, Trash2, X, AlertTriangle, ArrowRight, Download, Upload,
-  CheckCircle2, Cloud, CloudOff, HardDrive, ChevronDown, RefreshCw, ArrowUpCircle, Heart,
-  ShieldCheck,
+  X, AlertTriangle, ArrowRight, Download,
+  CheckCircle2, Cloud, HardDrive, ChevronDown, RefreshCw, ArrowUpCircle, Heart,
+  ShieldCheck, Settings
 } from "lucide-react";
-import CloudPanel from "./CloudPanel";
 import AboutPanel from "./AboutPanel";
 import logoUrl from "../assets/logo.png";
 import { IS_ANDROID } from "../util/platform";
@@ -31,9 +30,11 @@ interface Row { name: string; local: boolean; cloud: CloudProfile | null; }
 
 interface Props {
   onUnlocked: (profileName: string) => void;
+  autoSync?: boolean;
+  onOpenSettings?: () => void;
 }
 
-const ProfileSelectPage = ({ onUnlocked }: Props) => {
+const ProfileSelectPage = ({ onUnlocked, autoSync, onOpenSettings }: Props) => {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,16 +47,6 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
   const [password, setPassword] = useState("");
   const [enableBiometric, setEnableBiometric] = useState(false);
 
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newConfirmPassword, setNewConfirmPassword] = useState("");
-
-  // Import is a two-step flow: pick file (backend validates header) → prompt
-  // for the profile name to save it under. We keep the picked path here so
-  // the second step can pass it back to Rust on commit.
-  const [importStaged, setImportStaged] = useState<{ sourcePath: string; name: string } | null>(null);
-  const [cloudOpen, setCloudOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
   // Cloud status surfaced directly on this page so the user doesn't have
@@ -74,8 +65,6 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
   const confirm = useConfirm();
 
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
-  const importNameRef = useRef<HTMLInputElement | null>(null);
 
   // Clean the [PREFIX] off backend errors for display.
   const cleanErr = (e: unknown) => String(e).replace(/^\[[A-Z_]+\]\s*/, "");
@@ -98,6 +87,11 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
   // failure must never block unlocking a local profile, so errors are swallowed
   // and just leave the cloud side empty.
   const refreshCloud = useCallback(async () => {
+    if (!autoSync) {
+      setCloudStatus({ signed_in: false, email: null });
+      setCloudProfiles([]);
+      return;
+    }
     try {
       const s = await invoke<CloudStatus>("cloud_status");
       setCloudStatus(s);
@@ -118,7 +112,7 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
     }
   }, []);
 
-  useEffect(() => { refreshCloud(); }, [refreshCloud]);
+  useEffect(() => { refreshCloud(); }, [refreshCloud, autoSync]);
 
   // Check GitHub for a newer release once per app open (this page mounts on
   // launch and on every return to the picker). Best-effort and silent: the
@@ -137,7 +131,7 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
   // owner fills in later). Goes through the backend URL-opener like every other
   // external link so the CSP stays tight.
   const openDonate = () => {
-    invoke("open_external_url", { url: "https://github.com/SinaXhpm/submarine#donate" }).catch(() => {});
+    invoke("open_external_url", { url: "https://github.com/manojsyadav/SubTerm" }).catch(() => {});
   };
 
   // When the expanded row changes, reset + focus the password so opening a
@@ -148,14 +142,8 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
     requestAnimationFrame(() => passwordInputRef.current?.focus());
   }, [selected]);
 
-  useEffect(() => {
-    if (creating) requestAnimationFrame(() => nameInputRef.current?.focus());
-  }, [creating]);
-
   // Merge local + cloud into one ordered list, matched case-insensitively by
-  // display name (a local file and its cloud partition are the SAME profile
-  // even though the partition key may be an opaque UUID). Local-first, then
-  // alphabetical, so the profiles already on this device sit up top.
+  // Merge local + cloud into one ordered list
   const buildRows = (): Row[] => {
     const byKey = new Map<string, Row>();
     for (const p of profiles) byKey.set(p.toLowerCase(), { name: p, local: true, cloud: null });
@@ -203,11 +191,7 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
           const challenge = new Uint8Array(32);
           window.crypto.getRandomValues(challenge);
           await navigator.credentials.get({
-            publicKey: {
-              challenge,
-              timeout: 60000,
-              userVerification: "preferred",
-            },
+            publicKey: { challenge, timeout: 60000, userVerification: "preferred" },
           }).catch(() => {});
         } catch {}
       }
@@ -223,66 +207,13 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
     }
   };
 
-  const createNew = async () => {
-    setError(null);
-    if (!newName.trim()) { setError("Pick a name."); return; }
-    if (!newPassword) { setError("Set a password."); return; }
-    // The backend enforces this too — say it here so the rule shows up while
-    // they're still typing, not as a rejection after they've confirmed it twice.
-    if (newPassword.length < 8) { setError("Use at least 8 characters — this password protects every saved credential."); return; }
-    if (newPassword !== newConfirmPassword) { setError("Passwords don't match."); return; }
-    setBusy(true);
-    try {
-      await invoke("create_profile", { name: newName.trim(), password: newPassword });
-      onUnlocked(newName.trim());
-    } catch (e: any) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const exportProfile = async (name: string) => {
+  const bringDown = async (cloud: CloudProfile) => {
     setBusy(true); setError(null); setInfo(null);
     try {
-      // Returns the chosen path on success, null if the user cancelled the
-      // save dialog. We only surface a toast in the success case.
-      const saved = await invoke<string | null>("export_profile", { name });
-      if (saved) setInfo(`Exported to ${saved}`);
-    } catch (e: any) {
-      setError(cleanErr(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startImport = async () => {
-    setError(null); setInfo(null);
-    setBusy(true);
-    try {
-      const picked = await invoke<[string, string] | null>("import_profile_pick");
-      if (!picked) { setBusy(false); return; }
-      const [sourcePath, suggested] = picked;
-      setImportStaged({ sourcePath, name: suggested });
-      requestAnimationFrame(() => importNameRef.current?.select());
-    } catch (e: any) {
-      setError(cleanErr(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const commitImport = async () => {
-    if (!importStaged) return;
-    const trimmed = importStaged.name.trim();
-    if (!trimmed) { setError("Pick a name for the imported profile."); return; }
-    setBusy(true); setError(null);
-    try {
-      await invoke("import_profile_save", { sourcePath: importStaged.sourcePath, name: trimmed });
-      setImportStaged(null);
-      setInfo(`Imported as "${trimmed}". Open it with the original password.`);
+      await invoke("import_profile_cloud", { profile: cloud.profile, name: cloud.name });
       await reload();
-      setSelected(trimmed);
+      setSelected(cloud.name);
+      setInfo(`Downloaded "${cloud.name}". Open it with its original password.`);
     } catch (e: any) {
       setError(cleanErr(e));
     } finally {
@@ -290,93 +221,7 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
     }
   };
 
-  // Remove the on-disk copy. If the profile is also in the cloud, it stays
-  // there and can be pulled back with its password; if not, it's gone for good
-  // — the confirm wording says which.
-  const removeLocal = async (name: string) => {
-    const inCloud = cloudProfiles.some((c) => c.name.toLowerCase() === name.toLowerCase());
-    const ok = await confirm({
-      title: "Remove from this device",
-      message: inCloud
-        ? `Remove "${name}" from this device?\n\nThe encrypted file here is deleted. It stays in your cloud — you can Get it again anytime with its password.`
-        : `Remove "${name}" from this device?\n\nThe encrypted file here is deleted. This profile is not in your cloud, so it will be gone for good.`,
-      destructive: true,
-      okLabel: "Remove",
-    });
-    if (!ok) return;
-    setBusy(true); setError(null);
-    try {
-      await invoke("delete_profile", { name });
-      await reload();
-      refreshCloud();
-    } catch (e: any) {
-      setError(cleanErr(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Owner-only hard delete of the cloud copy (the /sync store is per-account, so
-  // you can only ever delete your own). Local copies are untouched.
-  const deleteFromCloud = async (row: Row) => {
-    if (!row.cloud) return;
-    const ok = await confirm({
-      title: "Delete from cloud",
-      message: `Delete "${row.name}" from your cloud?\n\nThis erases its synced copy and its restore key from the cloud. Copies already on your devices are NOT touched. This can't be undone.`,
-      destructive: true,
-      okLabel: "Delete from cloud",
-    });
-    if (!ok) return;
-    setBusy(true); setError(null); setInfo(null);
-    try {
-      const n = await invoke<number>("cloud_delete_profile", { profile: row.cloud.profile });
-      setInfo(`Removed "${row.name}" from the cloud (${n} record${n === 1 ? "" : "s"}).`);
-      if (!row.local) setSelected((prev) => (prev === row.name ? "" : prev));
-      await refreshCloud();
-    } catch (e: any) {
-      setError(cleanErr(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Bring a cloud profile onto this device using nothing but its own password:
-  // that password unseals the cloud copy's key AND protects the copy saved
-  // here. One field, no separate recovery secret.
-  const bringDown = async (c: CloudProfile) => {
-    setError(null); setInfo(null);
-    const pw = await textPrompt({
-      title: `Get "${c.name}"`,
-      message: "Enter THIS profile's password — the same one you open it with. It unlocks the cloud copy and protects the copy saved on this device.",
-      placeholder: "Profile password",
-      password: true,
-      okLabel: "Get it",
-      validate: (v: string) => (v.length < 1 ? "Enter the password" : null),
-    });
-    if (pw === null) return;
-    setBusy(true);
-    try {
-      const rep = await invoke<{ pushed: number; pulled: number }>("restore_personal_profile", {
-        cloudProfile: c.profile, localName: c.name, vaultPassword: pw,
-      });
-      setInfo(`"${c.name}" is now on this device — pulled ${rep.pulled} item${rep.pulled === 1 ? "" : "s"}. Open it below with the same password.`);
-      await reload();
-      setSelected(c.name);
-      refreshCloud();
-    } catch (e: any) {
-      setError(cleanErr(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const inputBase =
-    "w-full h-11 px-4 bg-zinc-900/40 border border-white/5 rounded-xl text-[14px] text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-primary/50 focus:bg-zinc-900/60 transition-colors";
-
-  // First run (nothing anywhere) drops straight into create; a returning user
-  // on a fresh device (cloud profiles, no local) still sees the list so they
-  // can Get them. `creating` is the explicit "New profile" toggle.
-  const showCreate = creating || (!loading && profiles.length === 0 && cloudProfiles.length === 0);
+  const showCreate = !loading && profiles.length === 0 && cloudProfiles.length === 0;
 
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-10 bg-background">
@@ -389,15 +234,15 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
             draggable={false}
             className="h-28 w-auto max-w-full object-contain mb-4 drop-shadow-[0_0_32px_rgba(var(--primary),0.22)]"
           />
-          <h1 className="text-[22px] font-semibold text-white tracking-tight leading-none">Submarine</h1>
+          <h1 className="text-[22px] font-semibold text-white tracking-tight leading-none">SubTerm</h1>
           <p className="text-[10px] text-primary/80 mt-1.5 tracking-[0.22em] uppercase font-semibold">
-            Run Silent, Run Deep
+            Modern SSH & SFTP Client
           </p>
           <p className="text-[12.5px] text-zinc-500 mt-2">
             {loading
               ? " "
               : showCreate
-                ? (rows.length === 0 ? "Let's set up your first profile." : "Create a new profile.")
+                ? "You don't have any profiles yet."
                 : null}
           </p>
         </div>
@@ -415,96 +260,16 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
           </div>
         )}
 
-        {importStaged && (
-          <div className="mb-3 px-3 py-3 bg-zinc-900/60 border border-primary/30 rounded-lg space-y-2 animate-in fade-in">
-            <div className="text-[11.5px] text-zinc-300 leading-snug">
-              Importing a profile. Pick a name (the file's password is unchanged).
-            </div>
-            <input
-              ref={importNameRef}
-              value={importStaged.name}
-              onChange={(e) => setImportStaged({ ...importStaged, name: e.target.value })}
-              onKeyDown={(e) => e.key === "Enter" && commitImport()}
-              className={inputBase + " h-9 text-[13px]"}
-              placeholder="Profile name"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={commitImport}
-                disabled={busy || !importStaged.name.trim()}
-                className="flex-1 h-9 rounded-lg text-[12.5px] font-semibold bg-primary text-black disabled:opacity-50"
-              >
-                {busy ? "Importing…" : "Import"}
-              </button>
-              <button
-                onClick={() => { setImportStaged(null); setError(null); }}
-                className="h-9 px-3 rounded-lg text-[12.5px] font-semibold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
         {loading ? (
           <div className="text-center text-zinc-500 text-[12.5px] py-6">Loading…</div>
-        ) : showCreate ? (
-          /* ---- Create a profile ---- */
-          <div className="space-y-3 animate-in fade-in">
-            <input
-              ref={nameInputRef}
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Profile name"
-              className={inputBase}
-            />
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Password"
-              className={inputBase}
-            />
-            <input
-              type="password"
-              value={newConfirmPassword}
-              onChange={(e) => setNewConfirmPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createNew()}
-              placeholder="Confirm password"
-              className={inputBase}
-            />
+        ) : rows.length === 0 ? (
+          <div className="pt-4 flex justify-center">
             <button
-              onClick={createNew}
-              disabled={busy}
-              className="w-full h-11 rounded-xl text-[14px] font-semibold bg-primary text-black hover:shadow-[0_0_24px_rgba(var(--primary),0.3)] disabled:opacity-50 flex items-center justify-center transition-all"
+              onClick={onOpenSettings}
+              className="w-full h-11 rounded-xl bg-primary text-black font-semibold text-[14px] flex items-center justify-center gap-2 hover:shadow-[0_0_24px_rgba(var(--primary),0.3)] transition-all"
             >
-              {busy ? "Creating…" : "Create profile"}
+              <Settings size={16} /> Open Settings to Create Profile
             </button>
-
-            <div className="flex gap-2 pt-1">
-              {rows.length > 0 && (
-                <button
-                  onClick={() => { setCreating(false); setNewName(""); setNewPassword(""); setNewConfirmPassword(""); setError(null); }}
-                  className="flex-1 h-9 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-white/10 text-zinc-400 hover:text-zinc-100 text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <X size={12} /> Cancel
-                </button>
-              )}
-              {!IS_ANDROID && (
-                <button
-                  onClick={startImport}
-                  disabled={busy}
-                  title="Import an exported .submarine file"
-                  className="flex-1 h-9 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-white/10 text-zinc-400 hover:text-zinc-100 text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  <Upload size={12} /> Import
-                </button>
-              )}
-            </div>
-
-            <p className="text-[11.5px] text-zinc-500 leading-relaxed text-center px-2 pt-1">
-              Profiles are encrypted. If you forget the password, the data is gone for good.
-            </p>
           </div>
         ) : (
           /* ---- Your profiles (local + cloud, one list) ---- */
@@ -585,26 +350,6 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
                                 Save for Biometric Unlock
                               </label>
                             </div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {!IS_ANDROID && (
-                                <RowAction onClick={() => exportProfile(row.name)} disabled={busy} icon={<Download size={12} />} label="Export" />
-                              )}
-                              <RowAction onClick={() => removeLocal(row.name)} disabled={busy} icon={<Trash2 size={12} />} label="Remove local" danger />
-                              {row.cloud && (
-                                <RowAction onClick={() => deleteFromCloud(row)} disabled={busy} icon={<CloudOff size={12} />} label="Delete from cloud" danger />
-                              )}
-                              {localStorage.getItem(`submarine-bio-${row.name}`) && (
-                                <RowAction
-                                  onClick={() => {
-                                    localStorage.removeItem(`submarine-bio-${row.name}`);
-                                    setInfo("Biometric key removed.");
-                                  }}
-                                  disabled={busy}
-                                  icon={<Trash2 size={12} />}
-                                  label="Forget biometric"
-                                />
-                              )}
-                            </div>
                           </>
                         ) : (
                           <>
@@ -620,7 +365,6 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
                               >
                                 <Download size={13} /> Get on this device
                               </button>
-                              <RowAction onClick={() => deleteFromCloud(row)} disabled={busy} icon={<CloudOff size={12} />} label="Delete" danger />
                             </div>
                           </>
                         )}
@@ -631,30 +375,11 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
               })}
             </div>
 
-            <div className="flex gap-2 pt-0.5">
-              <button
-                onClick={() => setCreating(true)}
-                className="flex-1 h-9 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-white/10 text-zinc-400 hover:text-zinc-100 text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Plus size={12} /> New profile
-              </button>
-              {!IS_ANDROID && (
-                <button
-                  onClick={startImport}
-                  disabled={busy}
-                  title="Import an exported .submarine file"
-                  className="flex-1 h-9 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-white/10 text-zinc-400 hover:text-zinc-100 text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  <Upload size={12} /> Import
-                </button>
-              )}
-            </div>
           </div>
         )}
 
-        {/* Cloud status bar — always visible. Signed-out shows a Connect
-            link; signed-in shows the account email + a way into Manage. */}
-        <CloudBar status={cloudStatus} busy={busy} onManage={() => setCloudOpen(true)} />
+        {/* Cloud status bar — always visible. Signed-in shows the account email. */}
+        <CloudBar status={cloudStatus} />
 
         {/* About + Donate — a matched pair of pills, with a live "new version"
             notice underneath when one is available. */}
@@ -693,17 +418,6 @@ const ProfileSelectPage = ({ onUnlocked }: Props) => {
         </div>
       </div>
 
-      <CloudPanel
-        isOpen={cloudOpen}
-        onClose={() => {
-          setCloudOpen(false);
-          // The modal may have logged in/out or changed cloud state —
-          // re-pull so the bar (and profile list) reflects reality.
-          refreshCloud();
-        }}
-        onLocalProfilesChanged={reload}
-      />
-
       <AboutPanel isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   );
@@ -740,24 +454,12 @@ const RowAction = ({
 );
 
 const CloudBar = ({
-  status, busy, onManage,
+  status,
 }: {
   status: CloudStatus;
-  busy: boolean;
-  onManage: () => void;
 }) => {
-  // Signed-out: a thin, low-weight link rather than a fourth full-width
-  // button — the user hasn't asked for cloud yet, so we don't want it
-  // competing visually with the profile list.
   if (!status.signed_in) {
-    return (
-      <button
-        onClick={onManage}
-        className="mt-4 h-7 mx-auto text-[11.5px] text-zinc-500 hover:text-primary transition-colors flex items-center justify-center gap-1.5"
-      >
-        <Cloud size={11} /> Connect cloud sync
-      </button>
-    );
+    return null;
   }
   return (
     <div className="mt-4 h-9 px-2.5 rounded-lg border border-white/5 bg-white/[0.02] flex items-center gap-2 text-[11.5px]">
@@ -766,14 +468,6 @@ const CloudBar = ({
       <span className="text-emerald-400 flex items-center gap-1 shrink-0">
         <CheckCircle2 size={11} /> Connected
       </span>
-      <button
-        onClick={onManage}
-        disabled={busy}
-        title="Manage cloud account"
-        className="text-zinc-500 hover:text-primary disabled:opacity-50 shrink-0 p-0.5"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-      </button>
     </div>
   );
 };

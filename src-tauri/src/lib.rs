@@ -6722,7 +6722,7 @@ pub fn run() {
             check_db_exists, setup_master_db, persist_vault,
             list_profiles, cloud_list_sync_profiles, cloud_delete_profile, force_push_profile, select_profile, create_profile, delete_profile, close_profile,
             export_profile, import_profile_pick, import_profile_save,
-            cloud::cloud_status, cloud::cloud_signup, cloud::cloud_consume_verify_link,
+            cloud::cloud_set_api_base, cloud::cloud_status, cloud::cloud_signup, cloud::cloud_consume_verify_link,
             cloud::cloud_set_password, cloud::cloud_login, cloud::cloud_logout,
             cloud::cloud_request_password_reset, cloud::cloud_reset_password,
             cloud::cloud_request_login_link, cloud::cloud_login_with_link,

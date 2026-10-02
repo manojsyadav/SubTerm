@@ -85,7 +85,7 @@ const AboutPanel = ({ isOpen, onClose }: Props) => {
           {/* Brand */}
           <div className="flex flex-col items-center select-none">
             <img src={logoUrl} alt="" draggable={false} className="h-14 w-auto max-w-full object-contain mb-3 drop-shadow-[0_0_24px_rgba(var(--primary),0.18)]" />
-            <h1 className="text-[20px] font-semibold text-white tracking-tight">Submarine</h1>
+            <h1 className="text-[20px] font-semibold text-white tracking-tight">SubTerm</h1>
             <p className="text-[11.5px] text-zinc-500 mt-1 font-mono">
               {info ? `v${info.version}` : "loading…"}
             </p>
@@ -146,7 +146,7 @@ const AboutPanel = ({ isOpen, onClose }: Props) => {
                 onClick={() => openUrl(info.website_url)}
                 className="w-full h-9 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-white/10 text-[12px] text-zinc-300 hover:text-white flex items-center justify-center gap-2 transition-colors"
               >
-                <Globe size={13} /> sinaxhpm.com
+                <Globe size={13} /> Project Page
               </button>
             </div>
           )}

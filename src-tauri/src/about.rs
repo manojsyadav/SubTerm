@@ -10,10 +10,10 @@ use serde::Serialize;
 
 /// `<owner>/<repo>` on GitHub (canonical casing). Used to build the API URL
 /// for the releases query and the user-facing repo URL.
-pub const GITHUB_REPO: &str = "SinaXhpm/Submarine";
+pub const GITHUB_REPO: &str = "manojsyadav/SubTerm";
 
 /// Marketing site / project page. Surfaced in the About panel.
-pub const WEBSITE_URL: &str = "https://sinaxhpm.com";
+pub const WEBSITE_URL: &str = "https://github.com/manojsyadav/SubTerm";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AppInfo {

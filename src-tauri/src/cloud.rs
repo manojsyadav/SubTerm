@@ -24,10 +24,17 @@ use tokio::sync::Mutex;
 // Config
 // ---------------------------------------------------------------------------
 
-/// Where the cloud API lives. Hardcoded per the design decision — change
-/// here and rebuild. Trailing slash intentionally omitted; the client
-/// joins paths with a leading slash.
-pub const CLOUD_API_BASE: &str = "https://submarine.sinaxhpm.com";
+/// Where the cloud API lives. Configured via the UI settings.
+static CLOUD_API_BASE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+pub fn get_api_base() -> String {
+    let base = CLOUD_API_BASE.lock().unwrap().clone();
+    if base.is_empty() {
+        "https://api.subterm.com".to_string()
+    } else {
+        base
+    }
+}
 
 /// HTTP request timeout. Uploads of large vaults can take time but we
 /// don't want a stuck connection to hang the UI forever.
@@ -283,7 +290,7 @@ impl CloudState {
 /// MUST start with `/`.
 pub fn url(path: &str) -> String {
     debug_assert!(path.starts_with('/'), "cloud::url path must start with '/'");
-    format!("{}{}", CLOUD_API_BASE, path)
+    format!("{}{}", get_api_base(), path)
 }
 
 /// Decode a non-2xx response into a human-readable error. We try JSON
@@ -322,6 +329,14 @@ use tauri::Manager as _;
 // friendly strings on error (already prefixed with `[CLOUD]` so the UI
 // can style consistently). State mutation only happens after a 2xx —
 // errors leave the stored token untouched.
+
+#[tauri::command]
+pub async fn cloud_set_api_base(url: String) -> Result<(), String> {
+    if let Ok(mut base) = CLOUD_API_BASE.lock() {
+        *base = url.trim().trim_end_matches('/').to_string();
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn cloud_status(state: tauri::State<'_, Arc<CloudState>>) -> Result<CloudStatus, String> {
