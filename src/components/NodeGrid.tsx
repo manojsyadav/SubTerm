@@ -3,6 +3,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../ui/confirm";
 import { renderServerIcon } from "./ServerIcon";
+import DistroLogo from "./DistroLogo";
 
 export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
   const [search, setSearch] = useState("");
@@ -320,28 +321,32 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
             <Globe size={10} className="text-zinc-400 shrink-0" />
             <span className="text-[10.5px] text-zinc-300 font-mono truncate">{s.host}</span>
-            {(() => {
-              if (!s.os_info) return null;
-              try {
-                const info = typeof s.os_info === "string" ? JSON.parse(s.os_info) : s.os_info;
-                const icon = info.os_type === "windows" ? "🪟" : info.os_type === "darwin" ? "🍎" : info.distro_id === "truenas" ? "🐡" : "🐧";
-                const label = info.distro || info.os_type;
-                if (!label) return null;
-                return (
-                  <span
-                    title={`OS: ${info.distro} ${info.version || ""}`}
-                    className="ml-auto text-[9.5px] px-1.5 py-0.2 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1 font-sans shrink-0 font-medium"
-                  >
-                    <span>{icon}</span>
-                    <span className="truncate max-w-[100px]">{label}</span>
-                  </span>
-                );
-              } catch {
-                return null;
-              }
-            })()}
           </div>
         </div>
+
+        {/* Distro / OS prominent logo on right */}
+        {(() => {
+          if (!s.os_info) return null;
+          try {
+            const info = typeof s.os_info === "string" ? JSON.parse(s.os_info) : s.os_info;
+            if (!info || (!info.distro && !info.os_type)) return null;
+            return (
+              <div
+                title={`OS: ${info.distro || info.os_type} ${info.version || ""}`}
+                className="shrink-0 mr-1 sm:group-hover:opacity-0 transition-opacity flex items-center justify-center select-none"
+              >
+                <DistroLogo
+                  distroId={info.distro_id}
+                  distroName={info.distro}
+                  osType={info.os_type}
+                  size={28}
+                />
+              </div>
+            );
+          } catch {
+            return null;
+          }
+        })()}
 
         {/* Actions: absolute + hover-revealed on desktop so the name gets the
             full width; inline + always-visible on mobile (no hover there). */}

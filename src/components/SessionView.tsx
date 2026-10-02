@@ -16,6 +16,7 @@ import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
 import { useTextPrompt } from "../ui/confirm";
 import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
+import DistroLogo from "./DistroLogo";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -1578,9 +1579,9 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
           {detectedOs && (
             <div
               title={`Detected OS: ${detectedOs.distro} ${detectedOs.version} ${detectedOs.kernel ? `| Kernel: ${detectedOs.kernel}` : ""}`}
-              className="h-5 px-2 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1 shrink-0 text-[10px] select-none font-sans"
+              className="h-5 px-2 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1.5 shrink-0 text-[10px] select-none font-sans"
             >
-              <span>{detectedOs.os_type === "windows" ? "🪟" : detectedOs.os_type === "darwin" ? "🍎" : detectedOs.distro_id === "truenas" ? "🐡" : "🐧"}</span>
+              <DistroLogo distroId={detectedOs.distro_id} distroName={detectedOs.distro} osType={detectedOs.os_type} size={13} />
               <span className="font-semibold text-zinc-200">{detectedOs.distro || detectedOs.os_type}</span>
               {detectedOs.version && <span className="text-zinc-500 font-normal">{detectedOs.version}</span>}
             </div>

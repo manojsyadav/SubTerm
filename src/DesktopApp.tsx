@@ -637,7 +637,7 @@ function DesktopApp() {
                     ? `Switch to ${server.name}`
                     : `Connect to ${server.name}`
                 }
-                className={`h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
+                className={`w-[130px] h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-all overflow-hidden ${
                   isCurrent
                     ? "bg-[#182338] border border-blue-500/50 text-blue-200 shadow-sm font-semibold"
                     : isConn
@@ -657,7 +657,7 @@ function DesktopApp() {
                       : "bg-zinc-600"
                   }`}
                 />
-                <span className="truncate max-w-[110px] tracking-tight">{server.name}</span>
+                <span className="truncate flex-1 min-w-0 text-left tracking-tight">{server.name}</span>
                 {isProd && (
                   <span className="px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
                     PROD
@@ -672,7 +672,7 @@ function DesktopApp() {
                       closeSession(sess.id);
                     }}
                     title="Disconnect session"
-                    className="ml-0.5 w-3.5 h-3.5 rounded flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-white/10 opacity-70 group-hover:opacity-100 transition-opacity"
+                    className="ml-0.5 w-3.5 h-3.5 rounded flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-white/10 opacity-70 group-hover:opacity-100 transition-opacity shrink-0"
                   >
                     <X size={10} />
                   </span>
@@ -933,7 +933,7 @@ function DesktopApp() {
               // it a tab with a 30-char hostname would wrap into a two-line
               // pill and break the row's height.
               title={isMergedTab ? `${s.serverName} · split beside current view (Ctrl-click to unpair)` : s.serverName}
-              className={`group no-drag flex items-center h-7 px-2.5 sm:px-3 rounded-md cursor-pointer transition-all shrink-0 mr-1 ${
+              className={`group no-drag flex items-center w-[130px] h-7 px-2 rounded-md cursor-pointer transition-all shrink-0 mr-1 overflow-hidden ${
                 activeView === s.id
                   ? 'bg-primary/15 text-primary border border-primary/40 shadow-inner shadow-primary/10'
                   : isMergedTab
@@ -943,32 +943,25 @@ function DesktopApp() {
             >
               <span
                 title={dotTitle}
-                className={`w-2 h-2 rounded-full mr-2 shrink-0 ${dotTone}`}
+                className={`w-2 h-2 rounded-full mr-1.5 shrink-0 ${dotTone}`}
                 aria-label={dotTitle}
               />
               {isBroadcastTarget && (
                 <span
                   title="Broadcast target"
                   aria-label="Broadcast target"
-                  className="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.7)]"
+                  className="w-1.5 h-1.5 rounded-full mr-1 shrink-0 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.7)]"
                 />
               )}
               {isMergedTab && (
                 <Columns size={9} className="text-primary/70 mr-1 shrink-0" />
               )}
-              {/* Node name display. Was 10 px + uppercase on desktop — that
-                  combination gave the smallest, hardest-to-read name in the
-                  whole title bar even though it's the ID users need most.
-                  Bumping to 12 px and dropping the uppercase transform gives
-                  the same tab pill roughly 30% more legible characters per
-                  pixel (uppercase is wider per glyph) without changing the
-                  strip height, which stays h-7. */}
-              <span className="shrink-0 mr-1.5 opacity-80" style={s.color ? { color: s.color } : {}}>
+              <span className="shrink-0 mr-1 opacity-80" style={s.color ? { color: s.color } : {}}>
                 {renderServerIcon(s.icon || "server", 11)}
               </span>
-              <span className="text-[11px] font-semibold whitespace-nowrap tracking-tight">{s.serverName}</span>
+              <span className="text-[11px] font-semibold truncate flex-1 min-w-0 text-left tracking-tight">{s.serverName}</span>
               {s.isProduction && (
-                <span className="ml-1.5 px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                <span className="ml-1 px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
                   PROD
                 </span>
               )}
