@@ -29,6 +29,7 @@ interface CommandPaletteProps {
   onCloseSession: (sessionId: string) => void;
   commands?: { id: number; title: string; content: string }[];
   onExecuteCommand?: (cmd: string) => void;
+  enableMonitoring?: boolean;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -45,6 +46,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onCloseSession,
   commands = [],
   onExecuteCommand,
+  enableMonitoring = true,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -156,14 +158,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       icon: <Bookmark size={14} className="text-amber-400" />,
       action: () => onSelectView("library"),
     });
-    list.push({
-      id: "nav-monitor",
-      category: "Action",
-      title: "Go to: Resource Monitor",
-      subtitle: "Real-time CPU/RAM/Network dashboard",
-      icon: <Layers size={14} className="text-emerald-400" />,
-      action: () => onSelectView("monitor"),
-    });
+    if (enableMonitoring !== false) {
+      list.push({
+        id: "nav-monitor",
+        category: "Action",
+        title: "Go to: Resource Monitor",
+        subtitle: "Real-time CPU/RAM/Network dashboard",
+        icon: <Layers size={14} className="text-emerald-400" />,
+        action: () => onSelectView("monitor"),
+      });
+    }
     list.push({
       id: "nav-wall",
       category: "Action",

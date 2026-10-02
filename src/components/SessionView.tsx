@@ -53,7 +53,7 @@ const SepToggle = ({ on, onToggle, status, title, onReconnect }: {
   </span>
 );
 
-const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange }: any) => {
+const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true }: any) => {
   const isProd = Boolean((session as any)?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>('connecting');
 
@@ -1699,7 +1699,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                       sessionId={session.id}
                       terminalId={t.id}
                       disabled={status !== 'connected' || !!sessionEndedAudit}
-                      isActive={isFocused && !(activeTool && isCompact)}
+                      isActive={isSessionActive && isFocused && !(activeTool && isCompact)}
                       containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                       connectionEpoch={connectionEpoch}
                       serverId={session.serverId}
@@ -1824,7 +1824,7 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                   sessionId={session.id}
                   terminalId={t.id}
                   disabled={status !== 'connected' || !!sessionEndedAudit}
-                  isActive={activeTab === t.id && !(activeTool && isCompact)}
+                  isActive={isSessionActive && activeTab === t.id && !(activeTool && isCompact)}
                   containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                   connectionEpoch={connectionEpoch}
                   serverId={session.serverId}

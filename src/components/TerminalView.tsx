@@ -92,8 +92,16 @@ const TerminalView = ({
   // state is observed without having to tear down and rebuild xterm.
   const disabledRef = useRef(disabled);
   useEffect(() => {
+    const wasDisabled = disabledRef.current;
     disabledRef.current = disabled;
-  }, [disabled]);
+    // Auto-focus xterm when terminal transitions from disabled (connecting) to enabled (connected)
+    if (wasDisabled && !disabled && isActive) {
+      const timer = setTimeout(() => {
+        xtermRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [disabled, isActive]);
   // Mirror of `isActive` readable inside the ResizeObserver callback. The
   // observer is bound once at mount and runs for the lifetime of the
   // terminal, so a stale closure over the initial `isActive` would block
@@ -275,7 +283,12 @@ const TerminalView = ({
       try {
         fitAddonRef.current?.fit();
         const t = xtermRef.current;
-        if (t) t.refresh(0, Math.max(0, t.rows - 1));
+        if (t) {
+          t.refresh(0, Math.max(0, t.rows - 1));
+          if (!disabledRef.current) {
+            t.focus();
+          }
+        }
       } catch { /* terminal not ready yet — next tick will catch it */ }
     });
     return () => cancelAnimationFrame(id);
@@ -550,6 +563,9 @@ const TerminalView = ({
     
     setTimeout(() => {
       fitAddon.fit();
+      if (isActiveRef.current && !disabledRef.current) {
+        term.focus();
+      }
       
       // Start PTY Session with correct dimensions only ONCE. Attach-only
       // instances skip this entirely — they hitch onto an existing PTY
@@ -966,6 +982,7 @@ const TerminalView = ({
     });
 
     // Handle Output with proper async cleanup for StrictMode
+    let hasReceivedFirstOutput = false;
     const unlistenPromise = listen(`terminal-output-${terminalId}`, (event: any) => {
       // The backend now coalesces output and sends it base64-encoded (was a raw
       // JSON byte array — ~4x larger and one event per SSH packet, which flooded
@@ -975,6 +992,16 @@ const TerminalView = ({
       const data = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i);
       term.write(data);
+      if (!hasReceivedFirstOutput) {
+        hasReceivedFirstOutput = true;
+        if (isActiveRef.current && !disabledRef.current) {
+          const activeEl = document.activeElement;
+          const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true');
+          if (!isInputFocused) {
+            term.focus();
+          }
+        }
+      }
       // Keep a short tail of decoded output so command-history capture can
       // recognize a no-echo password prompt and skip the typed secret.
       try {
@@ -1148,7 +1175,15 @@ const TerminalView = ({
     // pane (between xterm and the system soft keyboard). On desktop the bar
     // isn't rendered at all, so the xterm child claims the full height as
     // before.
-    <div className="h-full w-full bg-[#09090b] p-2 pr-2 pb-0 relative flex flex-col">
+    <div
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('button, input, select, textarea, [role="button"]')) {
+          xtermRef.current?.focus();
+        }
+      }}
+      className="h-full w-full bg-[#09090b] p-2 pr-2 pb-0 relative flex flex-col"
+    >
       <div
         ref={terminalRef}
         className="flex-1 min-h-0 w-full overflow-hidden select-text"

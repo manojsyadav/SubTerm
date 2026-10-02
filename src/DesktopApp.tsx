@@ -59,6 +59,7 @@ function DesktopApp() {
     autoCopyOutput: localStorage.getItem('subterm-auto-copy-output') === 'true',
     showAuditDownload: localStorage.getItem('subterm-show-audit-download') !== 'false',
     showAuditCopy: localStorage.getItem('subterm-show-audit-copy') !== 'false',
+    enableMonitoring: (localStorage.getItem('subterm-enable-monitoring') || localStorage.getItem('submarine-enable-monitoring')) !== 'false',
   });
 
   const wallManager = useWallManager();
@@ -260,6 +261,14 @@ function DesktopApp() {
     localStorage.setItem('subterm-auto-copy-output', appSettings.autoCopyOutput ? 'true' : 'false');
     localStorage.setItem('subterm-show-audit-download', appSettings.showAuditDownload ? 'true' : 'false');
     localStorage.setItem('subterm-show-audit-copy', appSettings.showAuditCopy ? 'true' : 'false');
+    localStorage.setItem('subterm-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
+    localStorage.setItem('submarine-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
+    if (!appSettings.enableMonitoring) {
+      if (activeView === 'monitor') {
+        setActiveView('nodes');
+      }
+      invoke('monitor_pause_all').catch(console.error);
+    }
     invoke('cloud_set_api_base', { url: appSettings.cloudApiBase }).catch(console.error);
     // Tell already-mounted terminals to re-fit with the new font size.
     // Without this dispatch the listener in TerminalView is dead code and
@@ -1110,7 +1119,15 @@ function DesktopApp() {
         // tab-order stays intuitive and <main> grabs the full screen width
         // (terminal gains the ~50px the vertical rail used to eat).
         <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
-          <Sidebar activeTab={activeView.startsWith('session-') ? 'nodes' : activeView} setActiveTab={setActiveView} isMobile={isMobile} onLogout={handleLogout} profileName={activeProfile} syncing={cloudSyncing} />
+          <Sidebar
+            activeTab={activeView.startsWith('session-') ? 'nodes' : activeView}
+            setActiveTab={setActiveView}
+            isMobile={isMobile}
+            onLogout={handleLogout}
+            profileName={activeProfile}
+            syncing={cloudSyncing}
+            enableMonitoring={appSettings.enableMonitoring}
+          />
 
           <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent relative">
             {activeView === "nodes" && (
@@ -1443,6 +1460,7 @@ function DesktopApp() {
                               onStatusChange={handleSessionStatus}
                               onTerminalsChange={handleTerminalsChange}
                               chromeless={isVisible && isTiled && !isFocused}
+                              isSessionActive={isFocused && viewIsSession}
                             />
                           </ErrorBoundary>
                         </div>
@@ -1855,9 +1873,11 @@ function DesktopApp() {
                 switching tabs felt like monitoring "stopped". Keeping it
                 mounted preserves the live data; the backend pollers were
                 always running, only the UI side was losing state. */}
-            <div className={`flex-1 flex flex-col overflow-hidden ${activeView === "monitor" ? "" : "hidden"}`}>
-              <MonitoringPanel servers={servers} refreshServers={refreshServers} addLog={addLog} />
-            </div>
+            {appSettings.enableMonitoring && (
+              <div className={`flex-1 flex flex-col overflow-hidden ${activeView === "monitor" ? "" : "hidden"}`}>
+                <MonitoringPanel servers={servers} refreshServers={refreshServers} addLog={addLog} />
+              </div>
+            )}
 
             {/* Compare workspace — pick any subset of open sessions and
                 tile their currently-visible terminals in one canvas.
@@ -2054,6 +2074,7 @@ function DesktopApp() {
         servers={servers}
         sessions={sessions}
         activeView={activeView}
+        enableMonitoring={appSettings.enableMonitoring}
         onSelectView={(viewId) => {
           setActiveView(viewId);
           setIsCommandPaletteOpen(false);

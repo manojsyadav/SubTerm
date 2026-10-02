@@ -9,12 +9,18 @@ import { Server, KeyRound, Library, Activity, Settings, LogOut, UserCircle } fro
 // a 360px-wide viewport. The parent in DesktopApp uses `flex-col-reverse` on
 // mobile so this component visually lands at the bottom while staying first
 // in DOM order (keyboard tab-order stays intuitive).
-export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileName, syncing }: any) => {
+export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileName, syncing, enableMonitoring = true }: any) => {
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
   const [alertSummary, setAlertSummary] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enableMonitoring) {
+      setHealthState("idle");
+      setAlertSummary(null);
+      return;
+    }
+
     let isMounted = true;
     const cleanups: (() => void)[] = [];
 
@@ -88,7 +94,7 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
       clearInterval(interval);
       cleanups.forEach((c) => c());
     };
-  }, []);
+  }, [enableMonitoring]);
 
   // The profile rail is deliberately apart from the content rails below. Those
   // switch what you're looking at INSIDE the open profile; this one is about the
@@ -126,7 +132,7 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
     { id: 'nodes', icon: Server, label: 'Servers' },
     { id: 'vault', icon: KeyRound, label: 'Logins' },
     { id: 'library', icon: Library, label: 'Library' },
-    { id: 'monitor', icon: Activity, label: 'Monitor' },
+    ...(enableMonitoring ? [{ id: 'monitor', icon: Activity, label: 'Monitor' }] : []),
   ];
 
   if (isMobile) {
@@ -150,11 +156,11 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
                   ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
                   : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
               }`}
-              title={(item.id === 'nodes' || item.id === 'monitor') && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
+              title={(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
             >
               <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
               {/* Live Health Pulse Badge */}
-              {(item.id === 'nodes' || item.id === 'monitor') && healthState !== 'idle' && (
+              {(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && healthState !== 'idle' && (
                 <>
                   {healthState === 'critical' && (
                     <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
@@ -226,11 +232,11 @@ export const Sidebar = ({ activeTab, setActiveTab, isMobile, onLogout, profileNa
                 ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
                 : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
             }`}
-            title={(item.id === 'nodes' || item.id === 'monitor') && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
+            title={(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
           >
             <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
             {/* Live Health Pulse Badge */}
-            {(item.id === 'nodes' || item.id === 'monitor') && healthState !== 'idle' && (
+            {(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && healthState !== 'idle' && (
               <>
                 {healthState === 'critical' && (
                   <span className="absolute top-1.5 right-1.5 flex h-2 w-2">

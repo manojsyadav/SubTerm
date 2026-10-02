@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft } from "lucide-react";
+import { Settings, Palette, RefreshCw, Pipette, List, Cloud, User, ArrowLeft, Activity } from "lucide-react";
 import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 
@@ -282,6 +282,52 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked 
           </div>
         </section>
 
+        {/* Server Monitoring Section */}
+        <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8">
+          <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
+            <Activity size={14} className={settings.enableMonitoring !== false ? "text-primary" : "text-zinc-500"} /> Server Monitoring
+          </div>
+
+          <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  Enable Resource Monitoring
+                  {settings.enableMonitoring !== false && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12px] text-zinc-400 leading-relaxed mt-1">
+                  Show the Monitor tab in the navigation bar and enable background polling for CPU, RAM, disk metrics, and outage notifications for your saved servers.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.enableMonitoring !== false}
+                onClick={() => setSettings({ ...settings, enableMonitoring: !(settings.enableMonitoring !== false) })}
+                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${settings.enableMonitoring !== false ? 'bg-primary' : 'bg-white/10'}`}
+              >
+                <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${settings.enableMonitoring !== false ? 'translate-x-5' : 'translate-x-0.5'} shadow-md`} />
+              </button>
+            </div>
+
+            {settings.enableMonitoring === false ? (
+              <div className="border-t border-white/5 pt-3">
+                <p className="text-[11px] text-zinc-500 italic">
+                  Monitoring is currently disabled. The Monitor tab is hidden and background polling is halted to save CPU, network, and battery.
+                </p>
+              </div>
+            ) : (
+              <div className="border-t border-white/5 pt-3 text-[11px] text-zinc-400 flex items-center justify-between">
+                <span>Real-time polling, sparklines, and outage detection are active in the Monitor tab.</span>
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Activity Section — moved out of the sidebar so the top-level
             navigation stays focused on primary workflows. Logs are diagnostic
             only; keeping them one click deep here cleans up the sidebar on
@@ -376,7 +422,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked 
             <button
               onClick={() => {
                 if(window.confirm('Reset all UI customizations?')) {
-                  setSettings((s: any) => ({ ...s, primaryColor: '#60a5fa', backgroundColor: '#0a0a0c', terminalFontSize: 14 }));
+                  setSettings((s: any) => ({ ...s, primaryColor: '#60a5fa', backgroundColor: '#0a0a0c', terminalFontSize: 14, enableMonitoring: true }));
                 }
               }}
               className="px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase hover:bg-white/5 transition-all w-full"
