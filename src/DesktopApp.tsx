@@ -425,77 +425,105 @@ function DesktopApp() {
         <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
       </div>
 
-      {/* Top Bar Quick Access Server List (Max 5) */}
-      {quickAccessServersList.length > 0 && (
-        <div className="hidden sm:flex items-center gap-1.5 px-2 no-drag shrink-0">
-          {quickAccessServersList.map((server: any) => {
-            const sess = sessions.find((s) => s.serverId === server.id || s.serverName === server.name);
-            const isCurrent = Boolean(sess && activeView === sess.id);
-            const isConn = Boolean(sess && sessionStatuses[sess.id] === "connected");
-            const isConnIng = Boolean(sess && sessionStatuses[sess.id] === "connecting");
+      {/* Top Bar Bookmarks Strip: Local Shell + Quick Access Servers */}
+      <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.03] border border-white/5 rounded-lg no-drag shrink-0 mx-1">
+        {/* Pinned Bookmark: Local Shell */}
+        {isUnlocked && (
+          <button
+            type="button"
+            onClick={openLocalTerminal}
+            title={`Open Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
+            className={`h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
+              activeView.startsWith("session-local-")
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm font-semibold"
+                : "text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20"
+            }`}
+          >
+            <Terminal size={12} className={activeView.startsWith("session-local-") ? "text-emerald-400" : "text-emerald-500/80"} />
+            <span className="whitespace-nowrap tracking-tight font-medium">Local Shell</span>
+          </button>
+        )}
 
-            return (
-              <div key={server.id} className="group relative flex items-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (sess) {
-                      if (!mergedSessionIds.includes(sess.id)) setMergedSessionIds([]);
-                      setActiveView(sess.id);
-                    } else {
-                      openServer(server);
-                    }
-                  }}
-                  title={
-                    isCurrent
-                      ? `${server.name} (Active Session)`
-                      : sess
-                      ? `Switch to ${server.name}`
-                      : `Connect to ${server.name}`
+        {/* Separator if quick access servers exist */}
+        {quickAccessServersList.length > 0 && isUnlocked && (
+          <div className="w-[1px] h-4 bg-white/10 mx-0.5 shrink-0" />
+        )}
+
+        {/* Server Bookmarks */}
+        {quickAccessServersList.map((server: any) => {
+          const sess = sessions.find((s) => s.serverId === server.id || s.serverName === server.name);
+          const isCurrent = Boolean(sess && activeView === sess.id);
+          const isConn = Boolean(sess && sessionStatuses[sess.id] === "connected");
+          const isConnIng = Boolean(sess && sessionStatuses[sess.id] === "connecting");
+          const isProd = Boolean(server.is_production || /prod|production|live/i.test(server.name || ""));
+
+          return (
+            <div key={server.id} className="group relative flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  if (sess) {
+                    if (!mergedSessionIds.includes(sess.id)) setMergedSessionIds([]);
+                    setActiveView(sess.id);
+                  } else {
+                    openServer(server);
                   }
-                  className={`h-7 px-2.5 rounded-full flex items-center gap-1.5 text-xs font-medium transition-all ${
-                    isCurrent
-                      ? "bg-[#182338] border border-blue-500/50 text-blue-200 shadow-sm"
-                      : isConn
-                      ? "bg-white/[0.05] border border-white/10 text-zinc-300 hover:bg-white/[0.09] hover:text-white"
-                      : "bg-white/[0.02] border border-white/5 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
-                  }`}
-                >
+                }}
+                title={
+                  isCurrent
+                    ? `${server.name} (Active Session)`
+                    : sess
+                    ? `Switch to ${server.name}`
+                    : `Connect to ${server.name}`
+                }
+                className={`h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
+                  isCurrent
+                    ? "bg-[#182338] border border-blue-500/50 text-blue-200 shadow-sm font-semibold"
+                    : isConn
+                    ? "bg-white/[0.08] border border-white/15 text-zinc-200 hover:bg-white/[0.12] hover:text-white"
+                    : "bg-white/[0.02] border border-white/5 text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] hover:border-white/10"
+                }`}
+              >
+                {server.color && (
                   <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      isCurrent || isConn
-                        ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
-                        : isConnIng
-                        ? "bg-amber-400 animate-pulse"
-                        : "bg-zinc-600"
-                    }`}
+                    className="w-1.5 h-1.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: server.color }}
                   />
-                  <span className="truncate max-w-[110px]">{server.name}</span>
-                  {Boolean(server.is_production || /prod|production|live/i.test(server.name || "")) && (
-                    <span className="px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
-                      PROD
-                    </span>
-                  )}
-                  {sess && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeSession(sess.id);
-                      }}
-                      title="Disconnect session"
-                      className="ml-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-white/10 opacity-60 hover:opacity-100 transition-opacity"
-                    >
-                      <X size={10} />
-                    </span>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                )}
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    isCurrent || isConn
+                      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                      : isConnIng
+                      ? "bg-amber-400 animate-pulse"
+                      : "bg-zinc-600"
+                  }`}
+                />
+                <span className="truncate max-w-[110px] tracking-tight">{server.name}</span>
+                {isProd && (
+                  <span className="px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                    PROD
+                  </span>
+                )}
+                {sess && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeSession(sess.id);
+                    }}
+                    title="Disconnect session"
+                    className="ml-0.5 w-3.5 h-3.5 rounded flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-white/10 opacity-70 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={10} />
+                  </span>
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
       {/* Mobile session picker — replaces the horizontal tab strip on
           narrow viewports so a phone doesn't spend its whole title row
@@ -510,7 +538,7 @@ function DesktopApp() {
             <button
               type="button"
               onClick={() => setMobileSessionPickerOpen(v => !v)}
-              className={`w-full h-7 px-3 rounded-full flex items-center gap-2 border transition-all ${
+              className={`w-full h-7 px-3 rounded-md flex items-center gap-2 border transition-all ${
                 activeView.startsWith('session-') || activeView === 'wall'
                   ? 'bg-primary/15 text-primary border-primary/40 shadow-inner'
                   : 'bg-white/[0.06] text-zinc-300 border-white/10'
@@ -747,7 +775,7 @@ function DesktopApp() {
               // it a tab with a 30-char hostname would wrap into a two-line
               // pill and break the row's height.
               title={isMergedTab ? `${s.serverName} · split beside current view (Ctrl-click to unpair)` : s.serverName}
-              className={`group no-drag flex items-center h-7 px-2.5 sm:px-4 rounded-full cursor-pointer transition-all shrink-0 mr-1 ${
+              className={`group no-drag flex items-center h-7 px-2.5 sm:px-3 rounded-md cursor-pointer transition-all shrink-0 mr-1 ${
                 activeView === s.id
                   ? 'bg-primary/15 text-primary border border-primary/40 shadow-inner shadow-primary/10'
                   : isMergedTab
@@ -1008,15 +1036,6 @@ function DesktopApp() {
       <div className="hidden sm:flex items-center h-full gap-1 no-drag">
         {isUnlocked && (
           <>
-            <button
-              type="button"
-              onClick={openLocalTerminal}
-              title={`Open Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
-              className="h-7 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-400 hover:text-emerald-300 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
-            >
-              <Terminal size={12} className="text-emerald-400" />
-              <span className="hidden md:inline font-medium">Local Shell</span>
-            </button>
             <button
               type="button"
               onClick={() => setIsCommandPaletteOpen(true)}
