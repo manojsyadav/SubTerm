@@ -1,4 +1,4 @@
-import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare } from "lucide-react";
+import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert } from "lucide-react";
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../ui/confirm";
@@ -247,7 +247,8 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   // the one being dragged it renders as a dashed placeholder holding the slot;
   // the floating clone (portal, below) is what the pointer carries.
   const renderServer = (s: any) => {
-    const accent = s.color || 'rgb(var(--primary))';
+    const isProd = Boolean(s.is_production || /prod|production|live/i.test(s.name || ""));
+    const accent = s.color || (isProd ? '#f43f5e' : 'rgb(var(--primary))');
     const monogram = (s.name || '').trim().charAt(0).toUpperCase();
     if (dragId === s.id) {
       return (
@@ -293,7 +294,17 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
 
         {/* Name + host — flex-1 + min-w-0 so long values truncate cleanly. */}
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-zinc-100 text-[13px] truncate tracking-tight leading-tight">{s.name}</h3>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <h3 className="font-bold text-zinc-100 text-[13px] truncate tracking-tight leading-tight">{s.name}</h3>
+            {isProd && (
+              <span
+                className="px-1.5 py-0.5 rounded text-[8.5px] font-bold tracking-wider uppercase bg-rose-500/15 border border-rose-500/30 text-rose-300 flex items-center gap-1 shrink-0"
+                title="Production Node (Safe Mode active)"
+              >
+                <ShieldAlert size={10} /> PROD
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 mt-0.5">
             <Globe size={10} className="text-zinc-400 shrink-0" />
             <span className="text-[10.5px] text-zinc-300 font-mono truncate">{s.host}</span>

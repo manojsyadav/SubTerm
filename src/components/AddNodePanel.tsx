@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Cpu, X, Link2, ArrowLeftRight, Shield, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio } from "lucide-react";
+import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio } from "lucide-react";
 import PasswordField from "./PasswordField";
 
 // Compact "2h ago" style relative time for the attribution line.
@@ -707,6 +707,34 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                 <span
                   className={`absolute top-0.5 left-0.5 w-5 h-5 bg-zinc-100 rounded-full shadow transition-transform ${
                     newNode.autostart ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Production Environment Toggle */}
+            <div className="flex items-center justify-between gap-3 pt-2 pb-1 border-t border-white/5">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-rose-400 flex items-center gap-1.5">
+                  <ShieldAlert size={13} className="shrink-0 text-rose-400" />
+                  Production Environment
+                </div>
+                <div className="text-[10.5px] text-zinc-500 leading-snug">
+                  Enables destructive command interception (rm -rf, reboot, drop db) & visual hazard alerts.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewNode({ ...newNode, is_production: !newNode.is_production })}
+                role="switch"
+                aria-checked={!!newNode.is_production}
+                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
+                  newNode.is_production ? "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)]" : "bg-white/10"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-zinc-100 rounded-full shadow transition-transform ${
+                    newNode.is_production ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>

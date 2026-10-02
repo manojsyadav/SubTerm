@@ -237,6 +237,7 @@ function DesktopApp() {
     // flag a transient `reveal_server_password` failure would silently
     // wipe the stored secret.
     password_dirty: false,
+    is_production: false,
   };
 
   // Live width-based "narrow viewport" flag. Replaces a one-shot UA check
@@ -375,6 +376,7 @@ function DesktopApp() {
       // field. Save handler reads this to decide between `preserve_password`
       // and a real overwrite.
       password_dirty: false,
+      is_production: Boolean(server.is_production),
     });
     setIsPanelOpen(true);
   };
@@ -469,6 +471,11 @@ function DesktopApp() {
                     }`}
                   />
                   <span className="truncate max-w-[110px]">{server.name}</span>
+                  {Boolean(server.is_production || /prod|production|live/i.test(server.name || "")) && (
+                    <span className="px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                      PROD
+                    </span>
+                  )}
                   {sess && (
                     <span
                       role="button"
@@ -572,6 +579,11 @@ function DesktopApp() {
                         >
                           <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
                           <span className="text-[12px] font-semibold truncate flex-1">{s.serverName}</span>
+                          {s.isProduction && (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                              PROD
+                            </span>
+                          )}
                           {isMerged && !isActive && (
                             <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60">Split-in</span>
                           )}
@@ -766,6 +778,11 @@ function DesktopApp() {
                   pixel (uppercase is wider per glyph) without changing the
                   strip height, which stays h-7. */}
               <span className="text-[11px] font-semibold whitespace-nowrap tracking-tight">{s.serverName}</span>
+              {s.isProduction && (
+                <span className="ml-1.5 px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                  PROD
+                </span>
+              )}
               {/* Mobile-only actions trigger. On phone we surface the same
                   tabMenu (Reconnect / Disconnect / Close) here since there
                   is no right-click on touch — a single kebab is a cleaner
@@ -2140,6 +2157,11 @@ function DesktopApp() {
               await invoke("set_server_jump_host", { id: savedId, value: newNode.jumpHostId ? parseInt(newNode.jumpHostId) : null });
             } catch (e) {
               addLog(`SAVE_JUMP_HOST_FAILED: ${e}`, "error");
+            }
+            try {
+              await invoke("set_server_is_production", { id: savedId, value: !!newNode.is_production });
+            } catch (e) {
+              addLog(`SAVE_IS_PRODUCTION_FAILED: ${e}`, "error");
             }
             setIsPanelOpen(false);
             setFormError("");

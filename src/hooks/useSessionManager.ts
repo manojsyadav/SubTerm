@@ -11,6 +11,7 @@ export type Session = {
   quickAuth?: QuickAuth | null;
   initialTool?: "sftp" | "tunnels" | "mirrors" | "cmds" | "info" | null;
   isLocal?: boolean;
+  isProduction?: boolean;
 };
 
 interface UseSessionManagerOptions {
@@ -96,6 +97,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
               mirrors: server.mirrors,
               runOnConnect: server.run_on_connect || "",
               initialTool: initialTool || null,
+              isProduction: Boolean(server.is_production || /prod|production|live/i.test(server.name || "")),
             },
           ];
         } else if (initialTool) {
@@ -123,6 +125,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
           mirrors: srv.mirrors,
           runOnConnect: srv.run_on_connect || "",
           initialTool: null,
+          isProduction: Boolean(srv.is_production || /prod|production|live/i.test(srv.name || "")),
         });
       });
       setSessions((prev) => {

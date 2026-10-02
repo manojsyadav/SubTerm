@@ -20,6 +20,7 @@ SubTerm is a fast, native, and highly customizable client for managing your serv
 ## 🛠️ SubTerm Features & Optimizations
 
 - **Native Local Terminal**: Integrated cross-platform local PTY shell (PowerShell/CMD on Windows, Bash/Zsh on macOS/Linux) with full xterm features (themes, shortcuts, OSC 133, copilot, split views). Launchable instantly from the Top Bar, Node Grid, Command Palette, or global shortcut (`Ctrl+Alt+T`).
+- **Production Node Safeguards & Identifier**: First-class explicit Production Server flag with persistent database tracking, high-visibility rose `PROD` badges in the Node Grid, Top Bar, and Session Tabs. Features active Safe Mode with destructive command interception (`rm -rf`, `drop database`, `reboot`, etc.), multi-line paste confirmation, and top hazard glowing indicators.
 - **Terminal Enhancements**: OSC 133 command block separation, 1-click output copy, exit code status, output link providers, paste preview, and production safety guardrails.
 - **In-App Quick File Editor & Picker**: 1-click terminal file path editing, `Alt+E` quick file search with interactive picker, and a resilient SSH execution fallback engine (supports minimal Linux/DietPi environments without `sftp-server`).
 - **Parallel Tool Tabs**: Dedicated first-class tabs on the session rail for **Docker** (containers & images), **Processes** (real-time task manager), and **Services** (systemd service control), cleanly decoupled from System Info.
