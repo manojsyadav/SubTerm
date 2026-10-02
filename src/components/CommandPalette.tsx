@@ -31,6 +31,7 @@ interface CommandPaletteProps {
   commands?: { id: number; title: string; content: string }[];
   onExecuteCommand?: (cmd: string) => void;
   enableMonitoring?: boolean;
+  onOpenLocalTerminal?: () => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -48,6 +49,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   commands = [],
   onExecuteCommand,
   enableMonitoring = true,
+  onOpenLocalTerminal,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -137,6 +139,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
 
     // 2. Global Actions & Navigation
+    if (onOpenLocalTerminal) {
+      list.push({
+        id: "act-open-local-terminal",
+        category: "Action",
+        title: "Launch Local Terminal",
+        subtitle: "Open a native local shell session (PowerShell / Bash)",
+        icon: <Terminal size={14} className="text-teal-400" />,
+        shortcut: getActiveShortcut("openLocalTerminal"),
+        action: onOpenLocalTerminal,
+      });
+    }
     list.push({
       id: "act-quick-connect",
       category: "Action",

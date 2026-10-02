@@ -10,6 +10,14 @@ export const DEFAULT_SHORTCUTS: ShortcutAction[] = [
     defaultKey: "Ctrl+Shift+P",
     scope: "global",
   },
+  {
+    id: "openLocalTerminal",
+    name: "Open Local Terminal",
+    category: "General",
+    description: "Launch a native local shell session (PowerShell / Bash)",
+    defaultKey: "Ctrl+Alt+T",
+    scope: "global",
+  },
 
   // Tools & Panels
   {

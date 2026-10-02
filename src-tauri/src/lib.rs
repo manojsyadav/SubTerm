@@ -6807,7 +6807,7 @@ pub fn run() {
             commands::servers::add_ssh_key, commands::servers::edit_ssh_key, commands::servers::delete_ssh_key,
             initiate_connection, verify_fingerprint_response, submit_kbi_response, disconnect_session,
             commands::tunnels::start_tunnel, commands::tunnels::stop_tunnel, commands::tunnels::list_tunnels, commands::tunnels::restart_session_tunnels, commands::tunnels::persist_session_tunnels,
-            commands::terminal::open_terminal, commands::terminal::write_terminal_data, commands::terminal::resize_terminal, commands::terminal::close_terminal,
+            commands::terminal::open_terminal, commands::terminal::open_local_terminal, commands::terminal::get_available_local_shells, commands::terminal::write_terminal_data, commands::terminal::resize_terminal, commands::terminal::close_terminal,
             ssh_info_probe_section, ssh_systemctl_action, ssh_kill_process,
             ssh_iptables_chain, ssh_nft_chain,
             docker::ssh_docker_container_action,

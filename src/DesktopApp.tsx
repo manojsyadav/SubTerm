@@ -102,7 +102,7 @@ function DesktopApp() {
     mergedSessionIds, setMergedSessionIds,
     mobileSessionPickerOpen, setMobileSessionPickerOpen,
     getCloseHandler, closeSession,
-    openServer, openMultipleServers, openQuickConnect,
+    openServer, openMultipleServers, openQuickConnect, openLocalTerminal,
   } = sessionManager;
 
   const vault = useProfileVault({
@@ -293,6 +293,7 @@ function DesktopApp() {
     setActiveView,
     onCloseSession: (sessId) => getCloseHandler(sessId)(),
     onOpenCommandPalette: () => isUnlocked && setIsCommandPaletteOpen(prev => !prev),
+    onOpenLocalTerminal: openLocalTerminal,
   });
 
   // Window-close guard. Keep `sessions` mirrored into a ref so the close
@@ -989,18 +990,29 @@ function DesktopApp() {
           phone and reclaim ~120 px of titlebar for the tab strip. */}
       <div className="hidden sm:flex items-center h-full gap-1 no-drag">
         {isUnlocked && (
-          <button
-            type="button"
-            onClick={() => setIsCommandPaletteOpen(true)}
-            title={`Command Palette (${getActiveShortcut("commandPalette")})`}
-            className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
-          >
-            <Command size={11} className="text-primary" />
-            <span className="hidden md:inline font-medium">Palette</span>
-            <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">
-              {getActiveShortcut("commandPalette")}
-            </kbd>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={openLocalTerminal}
+              title={`Open Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
+              className="h-7 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-400 hover:text-emerald-300 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
+            >
+              <Terminal size={12} className="text-emerald-400" />
+              <span className="hidden md:inline font-medium">Local Shell</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              title={`Command Palette (${getActiveShortcut("commandPalette")})`}
+              className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] flex items-center gap-1.5 transition-colors no-drag mr-1"
+            >
+              <Command size={11} className="text-primary" />
+              <span className="hidden md:inline font-medium">Palette</span>
+              <kbd className="hidden lg:inline text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-400 font-mono border border-white/10">
+                {getActiveShortcut("commandPalette")}
+              </kbd>
+            </button>
+          </>
         )}
         <button
           onClick={() => appWindow.minimize()}
@@ -1242,6 +1254,7 @@ function DesktopApp() {
                   setIsPanelOpen(true);
                 }}
                 onQuickConnect={() => setIsQuickConnectOpen(true)}
+                onOpenLocalTerminal={openLocalTerminal}
                 onRemoveServer={removeServer}
                 onRemoveFolder={removeFolder}
                 onRenameFolder={renameFolder}
@@ -2178,6 +2191,10 @@ function DesktopApp() {
         onOpenQuickConnect={() => {
           setIsCommandPaletteOpen(false);
           setIsQuickConnectOpen(true);
+        }}
+        onOpenLocalTerminal={() => {
+          setIsCommandPaletteOpen(false);
+          openLocalTerminal();
         }}
         onOpenAddNode={() => {
           setIsCommandPaletteOpen(false);

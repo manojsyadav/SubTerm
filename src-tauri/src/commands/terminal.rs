@@ -182,3 +182,265 @@ pub async fn close_terminal(
     state.resize_txs.lock().await.remove(&terminal_id);
     Ok(())
 }
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub async fn open_local_terminal(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SshState>,
+    terminal_id: String,
+    cols: u32,
+    rows: u32,
+    cwd: Option<String>,
+    shell: Option<String>,
+) -> Result<(), String> {
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
+    use std::io::{Read, Write};
+
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PortablePtySize {
+            rows: rows.max(1) as u16,
+            cols: cols.max(1) as u16,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("Failed to create local PTY: {e}"))?;
+
+    let shell_cmd = shell.unwrap_or_else(|| {
+        #[cfg(windows)]
+        {
+            "powershell.exe".to_string()
+        }
+        #[cfg(not(windows))]
+        {
+            std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+        }
+    });
+
+    let mut cmd = CommandBuilder::new(&shell_cmd);
+    if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) {
+        cmd.cwd(dir);
+    } else if let Some(base_dirs) = directories::BaseDirs::new() {
+        cmd.cwd(base_dirs.home_dir());
+    }
+
+    let mut child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| format!("Failed to spawn local shell ({shell_cmd}): {e}"))?;
+
+    drop(pair.slave);
+
+    let master = pair.master;
+    let mut reader = master
+        .try_clone_reader()
+        .map_err(|e| format!("Failed to clone PTY reader: {e}"))?;
+    let mut writer = master
+        .take_writer()
+        .map_err(|e| format!("Failed to take PTY writer: {e}"))?;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<TerminalCommand>(32);
+    let (resize_tx, mut resize_rx) = tokio::sync::watch::channel(PtySize { cols, rows });
+    state.terminal_txs.lock().await.insert(terminal_id.clone(), tx);
+    state.resize_txs.lock().await.insert(terminal_id.clone(), resize_tx);
+
+    let (pty_out_tx, mut pty_out_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
+
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if pty_out_tx.blocking_send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let terminal_id_clone = terminal_id.clone();
+    let app_clone = app.clone();
+
+    tauri::async_runtime::spawn(async move {
+        const FLUSH_CAP: usize = 256 * 1024;
+        const FLUSH_WINDOW: std::time::Duration = std::time::Duration::from_millis(8);
+        let mut out_buf: Vec<u8> = Vec::new();
+        let park = || tokio::time::Instant::now() + std::time::Duration::from_secs(24 * 3600);
+        let flush_timer = tokio::time::sleep_until(park());
+        tokio::pin!(flush_timer);
+        let mut clean_exit = false;
+
+        loop {
+            tokio::select! {
+                out_chunk = pty_out_rx.recv() => {
+                    match out_chunk {
+                        Some(data) => {
+                            let was_empty = out_buf.is_empty();
+                            out_buf.extend_from_slice(&data);
+                            if out_buf.len() >= FLUSH_CAP {
+                                emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                            } else if was_empty {
+                                flush_timer.as_mut().reset(tokio::time::Instant::now() + FLUSH_WINDOW);
+                            }
+                        }
+                        None => {
+                            clean_exit = true;
+                            emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                            break;
+                        }
+                    }
+                }
+                _ = &mut flush_timer => {
+                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                    flush_timer.as_mut().reset(park());
+                }
+                opt_cmd = rx.recv() => {
+                    match opt_cmd {
+                        Some(cmd) => match cmd {
+                            TerminalCommand::Data(data) => {
+                                if writer.write_all(&data).is_err() {
+                                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                    break;
+                                }
+                                let _ = writer.flush();
+                            }
+                        },
+                        None => {
+                            break;
+                        }
+                    }
+                }
+                changed = resize_rx.changed() => {
+                    if changed.is_err() { break; }
+                    let size = *resize_rx.borrow();
+                    let _ = master.resize(PortablePtySize {
+                        rows: size.rows.max(1) as u16,
+                        cols: size.cols.max(1) as u16,
+                        pixel_width: 0,
+                        pixel_height: 0,
+                    });
+                }
+            }
+        }
+
+        let _ = child.kill();
+        let _ = child.wait();
+
+        let _ = app_clone.emit(&format!("terminal-closed-{}", terminal_id_clone), serde_json::json!({
+            "clean_exit": clean_exit
+        }));
+    });
+
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct LocalShellOption {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+}
+
+#[tauri::command]
+pub async fn get_available_local_shells() -> Result<Vec<LocalShellOption>, String> {
+    let mut shells = Vec::new();
+
+    #[cfg(windows)]
+    {
+        let pwsh_paths = [
+            "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+            "C:\\Program Files (x86)\\PowerShell\\7\\pwsh.exe",
+        ];
+        if pwsh_paths.iter().any(|p| std::path::Path::new(p).exists()) {
+            shells.push(LocalShellOption {
+                id: "pwsh".to_string(),
+                name: "PowerShell 7 (pwsh)".to_string(),
+                command: "pwsh.exe".to_string(),
+            });
+        }
+
+        shells.push(LocalShellOption {
+            id: "powershell".to_string(),
+            name: "Windows PowerShell".to_string(),
+            command: "powershell.exe".to_string(),
+        });
+
+        shells.push(LocalShellOption {
+            id: "cmd".to_string(),
+            name: "Command Prompt (CMD)".to_string(),
+            command: "cmd.exe".to_string(),
+        });
+
+        let git_bash_paths = [
+            "C:\\Program Files\\Git\\bin\\bash.exe",
+            "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+        ];
+        for p in &git_bash_paths {
+            if std::path::Path::new(p).exists() {
+                shells.push(LocalShellOption {
+                    id: "git-bash".to_string(),
+                    name: "Git Bash".to_string(),
+                    command: (*p).to_string(),
+                });
+                break;
+            }
+        }
+
+        let wsl_path = "C:\\Windows\\System32\\wsl.exe";
+        if std::path::Path::new(wsl_path).exists() {
+            shells.push(LocalShellOption {
+                id: "wsl".to_string(),
+                name: "WSL (Windows Subsystem for Linux)".to_string(),
+                command: "wsl.exe".to_string(),
+            });
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Ok(sh) = std::env::var("SHELL") {
+            shells.push(LocalShellOption {
+                id: "default".to_string(),
+                name: format!("Default Shell ({sh})"),
+                command: sh,
+            });
+        }
+        for (name, path) in [("Zsh", "/bin/zsh"), ("Bash", "/bin/bash"), ("Fish", "/usr/bin/fish"), ("Sh", "/bin/sh")] {
+            if std::path::Path::new(path).exists() {
+                shells.push(LocalShellOption {
+                    id: name.to_lowercase(),
+                    name: name.to_string(),
+                    command: path.to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(shells)
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub async fn open_local_terminal(
+    _app: tauri::AppHandle,
+    _state: tauri::State<'_, SshState>,
+    _terminal_id: String,
+    _cols: u32,
+    _rows: u32,
+    _cwd: Option<String>,
+    _shell: Option<String>,
+) -> Result<(), String> {
+    Err("Local terminal is not supported on Android".to_string())
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub async fn get_available_local_shells() -> Result<Vec<LocalShellOption>, String> {
+    Ok(vec![])
+}
+
+

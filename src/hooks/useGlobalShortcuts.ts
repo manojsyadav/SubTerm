@@ -8,6 +8,7 @@ interface GlobalShortcutsProps {
   setActiveView: (id: string) => void;
   onCloseSession: (id: string) => void;
   onOpenCommandPalette?: () => void;
+  onOpenLocalTerminal?: () => void;
 }
 
 export function useGlobalShortcuts({
@@ -17,6 +18,7 @@ export function useGlobalShortcuts({
   setActiveView,
   onCloseSession,
   onOpenCommandPalette,
+  onOpenLocalTerminal,
 }: GlobalShortcutsProps) {
   useEffect(() => {
     if (!enabled) return;
@@ -40,6 +42,15 @@ export function useGlobalShortcuts({
         e.preventDefault();
         e.stopPropagation();
         onOpenCommandPalette?.();
+        return;
+      }
+
+      // Open Local Terminal shortcut: Ctrl+Alt+T / custom
+      const openLocalCombo = getActiveShortcut("openLocalTerminal");
+      if (matchesKeyCombo(e, openLocalCombo)) {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenLocalTerminal?.();
         return;
       }
 
@@ -193,5 +204,5 @@ export function useGlobalShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [enabled, sessions, activeView, setActiveView, onCloseSession, onOpenCommandPalette]);
+  }, [enabled, sessions, activeView, setActiveView, onCloseSession, onOpenCommandPalette, onOpenLocalTerminal]);
 }

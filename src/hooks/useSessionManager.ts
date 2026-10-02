@@ -10,6 +10,7 @@ export type Session = {
   runOnConnect?: string;
   quickAuth?: QuickAuth | null;
   initialTool?: "sftp" | "tunnels" | "mirrors" | "cmds" | "info" | null;
+  isLocal?: boolean;
 };
 
 interface UseSessionManagerOptions {
@@ -163,6 +164,21 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     [options]
   );
 
+  const openLocalTerminal = useCallback(() => {
+    const sessionId = `session-local-${Date.now()}`;
+    setSessions((prev) => [
+      ...prev,
+      {
+        id: sessionId,
+        serverId: -1,
+        serverName: "Local Terminal",
+        isLocal: true,
+      },
+    ]);
+    setActiveView(sessionId);
+    options?.onAddLog?.("Opened local terminal", "info");
+  }, [options]);
+
   return {
     sessions,
     setSessions,
@@ -182,5 +198,6 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     openServer,
     openMultipleServers,
     openQuickConnect,
+    openLocalTerminal,
   };
 }

@@ -66,6 +66,9 @@ const TerminalView = ({
   serverName = "",
   attachOnly = false,
   isProd = false,
+  isLocal = false,
+  localShell,
+  localCwd,
   onTerminalClosed,
 }: {
   sessionId: string;
@@ -78,6 +81,9 @@ const TerminalView = ({
   serverId?: number;
   serverName?: string;
   isProd?: boolean;
+  isLocal?: boolean;
+  localShell?: string;
+  localCwd?: string;
   onTerminalClosed?: (details: { cleanExit: boolean; transcript: string }) => void;
 }) => {
   const onTerminalClosedRef = useRef(onTerminalClosed);
@@ -248,27 +254,39 @@ const TerminalView = ({
     // already did it and this instance just needs to keep reading
     // events off the same terminal_id.
     if (attachOnly) return;
-    const ce = containerExecRef.current;
-    if (ce) {
-      invoke('open_container_terminal', {
-        sessionId,
+    if (isLocal) {
+      invoke('open_local_terminal', {
         terminalId,
-        container: ce.container,
         cols: term.cols || 80,
         rows: term.rows || 24,
-        useSudo: ce.useSudo,
+        cwd: localCwd || null,
+        shell: localShell || null,
       }).catch(e => {
-        term.writeln(`\x1b[31mReconnect into container failed: ${e}\x1b[0m`);
+        term.writeln(`\x1b[31mRestart local terminal failed: ${e}\x1b[0m`);
       });
     } else {
-      invoke('open_terminal', {
-        sessionId,
-        terminalId,
-        cols: term.cols || 80,
-        rows: term.rows || 24,
-      }).catch(e => {
-        term.writeln(`\x1b[31mReconnect failed: ${e}\x1b[0m`);
-      });
+      const ce = containerExecRef.current;
+      if (ce) {
+        invoke('open_container_terminal', {
+          sessionId,
+          terminalId,
+          container: ce.container,
+          cols: term.cols || 80,
+          rows: term.rows || 24,
+          useSudo: ce.useSudo,
+        }).catch(e => {
+          term.writeln(`\x1b[31mReconnect into container failed: ${e}\x1b[0m`);
+        });
+      } else {
+        invoke('open_terminal', {
+          sessionId,
+          terminalId,
+          cols: term.cols || 80,
+          rows: term.rows || 24,
+        }).catch(e => {
+          term.writeln(`\x1b[31mReconnect failed: ${e}\x1b[0m`);
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionEpoch]);
@@ -661,7 +679,17 @@ const TerminalView = ({
         // shell. Same xterm wiring, different backend command — the
         // PTY/data/resize event topology is identical so xterm doesn't
         // notice the difference.
-        if (containerExec) {
+        if (isLocal) {
+          invoke('open_local_terminal', {
+            terminalId,
+            cols: term.cols || 80,
+            rows: term.rows || 24,
+            cwd: localCwd || null,
+            shell: localShell || null,
+          }).catch(e => {
+            term.writeln(`\x1b[31mFailed to open local terminal: ${e}\x1b[0m`);
+          });
+        } else if (containerExec) {
           invoke('open_container_terminal', {
             sessionId,
             terminalId,

@@ -157,3 +157,4 @@ zeroize = { version = "1.8", features = ["zeroize_derive"] }
 tauri-plugin-window-state = "2"
 rfd = "0.14"
 open = "5.1"
+portable-pty = "0.8"
