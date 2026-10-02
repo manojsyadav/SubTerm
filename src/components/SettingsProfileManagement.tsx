@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Trash2, Edit2, Check, CheckCircle2, AlertTriangle, X, User, ShieldCheck, ArrowLeftRight } from "lucide-react";
-import { useConfirm } from "../ui/confirm";
+import {
+  Plus, Trash2, Edit2, Check, CheckCircle2, AlertTriangle, X,
+  User, ShieldCheck, ArrowLeftRight, Key, Lock
+} from "lucide-react";
+import { useConfirm, useTextPrompt } from "../ui/confirm";
 import {
   DEFAULT_PROFILE_ICONS,
   getProfileIcon,
@@ -20,6 +23,7 @@ export const SettingsProfileManagement = ({
   onSwitchProfile?: (name: string) => void;
 }) => {
   const [profiles, setProfiles] = useState<string[]>([]);
+  const [syncStatusMap, setSyncStatusMap] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -37,7 +41,13 @@ export const SettingsProfileManagement = ({
   const [editName, setEditName] = useState("");
   const [editIcon, setEditIcon] = useState("👤");
 
+  // Change Master Password state
+  const [changingMasterPw, setChangingMasterPw] = useState(false);
+  const [newMasterPw, setNewMasterPw] = useState("");
+  const [confirmMasterPw, setConfirmMasterPw] = useState("");
+
   const confirm = useConfirm();
+  const textPrompt = useTextPrompt();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const cleanErr = (e: unknown) => String(e).replace(/^\[[A-Z_]+\]\s*/, "");
 
@@ -45,6 +55,14 @@ export const SettingsProfileManagement = ({
     try {
       const list = await invoke<string[]>("list_profiles");
       setProfiles(list);
+      try {
+        const statuses = await invoke<{ name: string; synced: boolean }[]>("get_profiles_sync_status");
+        const map: Record<string, boolean> = {};
+        for (const s of statuses) {
+          map[s.name] = s.synced;
+        }
+        setSyncStatusMap(map);
+      } catch {}
     } catch {}
   };
 
@@ -92,6 +110,56 @@ export const SettingsProfileManagement = ({
       setInfo(`Workspace "${trimmed}" created.`);
       if (onUnlocked) onUnlocked(trimmed);
       else await reloadProfiles();
+    } catch (e: any) {
+      setError(cleanErr(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSyncToMasterPassword = async (profileName: string) => {
+    setError(null);
+    setInfo(null);
+    const pass = await textPrompt({
+      title: `Sync "${profileName}" to Master Password`,
+      message: `Enter the current password for workspace "${profileName}" to re-encrypt it with your Unified Master Password:`,
+      placeholder: "Current password",
+      password: true,
+      okLabel: "Sync to Master Password",
+      cancelLabel: "Cancel",
+    });
+    if (!pass) return;
+
+    setBusy(true);
+    try {
+      await invoke("sync_profile_password", { name: profileName, currentPassword: pass });
+      setInfo(`Workspace "${profileName}" is now synced to your Unified Master Password!`);
+      await reloadProfiles();
+    } catch (e: any) {
+      setError(cleanErr(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleChangeMasterPassword = async () => {
+    setError(null);
+    if (!newMasterPw || newMasterPw.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newMasterPw !== confirmMasterPw) {
+      setError("Passwords don't match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("change_master_password", { newPassword: newMasterPw });
+      setChangingMasterPw(false);
+      setNewMasterPw("");
+      setConfirmMasterPw("");
+      setInfo("Master Password updated successfully!");
+      await reloadProfiles();
     } catch (e: any) {
       setError(cleanErr(e));
     } finally {
@@ -153,15 +221,30 @@ export const SettingsProfileManagement = ({
     }
   };
 
+  const hasUnsyncedProfiles = profiles.some((p) => syncStatusMap[p] === false);
+
   return (
     <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8" id="profile-management-setting">
-      <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
-        <User size={14} className="text-primary" /> Profile Management
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
+          <User size={14} className="text-primary" /> Profile & Workspace Management
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setChangingMasterPw(!changingMasterPw);
+            setCreating(false);
+            setEditingProfile(null);
+          }}
+          className="text-[11px] font-semibold text-zinc-400 hover:text-primary flex items-center gap-1.5 transition-colors"
+        >
+          <Lock size={12} /> Change Master Password
+        </button>
       </div>
 
       <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-4 shadow-xl">
         <p className="text-xs text-zinc-400 leading-relaxed">
-          Create, customize, and manage encrypted workspaces. Each profile contains its own isolated servers, logins, and configurations under your Unified Master Password.
+          Manage encrypted workspaces. All workspaces can be synchronized to your single Unified Master Password for 1-click zero-prompt switching.
         </p>
 
         {error && (
@@ -174,6 +257,57 @@ export const SettingsProfileManagement = ({
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-100 text-xs flex gap-2 items-center">
             <CheckCircle2 size={14} className="shrink-0" />
             <span>{info}</span>
+          </div>
+        )}
+
+        {/* Change Master Password Drawer */}
+        {changingMasterPw && (
+          <div className="space-y-3 p-4 bg-black/60 border border-amber-500/30 rounded-xl animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Lock size={14} className="text-amber-400" /> Change Master Password
+              </span>
+              <button onClick={() => setChangingMasterPw(false)} className="text-zinc-500 hover:text-zinc-300">
+                <X size={14} />
+              </button>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Sets a new Master Password for your current workspace and session.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                type="password"
+                value={newMasterPw}
+                onChange={(e) => setNewMasterPw(e.target.value)}
+                placeholder="New Master Password (min 8 chars)"
+                className="w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-amber-400/50"
+              />
+              <input
+                type="password"
+                value={confirmMasterPw}
+                onChange={(e) => setConfirmMasterPw(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleChangeMasterPassword()}
+                placeholder="Confirm New Password"
+                className="w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-amber-400/50"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setChangingMasterPw(false)}
+                className="h-8 px-3 rounded-lg text-xs text-zinc-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleChangeMasterPassword}
+                disabled={busy || !newMasterPw}
+                className="h-8 px-4 rounded-lg bg-amber-400 text-zinc-950 font-bold text-xs hover:bg-amber-300 disabled:opacity-40"
+              >
+                Update Password
+              </button>
+            </div>
           </div>
         )}
 
@@ -221,7 +355,7 @@ export const SettingsProfileManagement = ({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !useCustomPassword && createNew()}
-                  placeholder="Profile Name (e.g. Work, Personal, Client-A)"
+                  placeholder="Workspace Name (e.g. Work, Personal, Client-A)"
                   className="flex-1 h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary/50"
                 />
               </div>
@@ -232,7 +366,7 @@ export const SettingsProfileManagement = ({
                 <div className="flex-1 text-[11px] leading-tight">
                   <span className="font-semibold text-white">Protected by Master Password</span>
                   <p className="text-zinc-400 mt-0.5">
-                    This workspace unlocks automatically whenever SubTerm is open — no extra password needed.
+                    This workspace unlocks automatically whenever SubTerm is open — zero extra password prompts.
                   </p>
                 </div>
               </div>
@@ -289,11 +423,24 @@ export const SettingsProfileManagement = ({
         ) : (
           <button
             type="button"
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              setCreating(true);
+              setChangingMasterPw(false);
+            }}
             className="w-full h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"
           >
             <Plus size={14} className="text-primary" /> New Workspace / Profile
           </button>
+        )}
+
+        {/* Unsynced Banner */}
+        {hasUnsyncedProfiles && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-xs flex items-center gap-2.5">
+            <AlertTriangle size={15} className="text-amber-400 shrink-0" />
+            <div className="flex-1 text-[11.5px]">
+              Some workspaces have a different password. Click <span className="font-semibold text-amber-300">Sync to Master Password</span> to convert them to 1-click zero-prompt switching.
+            </div>
+          </div>
         )}
 
         {/* Existing Profiles List */}
@@ -308,6 +455,7 @@ export const SettingsProfileManagement = ({
               const isEditing = editingProfile === p;
               const currentIcon = getProfileIcon(p);
               const isActive = activeProfile === p;
+              const isSynced = syncStatusMap[p] !== false;
 
               if (isEditing) {
                 return (
@@ -376,14 +524,33 @@ export const SettingsProfileManagement = ({
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-base select-none">{currentIcon}</span>
                     <span className="font-semibold text-white truncate">{p}</span>
-                    {isActive && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
+                    {isActive ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30 shrink-0">
                         <Check size={10} /> Active Workspace
+                      </span>
+                    ) : isSynced ? (
+                      <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                        <ShieldCheck size={11} /> Master Password
+                      </span>
+                    ) : (
+                      <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 shrink-0">
+                        <Key size={11} /> Custom Password
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!isSynced && (
+                      <button
+                        type="button"
+                        onClick={() => handleSyncToMasterPassword(p)}
+                        disabled={busy}
+                        title="Re-encrypt with Unified Master Password"
+                        className="h-7 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      >
+                        <Key size={11} /> Sync Password
+                      </button>
+                    )}
                     {!isActive && onSwitchProfile && (
                       <button
                         type="button"

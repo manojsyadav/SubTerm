@@ -3075,6 +3075,191 @@ async fn switch_profile_seamless(
     }
 }
 
+#[derive(serde::Serialize)]
+struct ProfileSyncStatus {
+    name: String,
+    synced: bool,
+}
+
+/// Check which on-disk profiles match the current master session password.
+#[tauri::command]
+async fn get_profiles_sync_status(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+) -> Result<Vec<ProfileSyncStatus>, String> {
+    let cached_pw = {
+        let guard = state.session_password.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        match guard.as_ref() {
+            Some(pw) => (**pw).clone(),
+            None => return Err("[AUTH] NO_SESSION_PASSWORD".into()),
+        }
+    };
+
+    let dir = profiles_dir(&app_handle)?;
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+    let entries = fs::read_dir(&dir).map_err(|e| format!("[FILE] READ_DIR: {}", e))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext != Some("subterm") && ext != Some("submarine") { continue; }
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            if validate_profile_name(stem).is_err() { continue; }
+            let name = stem.to_string();
+            let pw_copy = cached_pw.clone();
+            let path_copy = path.clone();
+            let is_synced = tokio::task::spawn_blocking(move || {
+                if let Ok(data) = fs::read(&path_copy) {
+                    if let Ok((parsed_salt, nonce, ciphertext)) = parse_vault_blob(&data) {
+                        let mut salt_fixed = [0u8; SALT_LEN];
+                        salt_fixed.copy_from_slice(&parsed_salt);
+                        if let Ok(derived) = derive_key(&pw_copy, &salt_fixed) {
+                            let key = Zeroizing::new(derived);
+                            return decrypt_with_key(&ciphertext, &nonce, &key).is_ok();
+                        }
+                    }
+                }
+                false
+            }).await.unwrap_or(false);
+
+            results.push(ProfileSyncStatus { name, synced: is_synced });
+        }
+    }
+    results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(results)
+}
+
+/// Convert an existing profile to use the current Unified Master Password.
+/// Requires the profile's current password once to decrypt its vault.
+#[tauri::command]
+async fn sync_profile_password(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    name: String,
+    current_password: String,
+) -> Result<(), String> {
+    validate_profile_name(&name)?;
+    let target_path = profile_path(&app_handle, &name)?;
+    if !target_path.exists() {
+        return Err(format!("Profile '{}' not found on disk", name));
+    }
+
+    let master_pw = {
+        let guard = state.session_password.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        match guard.as_ref() {
+            Some(pw) => (**pw).clone(),
+            None => return Err("[AUTH] NO_SESSION_PASSWORD: sign-in required".into()),
+        }
+    };
+
+    let target_path_clone = target_path.clone();
+    let master_pw_for_task = master_pw.clone();
+    tokio::task::spawn_blocking(move || {
+        let data = fs::read(&target_path_clone)
+            .map_err(|e| format!("[FILE] READ_FAILED: {}", e))?;
+        let (parsed_salt, nonce, ciphertext) = parse_vault_blob(&data)?;
+        let mut old_salt = [0u8; SALT_LEN];
+        old_salt.copy_from_slice(&parsed_salt);
+
+        let old_derived = derive_key(&current_password, &old_salt)
+            .map_err(|e| format!("[CRYPTO] DERIVE_FAILED: {}", e))?;
+        let old_key = Zeroizing::new(old_derived);
+        let decrypted_raw = Zeroizing::new(decrypt_with_key(&ciphertext, &nonce, &old_key)
+            .map_err(|_| "Incorrect current password for this workspace".to_string())?);
+
+        // Generate fresh salt and encrypt with master_pw
+        let mut fresh_salt = [0u8; SALT_LEN];
+        rand::thread_rng().fill(&mut fresh_salt);
+        let new_derived = derive_key(&master_pw_for_task, &fresh_salt)
+            .map_err(|e| format!("[CRYPTO] DERIVE_NEW_FAILED: {}", e))?;
+        let new_key = Zeroizing::new(new_derived);
+
+        let (new_ciphertext, new_nonce) = encrypt_with_key(&decrypted_raw, &new_key)?;
+        let new_blob = write_vault_blob(&fresh_salt, &new_nonce, &new_ciphertext);
+
+        let tmp_path = target_path_clone.with_extension("subterm.tmp");
+        {
+            use std::io::Write as _;
+            let mut f = fs::File::create(&tmp_path)
+                .map_err(|e| format!("[FILE] TMP_CREATE_FAILED: {}", e))?;
+            f.write_all(&new_blob)
+                .map_err(|e| format!("[FILE] TMP_WRITE_FAILED: {}", e))?;
+            f.sync_all()
+                .map_err(|e| format!("[FILE] TMP_SYNC_FAILED: {}", e))?;
+        }
+        fs::rename(&tmp_path, &target_path_clone)
+            .map_err(|e| format!("[FILE] RENAME_FAILED: {}", e))?;
+
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| format!("[CRYPTO] JOIN_ERROR: {}", e))??;
+
+    // If this profile was active in memory, also update state.master_key and salt
+    let is_active = {
+        let active = state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        active.as_deref() == Some(&name)
+    };
+    if is_active {
+        let mut fresh_salt = [0u8; SALT_LEN];
+        rand::thread_rng().fill(&mut fresh_salt);
+        let derived = derive_key(&master_pw, &fresh_salt)?;
+        *state.master_key.lock().map_err(|_| "[STATE] LOCK_FAILED")? = Some(Zeroizing::new(derived));
+        *state.salt.lock().map_err(|_| "[STATE] LOCK_FAILED")? = Some(fresh_salt);
+        let _ = save_vault_async(&state).await;
+    }
+
+    Ok(())
+}
+
+/// Change the unified Master Password for the active workspace and app session.
+#[tauri::command]
+async fn change_master_password(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, DbState>,
+    new_password: String,
+) -> Result<(), String> {
+    if new_password.chars().count() < 8 {
+        return Err("Password must be at least 8 characters".into());
+    }
+
+    let active_name = {
+        let guard = state.active_profile.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        match guard.as_ref() {
+            Some(n) => n.clone(),
+            None => return Err("[AUTH] NO_ACTIVE_PROFILE".into()),
+        }
+    };
+
+    let _target_path = profile_path(&app_handle, &active_name)?;
+
+    let mut fresh_salt = [0u8; SALT_LEN];
+    rand::thread_rng().fill(&mut fresh_salt);
+    let mut pw_copy = new_password.clone();
+    let derived = tokio::task::spawn_blocking(move || {
+        let res = derive_key(&pw_copy, &fresh_salt);
+        pw_copy.zeroize();
+        res
+    })
+    .await
+    .map_err(|e| format!("[CRYPTO] KDF_JOIN: {}", e))??;
+
+    let new_key = Zeroizing::new(derived);
+
+    {
+        *state.master_key.lock().map_err(|_| "[STATE] LOCK_KEY")? = Some(new_key);
+        *state.salt.lock().map_err(|_| "[STATE] LOCK_SALT")? = Some(fresh_salt);
+        *state.session_password.lock().map_err(|_| "[STATE] LOCK_SESSION_PW")? = Some(Zeroizing::new(new_password));
+    }
+
+    save_vault_async(&state).await?;
+    Ok(())
+}
+
 /// Permanently delete a profile's encrypted file. The caller must NOT be
 /// "in" that profile (would orphan in-memory state pointing at a deleted
 /// file). UI enforces this by only showing the delete button on the picker
@@ -7024,6 +7209,7 @@ pub fn run() {
             check_db_exists, setup_master_db, persist_vault,
             list_profiles, cloud_list_sync_profiles, cloud_delete_profile, force_push_profile, select_profile, create_profile, delete_profile, rename_profile, close_profile,
             prepare_switch_profile, has_session_password, switch_profile_seamless,
+            get_profiles_sync_status, sync_profile_password, change_master_password,
             export_profile, import_profile_pick, import_profile_save, save_audit_log,
             cloud::cloud_set_api_base, cloud::cloud_status, cloud::cloud_signup, cloud::cloud_consume_verify_link,
             cloud::cloud_set_password, cloud::cloud_login, cloud::cloud_logout,
