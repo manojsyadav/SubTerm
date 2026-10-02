@@ -207,18 +207,99 @@ pub async fn open_local_terminal(
         })
         .map_err(|e| format!("Failed to create local PTY: {e}"))?;
 
-    let shell_cmd = shell.unwrap_or_else(|| {
-        #[cfg(windows)]
-        {
-            "powershell.exe".to_string()
+fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
+    #[cfg(windows)]
+    {
+        let raw = input.unwrap_or("").trim();
+        match raw {
+            "pwsh" | "pwsh.exe" => {
+                let pwsh_paths = [
+                    "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+                    "C:\\Program Files (x86)\\PowerShell\\7\\pwsh.exe",
+                ];
+                for p in &pwsh_paths {
+                    if std::path::Path::new(p).exists() {
+                        return (p.to_string(), vec!["-NoLogo".to_string()]);
+                    }
+                }
+                ("pwsh.exe".to_string(), vec!["-NoLogo".to_string()])
+            }
+            "powershell" | "powershell.exe" => {
+                let sys_powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+                if std::path::Path::new(sys_powershell).exists() {
+                    (sys_powershell.to_string(), vec!["-NoLogo".to_string()])
+                } else {
+                    ("powershell.exe".to_string(), vec!["-NoLogo".to_string()])
+                }
+            }
+            "cmd" | "cmd.exe" => {
+                let sys_cmd = "C:\\Windows\\System32\\cmd.exe";
+                if std::path::Path::new(sys_cmd).exists() {
+                    (sys_cmd.to_string(), vec![])
+                } else {
+                    ("cmd.exe".to_string(), vec![])
+                }
+            }
+            "git-bash" | "bash" | "bash.exe" => {
+                let git_bash_paths = [
+                    "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+                    "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+                ];
+                for p in &git_bash_paths {
+                    if std::path::Path::new(p).exists() {
+                        return (p.to_string(), vec!["--login".to_string(), "-i".to_string()]);
+                    }
+                }
+                ("bash.exe".to_string(), vec!["--login".to_string(), "-i".to_string()])
+            }
+            "wsl" | "wsl.exe" => {
+                let wsl_path = "C:\\Windows\\System32\\wsl.exe";
+                if std::path::Path::new(wsl_path).exists() {
+                    (wsl_path.to_string(), vec![])
+                } else {
+                    ("wsl.exe".to_string(), vec![])
+                }
+            }
+            other => {
+                if other.is_empty() {
+                    // Prefer PowerShell 7 if available, otherwise fallback to Windows PowerShell
+                    let pwsh7 = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+                    if std::path::Path::new(pwsh7).exists() {
+                        (pwsh7.to_string(), vec!["-NoLogo".to_string()])
+                    } else {
+                        let sys_powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+                        if std::path::Path::new(sys_powershell).exists() {
+                            (sys_powershell.to_string(), vec!["-NoLogo".to_string()])
+                        } else {
+                            ("powershell.exe".to_string(), vec!["-NoLogo".to_string()])
+                        }
+                    }
+                } else if other.ends_with("bash.exe") {
+                    (other.to_string(), vec!["--login".to_string(), "-i".to_string()])
+                } else if !other.ends_with(".exe") && !other.contains('\\') && !other.contains('/') {
+                    (format!("{}.exe", other), vec![])
+                } else {
+                    (other.to_string(), vec![])
+                }
+            }
         }
-        #[cfg(not(windows))]
-        {
+    }
+    #[cfg(not(windows))]
+    {
+        let cmd = input.filter(|s| !s.trim().is_empty()).map(str::to_string).unwrap_or_else(|| {
             std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
-        }
-    });
+        });
+        (cmd, vec![])
+    }
+}
+
+    let (shell_cmd, shell_args) = resolve_local_shell(shell.as_deref());
 
     let mut cmd = CommandBuilder::new(&shell_cmd);
+    for arg in &shell_args {
+        cmd.arg(arg);
+    }
     if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) {
         cmd.cwd(dir);
     } else if let Some(base_dirs) = directories::BaseDirs::new() {
