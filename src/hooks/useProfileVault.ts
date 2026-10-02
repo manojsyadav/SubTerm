@@ -268,6 +268,9 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const handleProfileUnlocked = useCallback(
     async (name: string) => {
+      try {
+        localStorage.setItem("subterm_last_workspace", name);
+      } catch {}
       setActiveProfile(name);
       setIsUnlocked(true);
       addLog(`Profile "${name}" unlocked.`, "success");

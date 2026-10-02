@@ -247,13 +247,13 @@ export const Sidebar = ({
         ))}
       </nav>
 
-      {/* Bottom cluster: lock, switch profile, and settings */}
+      {/* Bottom cluster: lock, switch workspace, and settings */}
       <div className="mt-auto w-full px-2 flex flex-col gap-2">
         {(onLock || onLogout) && (
           <button
             onClick={onLock || onLogout}
             className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10"
-            title="Lock profile"
+            title="Lock SubTerm"
           >
             <Lock size={18} />
           </button>
@@ -262,7 +262,7 @@ export const Sidebar = ({
           <button
             onClick={onSwitchProfile || onLogout}
             className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
-            title="Switch profile"
+            title="Switch workspace"
           >
             <ArrowLeftRight size={18} />
           </button>

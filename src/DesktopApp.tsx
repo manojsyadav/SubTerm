@@ -5,12 +5,14 @@ import {
   Plus, X, RefreshCw, Terminal, Key, Trash2,
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
-  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check
+  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check,
+  Layers
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
 import { useProfileIcon, getProfileIcon } from "./utils/profileMetadata";
 
-import ProfileSelectPage from "./components/ProfileSelectPage";
+import MasterUnlockPage from "./components/MasterUnlockPage";
+import WorkspaceSwitcherModal from "./components/WorkspaceSwitcherModal";
 import logoUrl from "./assets/logo.png";
 import PasswordField from "./components/PasswordField";
 import QuickConnectModal, { QuickAuth } from "./components/QuickConnectModal";
@@ -148,6 +150,7 @@ function DesktopApp() {
   const [availableShells, setAvailableShells] = useState<{ id: string; name: string; command: string }[]>([]);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [isWorkspaceSwitcherOpen, setIsWorkspaceSwitcherOpen] = useState(false);
   const { icon: profileIcon } = useProfileIcon(activeProfile);
 
   useEffect(() => {
@@ -227,38 +230,16 @@ function DesktopApp() {
     } catch (err: any) {
       const msg = String(err);
       if (msg.includes("NO_SESSION_PASSWORD") || msg.toLowerCase().includes("decrypt") || msg.includes("PASSWORD")) {
-        setIsUnlocked(false);
-        setActiveProfile(targetProfile);
-        addLog(`Workspace "${targetProfile}" requires password.`, "info");
+        throw err;
       } else {
         addLog(`Failed to switch workspace: ${msg}`, "error");
+        throw err;
       }
     }
   };
 
-  const handleSwitchProfile = async () => {
-    if (sessions.length > 0) {
-      const ok = await confirm({
-        title: "Switch Workspace?",
-        message: `You have ${sessions.length} open SSH session${sessions.length === 1 ? "" : "s"}. Switching will disconnect them and open the workspace selector.`,
-        okLabel: "Switch",
-        cancelLabel: "Stay",
-        destructive: true,
-      });
-      if (!ok) return;
-      for (const s of sessions) {
-        try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
-      }
-    }
-    try {
-      await invoke("prepare_switch_profile");
-    } catch (e) {
-      addLog(`SWITCH_EXCEPTION: ${e}`, "error");
-    }
-    setIsUnlocked(false);
-    setSessions([]);
-    setActiveView("nodes");
-    addLog("Select a workspace to switch.", "info");
+  const handleSwitchProfile = () => {
+    setIsWorkspaceSwitcherOpen(true);
   };
 
   const handleSignOut = () => {
@@ -1301,9 +1282,20 @@ function DesktopApp() {
                         type="button"
                         onClick={() => {
                           setProfileDropdownOpen(false);
+                          setIsWorkspaceSwitcherOpen(true);
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-300 hover:text-primary flex items-center gap-2 transition-colors border-t border-white/5 mt-1"
+                      >
+                        <Layers size={12} className="text-primary" />
+                        <span>All Workspaces…</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
                           setActiveView("settings");
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-400 hover:text-primary flex items-center gap-2 transition-colors border-t border-white/5 mt-1"
+                        className="w-full text-left px-3 py-1.5 hover:bg-white/[0.06] text-zinc-400 hover:text-primary flex items-center gap-2 transition-colors"
                       >
                         <Plus size={12} />
                         <span>Manage / Add Workspace</span>
@@ -1577,7 +1569,7 @@ function DesktopApp() {
             lastSyncLabel={lastSyncLabel}
           />
         ) : (
-          <ProfileSelectPage
+          <MasterUnlockPage
             onUnlocked={handleProfileUnlocked}
             autoSync={appSettings.autoSync}
             onOpenSettings={() => setActiveView("settings")}
@@ -2545,6 +2537,17 @@ function DesktopApp() {
         isOpen={isQuickConnectOpen}
         onClose={() => setIsQuickConnectOpen(false)}
         onConnect={openQuickConnect}
+      />
+
+      <WorkspaceSwitcherModal
+        isOpen={isWorkspaceSwitcherOpen}
+        onClose={() => setIsWorkspaceSwitcherOpen(false)}
+        activeProfile={activeProfile}
+        onSwitchWorkspace={switchWorkspace}
+        onOpenSettings={() => {
+          setIsWorkspaceSwitcherOpen(false);
+          setActiveView("settings");
+        }}
       />
 
       {isUnlocked && (
