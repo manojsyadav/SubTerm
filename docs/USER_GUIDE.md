@@ -71,6 +71,10 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 4. **File Transfers**:
    - Drag and drop files from your local file explorer into the SubTerm SFTP panel to start transfers.
    - Monitor real-time transfer progress and transfer speed in the progress widget.
+5. **Directory Bookmarks & Quick Navigation (Starred Folders)**:
+   - **Quick Access Jumps**: Click the **Bookmark / Star** icon in the SFTP toolbar to access standard paths including `/` (Root), `~` (Home), `/var/log` (Logs), `/etc` (Configuration), `/var/www` (Web Root), `/opt`, and `/tmp`.
+   - **Star Any Directory**: Click **Star Folder** inside the bookmarks popover (or check the active gold star status) to save frequently accessed paths with custom friendly names.
+   - **Persistent & Searchable**: Bookmarks persist across application restarts and can be instantly filtered by typing in the popover search input.
 
 ### Workflow 3: Configuring Port Forwarding (Tunnels)
 

@@ -69,6 +69,12 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
   - Live color palette swatches in the Settings panel with instant zero-reconnect live hot-reloading across all active terminal sessions.
   - Added cursor shape configuration (*Block*, *Underline*, *Bar*) and animated cursor blinking toggle.
 
+- **SFTP Directory Bookmarks & Quick Navigation**:
+  - Added a dedicated **Directory Bookmarks** toolbar popover for both remote SFTP and local file exploration.
+  - Pre-loaded standard quick jumps for common server directories: `/` (Root), `~` (Home), `/var/log` (Logs), `/etc` (Configuration), `/var/www` (Web Root), `/opt`, and `/tmp`.
+  - 1-click **Star Folder** toggle directly in the toolbar with live gold star indicator when viewing any bookmarked directory.
+  - Real-time bookmark search filter and 1-click removal controls.
+
 ---
 
 ### ⚡ Improvements & Performance
