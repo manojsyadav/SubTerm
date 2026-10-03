@@ -143,6 +143,8 @@ zstd = { version = "0.13", default-features = false }
 # String/Vec passed as args to argon2/aes-gcm are zeroized internally by
 # those crates.
 zeroize = { version = "1.8", features = ["zeroize_derive"] }
+if-watch = { version = "3.2.2", features = ["tokio"] }
+futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
 
 # ---------------------------------------------------------------------------
 # Desktop-only deps. These crates either don't compile on Android at all

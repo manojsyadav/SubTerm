@@ -702,14 +702,20 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   // ---- Auto-reconnect: fixed 5s cadence, retried FOREVER -------------------
   // After a previously-good session drops we retry every 5 seconds, forever —
-  // no backoff ramp, no give-up. The user wants the session/tunnel to keep
-  // trying relentlessly on any drop (laptop sleep, mobile-hotspot dropout, a
-  // flaky link) so a forward always comes back by itself once the link
-  // returns. Only a genuine AUTH failure (wrong credentials) or an explicit
-  // Cancel stops the cycle — retrying auth-rejected attempts every 5s would
-  // just spam the server and risk locking the account. The terminal/SFTP
-  // overlay stays in place the whole time so the user keeps their context.
-  const RECONNECT_INTERVAL_MS = 5000;
+  // no give-up. The user wants the session/tunnel to keep trying
+  // relentlessly on any drop (laptop sleep, mobile-hotspot dropout, a flaky
+  // link) so a forward always comes back by itself once the link returns.
+  // Only a genuine AUTH failure (wrong credentials) or an explicit Cancel
+  // stops the cycle — retrying auth-rejected attempts would just spam the
+  // server and risk locking the account. The terminal/SFTP overlay stays in
+  // place the whole time so the user keeps their context.
+  //
+  // Backoff ramps 2s -> 4s -> 8s -> 16s, capped at 30s, so a server that's
+  // down for minutes doesn't get hammered every 5s the whole time it's gone.
+  const RECONNECT_BASE_MS = 2000;
+  const RECONNECT_MAX_MS = 30000;
+  const reconnectDelayFor = (attempt: number) =>
+    Math.min(RECONNECT_BASE_MS * 2 ** Math.max(0, attempt - 1), RECONNECT_MAX_MS);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [nextReconnectAt, setNextReconnectAt] = useState<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -920,6 +926,28 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       }
     });
 
+    // OS resume-from-sleep / network-interface-change signals from the
+    // backend (commands/connection.rs). Both are app-wide events (not
+    // scoped to this session id), so every open SessionView reacts
+    // independently based on its own current status. If we're sitting mid-
+    // backoff or already gave up, jump straight to an immediate retry
+    // instead of waiting out the rest of the delay — the whole point of
+    // these events is to notice the link is back faster than the passive
+    // health-watcher / backoff timer would on their own.
+    const unlistenResume = listen('system-resume', () => {
+      // reconnectAttemptRef > 0 is the authoritative "we're mid auto-retry
+      // cycle" signal: it's reset to 0 on success, on an auth failure, and
+      // on a user-initiated disconnect, so this can't fire in any of those.
+      if (!session?.isLocal && reconnectAttemptRef.current > 0) {
+        scheduleReconnect(reconnectAttemptRef.current, 0);
+      }
+    });
+    const unlistenNetworkChanged = listen('network-changed', () => {
+      if (!session?.isLocal && reconnectAttemptRef.current > 0) {
+        scheduleReconnect(reconnectAttemptRef.current, 0);
+      }
+    });
+
     return () => {
       unlistenLog.then(f => f());
       unlistenPrompt.then(f => f());
@@ -935,6 +963,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       unlistenSuccess.then(f => f());
       unlistenFailed.then(f => f());
       unlistenDisconnected.then(f => f());
+      unlistenResume.then(f => f());
+      unlistenNetworkChanged.then(f => f());
 
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       clearSecondaryRetryTimers();
@@ -953,12 +983,12 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     return () => clearInterval(t);
   }, [nextReconnectAt]);
 
-  const scheduleReconnect = (attempt: number) => {
+  const scheduleReconnect = (attempt: number, delayOverrideMs?: number) => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-    const delay = RECONNECT_INTERVAL_MS;
+    const delay = delayOverrideMs ?? reconnectDelayFor(attempt);
     updateAttempt(attempt);
     setNextReconnectAt(Date.now() + delay);
     reconnectTimerRef.current = setTimeout(() => {

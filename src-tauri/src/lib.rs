@@ -253,6 +253,7 @@ pub fn run() {
             cloud_config::init(&app.handle());
             let cloud_state = cloud::CloudState::new(&app.handle());
             app.manage(cloud_state);
+            commands::connection::spawn_connection_health_watchers(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

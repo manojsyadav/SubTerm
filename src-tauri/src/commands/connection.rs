@@ -179,6 +179,74 @@ pub(crate) fn apply_tcp_keepalive(stream: &tokio::net::TcpStream) {
 
 pub static SSH_KEEPALIVE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(20);
 
+/// How much a wall-clock tick can overshoot its expected interval before we
+/// treat it as "the OS was asleep", not scheduler jitter. Laptops routinely
+/// stall a tokio timer by tens of ms under load; a multi-second gap only
+/// happens from a real suspend/resume cycle.
+const RESUME_DETECTOR_TICK: std::time::Duration = std::time::Duration::from_secs(2);
+const RESUME_DETECTOR_THRESHOLD: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Detects laptop sleep/resume without any OS-specific power-event API: a
+/// tokio interval timer that stalls for multiple seconds between ticks can
+/// only mean the whole process (and its scheduler) was suspended, since a
+/// 2s timer firing late by tens of ms is normal jitter but firing late by
+/// several seconds is not. On resume, every open session's auto-reconnect
+/// (if any is pending) gets kicked immediately instead of waiting out
+/// whatever's left of its backoff — see `system-resume` in SessionView.tsx.
+fn spawn_resume_detector(app: tauri::AppHandle) {
+    use tauri::Emitter;
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(RESUME_DETECTOR_TICK);
+        let mut last = std::time::Instant::now();
+        loop {
+            interval.tick().await;
+            let now = std::time::Instant::now();
+            let elapsed = now.duration_since(last);
+            if elapsed > RESUME_DETECTOR_THRESHOLD {
+                let _ = app.emit("system-resume", ());
+            }
+            last = now;
+        }
+    });
+}
+
+/// Watches for network interface up/down/address changes (Wi-Fi roam, VPN
+/// toggle, cable unplug) and emits `network-changed` so pending
+/// auto-reconnects retry immediately instead of waiting on the passive
+/// health-watcher to eventually notice. Debounced to one emit per second —
+/// a single physical change (e.g. joining a new Wi-Fi network) often
+/// produces several back-to-back IfEvents (address down, then up, on
+/// multiple interfaces) and the frontend only needs to know "something
+/// changed", not every individual event.
+fn spawn_network_watcher(app: tauri::AppHandle) {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+    tokio::spawn(async move {
+        let mut watcher = match if_watch::tokio::IfWatcher::new() {
+            Ok(w) => w,
+            Err(_) => return, // No usable network-watching backend on this platform; silently skip.
+        };
+        let mut last_emit: Option<std::time::Instant> = None;
+        const DEBOUNCE: std::time::Duration = std::time::Duration::from_secs(1);
+        while let Some(event) = watcher.next().await {
+            if event.is_err() {
+                continue;
+            }
+            let now = std::time::Instant::now();
+            if last_emit.map(|t| now.duration_since(t) >= DEBOUNCE).unwrap_or(true) {
+                let _ = app.emit("network-changed", ());
+                last_emit = Some(now);
+            }
+        }
+    });
+}
+
+/// Starts both background watchers. Called once from `run()`'s `.setup()`.
+pub(crate) fn spawn_connection_health_watchers(app: tauri::AppHandle) {
+    spawn_resume_detector(app.clone());
+    spawn_network_watcher(app);
+}
+
 
 /// The russh client config shared by the primary connection and any ProxyJump
 /// hop, so both negotiate an identical algorithm set. Extracted verbatim from
