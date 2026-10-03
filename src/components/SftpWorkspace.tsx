@@ -63,6 +63,7 @@ const DragGhost = forwardRef<DragGhostHandle>((_props, ref) => {
     >
       <FileIcon size={12} className="text-indigo-300 shrink-0" />
       <span className="truncate max-w-[260px]">{drag.entry.name}</span>
+      {drag.items.length > 1 && <span className="shrink-0 text-indigo-300">+{drag.items.length - 1}</span>}
     </div>,
     document.body
   );
@@ -144,10 +145,26 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const dropHoverElRef = useRef<Element | null>(null);
+  const markDropHover = (el: Element | null) => {
+    if (dropHoverElRef.current === el) return;
+    dropHoverElRef.current?.removeAttribute("data-fs-drop-hover");
+    el?.setAttribute("data-fs-drop-hover", "");
+    dropHoverElRef.current = el;
+  };
+
   const handleDragMove = (drag: ActiveDrag | null) => {
     dragRef.current = drag;
-    if (drag) ghostRef.current?.show(drag);
-    else ghostRef.current?.hide();
+    if (!drag) {
+      ghostRef.current?.hide();
+      markDropHover(null);
+      return;
+    }
+    ghostRef.current?.show(drag);
+    const hit = document.elementFromPoint(drag.x, drag.y);
+    const pane = hit?.closest("[data-fs-pane]") ?? null;
+    const overOtherPane = !!pane && pane.getAttribute("data-fs-pane") !== drag.paneId;
+    markDropHover(overOtherPane ? hit!.closest("[data-fs-drop-path]") ?? pane : null);
   };
 
   // Live transfer progress, keyed by the backend-assigned id. The Rust
@@ -210,6 +227,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
       // Clear immediately so a second mouseup (e.g. the FilePanel's own
       // listener clearing the ghost) doesn't re-enter this branch.
       dragRef.current = null;
+      markDropHover(null);
 
       const hit = document.elementFromPoint(e.clientX, e.clientY);
       if (!hit) return;
@@ -218,64 +236,26 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
       const targetPaneId = pane.getAttribute("data-fs-pane");
       if (!targetPaneId || targetPaneId === active.paneId) return;
 
-      // Row-aware drop: if the cursor is on a folder row inside the
-      // destination pane, drop INTO that folder (its path) instead of
-      // the pane's current directory. Falling on a file row, an empty
-      // area, or the header still falls back to the pane's currentPath.
-      // This makes the natural "drag onto folder" gesture work, matching
-      // how users expect Finder/Explorer drag-drop to behave.
-      const row = (hit as HTMLElement).closest("[data-fs-row-isdir]") as HTMLElement | null;
-      const rowIsDir = row?.getAttribute("data-fs-row-isdir") === "1";
-      const rowPath = rowIsDir ? row?.getAttribute("data-fs-row-path") : null;
-      const targetDir = rowPath || pane.getAttribute("data-fs-current-path") || "";
+      const dropEl = (hit as HTMLElement).closest("[data-fs-drop-path]");
+      const targetDir = dropEl?.getAttribute("data-fs-drop-path")
+        || pane.getAttribute("data-fs-current-path") || "";
       if (!targetDir) return;
 
-      const srcProv = active.paneId === "local" ? localProvider : remoteProvider;
-      const destProv = targetPaneId === "local" ? localProvider : remoteProvider;
-      const isCrossSide = (active.paneId === "local") !== (targetPaneId === "local");
-
-      const action = active.paneId === "local" && targetPaneId === "remote"
-        ? "Uploading"
-        : active.paneId === "remote" && targetPaneId === "local"
-          ? "Downloading"
-          : "Moving";
-      notify(`${action} ${active.entry.name}…`, "info");
-
-      const runTransfer = async () => {
-        const srcInfo = { provider: srcProv, path: active.entry.path, name: active.entry.name, isDir: active.entry.isDir };
-        const dstInfo = { provider: destProv, dir: targetDir };
-        try {
-          await transferFile(srcInfo, dstInfo, false);
-        } catch (err: any) {
-          const msg = String(err?.message ?? err);
-          // The backend emits `EXISTS:<path>` only for cross-side SFTP
-          // transfers; same-side rename surfaces its own per-provider
-          // errors that won't match this sentinel. Both paths therefore
-          // do the right thing.
-          if (!msg.startsWith("EXISTS:") || !isCrossSide || active.entry.isDir) throw err;
-          const direction = action === "Uploading" ? "upload" : "download";
-          const choice = await overwritePrompt({ name: active.entry.name, direction, batchSize: 1 });
-          if (choice === "cancel" || choice === "skip" || choice === "skip-all") {
-            notify(`${active.entry.name} skipped`, "info");
-            return;
-          }
-          await transferFile(srcInfo, dstInfo, true);
-        }
-        notify(`${active.entry.name} ✓`, "success");
-        // Refresh both sides — source may have lost the file (move semantics
-        // for same-side transfers), target gains it.
-        localRef.current?.refresh();
-        remoteRef.current?.refresh();
-      };
-
-      runTransfer().catch((err) => {
-        notify(`Transfer failed: ${err}`, "error");
-        console.error("Cross-pane transfer failed:", err);
-      });
+      const sourceRef = active.paneId === "local" ? localRef : remoteRef;
+      const run = sourceRef.current?.sendItems(active.items, targetDir) ?? Promise.resolve();
+      run
+        .catch((err) => {
+          notify(`Transfer failed: ${err}`, "error");
+          console.error("Cross-pane transfer failed:", err);
+        })
+        .finally(() => {
+          localRef.current?.refresh();
+          remoteRef.current?.refresh();
+        });
     };
     window.addEventListener("mouseup", onMouseUp);
     return () => window.removeEventListener("mouseup", onMouseUp);
-  }, [localProvider, remoteProvider, overwritePrompt]);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0a0a0c] relative">
