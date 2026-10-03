@@ -1,11 +1,11 @@
-import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert } from "lucide-react";
+import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert, Download } from "lucide-react";
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../ui/confirm";
 import { renderServerIcon } from "./ServerIcon";
 import DistroLogo from "./DistroLogo";
 
-export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
+export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
   const [search, setSearch] = useState("");
   // Native window.confirm() is a silent no-op inside Tauri's Android WebView
   // (same shim gap useTextPrompt was added for), so the delete buttons here
@@ -562,6 +562,14 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                 <TerminalSquare size={15} /> Launch Local Shell
               </button>
             )}
+            {onImportSSHConfig && (
+              <button
+                onClick={onImportSSHConfig}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/25 text-sky-400 text-xs font-semibold hover:bg-sky-500/20 transition-all shadow-sm"
+              >
+                <Download size={15} /> Import from ~/.ssh/config
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -590,6 +598,15 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                     title="Launch a local shell (PowerShell / Bash) session"
                   >
                     <TerminalSquare size={13} /> Local Shell
+                  </button>
+                )}
+                {onImportSSHConfig && (
+                  <button
+                    onClick={onImportSSHConfig}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 text-[11px] font-bold uppercase tracking-wider hover:bg-sky-500/20 hover:text-sky-300 transition-colors"
+                    title="Import hosts from OpenSSH ~/.ssh/config, PuTTY, or MobaXterm"
+                  >
+                    <Download size={13} /> Import SSH Config
                   </button>
                 )}
                 {displayedServers.length >= 2 && onOpenMultipleServers && (

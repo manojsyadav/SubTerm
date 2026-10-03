@@ -371,6 +371,7 @@ function DesktopApp() {
   // for the whole profile session.
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isImportModalRequested, setIsImportModalRequested] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
@@ -1690,6 +1691,11 @@ function DesktopApp() {
                   });
                   setIsPanelOpen(true);
                 }}
+                onImportSSHConfig={() => {
+                  setNewNode({ ...defaultNode });
+                  setIsImportModalRequested(true);
+                  setIsPanelOpen(true);
+                }}
                 onQuickConnect={() => setIsQuickConnectOpen(true)}
                 onOpenLocalTerminal={openLocalTerminal}
                 onRemoveServer={removeServer}
@@ -2597,7 +2603,13 @@ function DesktopApp() {
         </div>
 
       <AddNodePanel
-        isOpen={isPanelOpen} onClose={() => { setIsPanelOpen(false); setFormError(""); }}
+        isOpen={isPanelOpen}
+        initialImportOpen={isImportModalRequested}
+        onClose={() => {
+          setIsPanelOpen(false);
+          setIsImportModalRequested(false);
+          setFormError("");
+        }}
         newNode={newNode} setNewNode={setNewNode}
         isEditMode={!!newNode.id}
         onSave={async () => {

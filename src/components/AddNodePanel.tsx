@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal } from "lucide-react";
@@ -33,7 +33,7 @@ type ImportedHost = {
   proxy_jump: string | null;
 };
 
-const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile }: any) => {
+const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile, initialImportOpen }: any) => {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
 
@@ -85,6 +85,12 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
       setImportLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen && initialImportOpen) {
+      openImportModal();
+    }
+  }, [isOpen, initialImportOpen]);
 
   // Parse whatever's in the textarea. Rust auto-detects the format so we
   // don't need three separate importers here.
