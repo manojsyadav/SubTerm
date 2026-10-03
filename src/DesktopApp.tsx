@@ -6,7 +6,7 @@ import {
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
   ChevronDown, Columns, Rows, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check,
-  Layers, Settings
+  Layers, Settings, Play
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
 import { useProfileIcon, getProfileIcon } from "./utils/profileMetadata";
@@ -33,6 +33,8 @@ import { getActiveShortcut } from "./shortcuts";
 import { useProfileVault } from "./hooks/useProfileVault";
 import { useSessionManager, Session } from "./hooks/useSessionManager";
 import { useWallManager, WallItem, SessionTerm } from "./hooks/useWallManager";
+import { parseSnippetVariables } from "./utils/snippetTemplate";
+import { SnippetParamModal } from "./components/SnippetParamModal";
 
 const appWindow = getCurrentWindow();
 
@@ -179,6 +181,30 @@ function DesktopApp() {
     removeServer, removeFolder, renameFolder,
     handleProfileUnlocked, handleLogout: vaultLogout,
   } = vault;
+
+  const [activeSnippetParam, setActiveSnippetParam] = useState<{
+    raw: string;
+    title?: string;
+    targetSessionId?: string;
+  } | null>(null);
+
+  const handleExecuteSnippet = useCallback((rawCommand: string, title?: string, targetSessionId?: string) => {
+    const target = targetSessionId || (activeView.startsWith("session-") ? activeView : sessions[0]?.id);
+    if (!target) {
+      addLog("No active session to run command in. Open a server first.", "warning");
+      return;
+    }
+
+    const vars = parseSnippetVariables(rawCommand);
+    if (vars.length > 0) {
+      setActiveSnippetParam({ raw: rawCommand, title, targetSessionId: target });
+      return;
+    }
+
+    // Direct execution
+    const text = rawCommand.endsWith("\n") || rawCommand.endsWith("\r") ? rawCommand : rawCommand + "\n";
+    window.dispatchEvent(new CustomEvent(`submarine-terminal-exec-${target}`, { detail: { text } }));
+  }, [activeView, sessions, addLog]);
 
   const [availableShells, setAvailableShells] = useState<{ id: string; name: string; command: string }[]>([]);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
@@ -2350,6 +2376,16 @@ function DesktopApp() {
                             <div className="flex justify-between items-start mb-2">
                               <h3 className="text-[16px] font-bold text-primary tracking-tight truncate flex-1">{cmd.title}</h3>
                               <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                {sessions.length > 0 && (
+                                  <button
+                                    onClick={() => handleExecuteSnippet(cmd.content, cmd.title)}
+                                    title="Run command in terminal"
+                                    className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors flex items-center gap-1 text-[11px] font-bold"
+                                  >
+                                    <Play size={10} className="fill-primary" />
+                                    <span>Run</span>
+                                  </button>
+                                )}
                                 <button onClick={() => { setEditCommandData(cmd); setIsCommandPanelOpen(true); }} className="text-zinc-500 hover:text-white transition-colors"><Edit2 size={14} /></button>
                                 <button onClick={async () => {
                                   const ok = await confirm({ title: "Delete command?", message: `“${cmd.title}” will be removed.`, destructive: true });
@@ -2675,9 +2711,7 @@ function DesktopApp() {
         }}
         commands={commands}
         onExecuteCommand={(cmd) => {
-          if (activeView.startsWith("session-")) {
-            window.dispatchEvent(new CustomEvent(`submarine-terminal-exec-${activeView}`, { detail: { text: cmd + "\n" } }));
-          }
+          handleExecuteSnippet(cmd);
         }}
       />
       )}
@@ -2954,6 +2988,24 @@ function DesktopApp() {
           </div>
         </div>
       </div>
+      {activeSnippetParam && (
+        <SnippetParamModal
+          isOpen={!!activeSnippetParam}
+          onClose={() => setActiveSnippetParam(null)}
+          rawCommand={activeSnippetParam.raw}
+          title={activeSnippetParam.title}
+          broadcastSessionCount={broadcast.enabled ? broadcast.targetSessionIds.size : 0}
+          onRun={(resolved, execute) => {
+            const target = activeSnippetParam.targetSessionId || (activeView.startsWith("session-") ? activeView : sessions[0]?.id);
+            if (target) {
+              const text = execute
+                ? (resolved.endsWith("\n") || resolved.endsWith("\r") ? resolved : resolved + "\n")
+                : resolved;
+              window.dispatchEvent(new CustomEvent(`submarine-terminal-exec-${target}`, { detail: { text } }));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

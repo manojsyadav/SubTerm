@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio } from "lucide-react";
+import { useBroadcast } from "../ui/broadcast";
 import TerminalView from "./TerminalView";
 import SftpWorkspace from "./SftpWorkspace";
 import TunnelsPanel from "./TunnelsPanel";
@@ -59,6 +60,7 @@ const SepToggle = ({ on, onToggle, status, title, onReconnect }: {
 );
 
 const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: any) => {
+  const broadcast = useBroadcast();
   const isProd = Boolean((session as any)?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>(() => session?.isLocal ? 'connected' : 'connecting');
 
@@ -568,6 +570,18 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
       if (!text) return;
       const bytes = Array.from(new TextEncoder().encode(text));
       invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
+
+      // Fan-out to other target sessions when fleet broadcast is armed
+      const bstate = broadcast.stateRef.current;
+      if (bstate.enabled && bstate.targetSessionIds.size >= 2 && bstate.targetSessionIds.has(session.id)) {
+        for (const targetSid of bstate.targetSessionIds) {
+          if (targetSid === session.id) continue;
+          const targetTid = bstate.sessionTerminalMap[targetSid];
+          if (targetTid) {
+            invoke('write_terminal_data', { terminalId: targetTid, data: bytes }).catch(() => {});
+          }
+        }
+      }
     };
     const handleOpenEditor = async (e: any) => {
       const p = e.detail?.path;
@@ -1861,6 +1875,33 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
               className="px-3 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 rounded-md text-[11px] font-bold uppercase transition-colors"
             >
               Close (Esc)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fleet Broadcast Armed Safety Warning Banner */}
+      {broadcast.enabled && broadcast.targetSessionIds.size >= 2 && broadcast.targetSessionIds.has(session.id) && (
+        <div className="bg-orange-500/15 border-b border-orange-500/30 px-3.5 py-1.5 flex items-center justify-between text-xs text-orange-200 shrink-0 z-20 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Radio size={14} className="text-orange-400 animate-pulse shrink-0" />
+            <span className="font-bold text-orange-300">Fleet Broadcast Active:</span>
+            <span className="text-orange-200/90 truncate">
+              Commands & keystrokes mirror concurrently to <strong>{broadcast.targetSessionIds.size} sessions</strong>.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => broadcast.toggleTarget(session.id)}
+              className="px-2.5 py-1 rounded bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 text-[11px] font-semibold transition-colors"
+            >
+              Disarm This Tab
+            </button>
+            <button
+              onClick={broadcast.disable}
+              className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition-colors"
+            >
+              Disable All
             </button>
           </div>
         </div>
