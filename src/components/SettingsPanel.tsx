@@ -3,6 +3,7 @@ import {
   Settings, Palette, RefreshCw, List, Cloud, User,
   ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
   Plus, Terminal, Keyboard, ChevronRight, Lock, ShieldCheck,
+  Download, X,
 } from "lucide-react";
 import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
@@ -10,7 +11,7 @@ import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
-import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS } from "../terminal/themes";
+import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
 
 type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
 
@@ -146,17 +147,53 @@ const PageAppearance = ({ settings, setSettings }: any) => (
 );
 
 const PageTerminal = ({ settings, setSettings }: any) => {
+  const [themesList, setThemesList] = useState<TerminalThemeConfig[]>(getAllTerminalThemes());
+  const [importThemeModal, setImportThemeModal] = useState(false);
+  const [importThemeText, setImportThemeText] = useState("");
+  const [importThemeError, setImportThemeError] = useState("");
+  const [copiedThemeToast, setCopiedThemeToast] = useState(false);
+
   const currentThemeId = settings.terminalTheme || 'subterm-dark';
-  const currentTheme = TERMINAL_THEMES.find((t) => t.id === currentThemeId) || TERMINAL_THEMES[0];
+  const currentTheme = themesList.find((t) => t.id === currentThemeId) || themesList[0] || TERMINAL_THEMES[0];
   const currentFont = settings.terminalFontFamily || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace';
   const matchingPreset = FONT_FAMILY_PRESETS.find((p) => p.value && p.value === currentFont);
   const selectedPresetId = matchingPreset ? matchingPreset.id : "custom";
 
+  const handleImportTheme = () => {
+    try {
+      const parsed = JSON.parse(importThemeText.trim());
+      const themeObj = parsed.theme || parsed;
+      const themeName = parsed.name || `Custom Theme ${themesList.length + 1}`;
+      const bg = themeObj.background || "#09090b";
+      const fg = themeObj.foreground || "#e4e4e7";
+      const accent1 = themeObj.cursor || themeObj.blue || "#60a5fa";
+      const accent2 = themeObj.green || "#34d399";
+      const newId = `custom-${Date.now()}`;
+      const newConfig: TerminalThemeConfig = {
+        id: newId,
+        name: `${themeName} (Custom)`,
+        previewColors: [bg, fg, accent1, accent2],
+        theme: themeObj,
+      };
+      const existing = getCustomThemes();
+      const updated = [...existing, newConfig];
+      saveCustomThemes(updated);
+      const all = getAllTerminalThemes();
+      setThemesList(all);
+      setSettings({ ...settings, terminalTheme: newId });
+      setImportThemeModal(false);
+      setImportThemeText("");
+      setImportThemeError("");
+    } catch (e: any) {
+      setImportThemeError(`Invalid JSON: ${e.message}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <SectionCard title="Display & Theme">
-        <Row label="Color Scheme / Theme" desc="Curated palette and full ANSI 16-color theme for terminal sessions">
-          <div className="flex items-center gap-3">
+        <Row label="Color Scheme / Theme" desc="Curated palette, custom themes, and full ANSI 16-color theme for terminal sessions">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 p-1 bg-black/40 rounded-md border border-white/10" title="Palette preview">
               {currentTheme.previewColors.map((color, i) => (
                 <span key={i} className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: color }} />
@@ -167,12 +204,55 @@ const PageTerminal = ({ settings, setSettings }: any) => {
               onChange={(e) => setSettings({ ...settings, terminalTheme: e.target.value })}
               className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
             >
-              {TERMINAL_THEMES.map((theme) => (
+              {themesList.map((theme) => (
                 <option key={theme.id} value={theme.id}>
                   {theme.name}
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(JSON.stringify(currentTheme.theme, null, 2));
+                setCopiedThemeToast(true);
+                setTimeout(() => setCopiedThemeToast(false), 2000);
+              }}
+              className="p-1.5 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors"
+              title="Copy current theme JSON to clipboard"
+            >
+              <Download size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setImportThemeText("");
+                setImportThemeError("");
+                setImportThemeModal(true);
+              }}
+              className="p-1.5 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 text-sky-400 hover:text-sky-300 transition-colors"
+              title="Import theme from JSON"
+            >
+              <Plus size={13} />
+            </button>
+            {currentThemeId.startsWith("custom-") && (
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = getCustomThemes().filter((t) => t.id !== currentThemeId);
+                  saveCustomThemes(updated);
+                  const all = getAllTerminalThemes();
+                  setThemesList(all);
+                  setSettings({ ...settings, terminalTheme: "subterm-dark" });
+                }}
+                className="p-1.5 rounded-md bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                title="Delete this custom theme"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+            {copiedThemeToast && (
+              <span className="text-[10px] text-emerald-400 font-mono">Copied JSON!</span>
+            )}
           </div>
         </Row>
         <Row label="Font Family" desc="Typography typeface preset or custom font stack">
@@ -282,6 +362,57 @@ const PageTerminal = ({ settings, setSettings }: any) => {
           </select>
         </Row>
       </SectionCard>
+
+      {/* Import Theme Modal */}
+      {importThemeModal && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setImportThemeModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#121215] border border-white/10 rounded-2xl shadow-2xl p-5 space-y-3 font-sans text-xs"
+          >
+            <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+              <span className="font-bold text-white text-sm">Import Terminal Theme</span>
+              <button onClick={() => setImportThemeModal(false)} className="text-zinc-400 hover:text-white">
+                <X size={14} />
+              </button>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Paste xterm.js theme JSON or Windows Terminal / Alacritty theme colors:
+            </p>
+            <textarea
+              autoFocus
+              rows={8}
+              value={importThemeText}
+              onChange={(e) => setImportThemeText(e.target.value)}
+              placeholder={`{\n  "name": "My Custom Theme",\n  "background": "#1e1e2e",\n  "foreground": "#cdd6f4",\n  "cursor": "#f5e0dc",\n  "black": "#45475a",\n  "red": "#f38ba8"\n}`}
+              className="w-full p-2.5 bg-black/50 border border-white/10 rounded-lg text-white font-mono text-[11px] outline-none focus:border-sky-400/50"
+            />
+            {importThemeError && (
+              <p className="text-[11px] text-rose-400 font-mono">{importThemeError}</p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setImportThemeModal(false)}
+                className="px-3 py-1.5 rounded-lg border border-white/10 text-zinc-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleImportTheme}
+                disabled={!importThemeText.trim()}
+                className="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-zinc-950 font-bold"
+              >
+                Import Theme
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     <SectionCard title="Session Behaviour">
       <Row label="Auto-close tab on exit" desc="Close the session tab when the shell process exits">
         <Toggle checked={!!settings.autoCloseOnExit} onChange={() => setSettings({ ...settings, autoCloseOnExit: !settings.autoCloseOnExit })} />

@@ -234,8 +234,24 @@ export const TERMINAL_THEMES: TerminalThemeConfig[] = [
   },
 ];
 
+export function getCustomThemes(): TerminalThemeConfig[] {
+  try {
+    const raw = localStorage.getItem('subterm-custom-terminal-themes');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function saveCustomThemes(themes: TerminalThemeConfig[]): void {
+  localStorage.setItem('subterm-custom-terminal-themes', JSON.stringify(themes));
+}
+
+export function getAllTerminalThemes(): TerminalThemeConfig[] {
+  return [...TERMINAL_THEMES, ...getCustomThemes()];
+}
+
 export function getTerminalTheme(id?: string | null): ITheme {
-  const match = TERMINAL_THEMES.find((t) => t.id === id);
+  const match = getAllTerminalThemes().find((t) => t.id === id);
   return match ? match.theme : TERMINAL_THEMES[0].theme;
 }
 
