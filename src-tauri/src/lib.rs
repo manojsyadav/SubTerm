@@ -23,7 +23,6 @@ pub use commands::tunnels::start_tunnel_specs_on;
 use ssh_manager::SshState;
 use monitor::{MonitorMap, SharedSettings};
 use mirror::MirrorMap;
-use std::sync::Arc;
 use vault::*;
 
 pub struct DbState {
@@ -5441,68 +5440,6 @@ async fn submit_kbi_response(
     Ok(())
 }
 
-// ----- Mirror commands -----------------------------------------------------
-
-#[tauri::command]
-async fn mirror_dry_run(
-    ssh: tauri::State<'_, SshState>,
-    session_id: String,
-    spec: mirror::MirrorSpec,
-) -> Result<mirror::DryRunReport, String> {
-    let handle = {
-        let conns = ssh.connections.lock().await;
-        conns.get(&session_id).cloned()
-            .ok_or_else(|| "Session not connected".to_string())?
-    };
-    mirror::dry_run(handle, spec).await
-}
-
-#[tauri::command]
-async fn start_mirror(
-    app: tauri::AppHandle,
-    ssh: tauri::State<'_, SshState>,
-    mirrors: tauri::State<'_, MirrorMap>,
-    session_id: String,
-    spec: mirror::MirrorSpec,
-) -> Result<String, String> {
-    let handle = {
-        let conns = ssh.connections.lock().await;
-        conns.get(&session_id).cloned()
-            .ok_or_else(|| "Session not connected".to_string())?
-    };
-    mirror::start(app, session_id, handle, Arc::clone(&mirrors), spec).await
-}
-
-#[tauri::command]
-async fn stop_mirror(
-    mirrors: tauri::State<'_, MirrorMap>,
-    mirror_id: String,
-) -> Result<(), String> {
-    mirror::stop(&mirrors, &mirror_id).await
-}
-
-#[tauri::command]
-async fn list_mirrors(
-    mirrors: tauri::State<'_, MirrorMap>,
-    session_id: Option<String>,
-) -> Result<Vec<mirror::MirrorStatus>, String> {
-    Ok(mirror::list(&mirrors, session_id.as_deref()).await)
-}
-
-/// Native OS folder picker. Used by MirrorsPanel to fill in `local`.
-#[tauri::command]
-async fn pick_local_directory() -> Result<Option<String>, String> {
-    #[cfg(target_os = "android")]
-    {
-        return Err("Folder picker not available on Android.".into());
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let path = rfd::AsyncFileDialog::new().pick_folder().await;
-        Ok(path.map(|p| p.path().to_string_lossy().into_owned()))
-    }
-}
-
 #[tauri::command]
 async fn disconnect_session(
     app: tauri::AppHandle,
@@ -5912,7 +5849,11 @@ pub fn run() {
             commands::servers::add_command, commands::servers::edit_command, commands::servers::delete_command, commands::servers::get_commands,
             commands::servers::cmd_history_add, commands::servers::cmd_history_list, commands::servers::cmd_history_clear,
             commands::servers::add_note, commands::servers::edit_note, commands::servers::delete_note, commands::servers::get_notes,
-            mirror_dry_run, start_mirror, stop_mirror, list_mirrors, pick_local_directory,
+            commands::mirror::mirror_dry_run,
+            commands::mirror::start_mirror,
+            commands::mirror::stop_mirror,
+            commands::mirror::list_mirrors,
+            commands::mirror::pick_local_directory,
             commands::servers::add_credential, commands::servers::edit_credential, commands::servers::delete_credential,
             commands::servers::add_ssh_key, commands::servers::edit_ssh_key, commands::servers::delete_ssh_key,
             get_known_hosts, delete_known_host, clear_all_known_hosts,
