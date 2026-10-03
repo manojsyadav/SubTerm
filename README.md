@@ -28,7 +28,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 ## Core Capabilities
 
 - **Integrated Terminal & SFTP**: Run terminal commands and manage remote files via SFTP side-by-side.
-- **SFTP Directory Bookmarks & Quick Navigation**: 1-click folder starring, instant standard system quick jumps (`/`, `~`, `/var/log`, `/etc`, `/var/www`, `/opt`, `/tmp`), and persistent bookmark management.
+- **SFTP Directory Bookmarks & Hidden Files Toggle**: 1-click folder starring, instant standard system quick jumps (`/`, `~`, `/var/log`, `/etc`, `/var/www`, `/opt`, `/tmp`), persistent bookmarks, and `Ctrl+H` toggle for Unix dotfiles with suppressed item counter badge.
 - **Port Forwarding**: Easily configure local (`-L`), remote (`-R`), and dynamic SOCKS5 (`-D`) tunnels.
 - **Folder Sync**: Keep your local and remote directories mirrored with real-time two-way sync tools.
 - **Cross-Platform**: Compiles natively for Windows, macOS, Linux, and Android.

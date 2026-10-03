@@ -84,6 +84,9 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
    - **Quick Access Jumps**: Click the **Bookmark / Star** icon in the SFTP toolbar to access standard paths including `/` (Root), `~` (Home), `/var/log` (Logs), `/etc` (Configuration), `/var/www` (Web Root), `/opt`, and `/tmp`.
    - **Star Any Directory**: Click **Star Folder** inside the bookmarks popover (or check the active gold star status) to save frequently accessed paths with custom friendly names.
    - **Persistent & Searchable**: Bookmarks persist across application restarts and can be instantly filtered by typing in the popover search input.
+6. **Toggle Hidden Files & Dotfiles (`Ctrl+H`)**:
+   - Click the **Eye / Eye-Off** button in the SFTP toolbar (or press `Ctrl+H`) to toggle visibility of hidden files and Unix dotfiles (e.g. `.env`, `.git/`, `.bashrc`).
+   - When hidden files are suppressed, SubTerm displays a discreet counter badge (e.g. `4 hidden`) indicating suppressed items; click the badge anytime to instantly reveal them.
 
 ### Workflow 3: Configuring Port Forwarding (Tunnels)
 
