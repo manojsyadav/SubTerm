@@ -1,0 +1,388 @@
+# SubTerm Tauri IPC & Command API Reference
+
+This document provides a technical reference for all Tauri IPC commands registered in `subterm_lib::run()` via `tauri::generate_handler![]` and invoked by the frontend via `@tauri-apps/api/core::invoke`.
+
+---
+
+## 1. Vault & Workspace Profile Commands
+
+### `check_db_exists`
+- **Description**: Verifies whether an active profile or default vault exists on disk.
+- **Input Arguments**: None.
+- **Return Type**: `Result<bool, String>`
+
+### `setup_master_db`
+- **Description**: Initializes or unlocks the in-memory SQLite database from an encrypted `.subterm` profile using the supplied master password.
+- **Input Arguments**:
+  ```typescript
+  { password: string }
+  ```
+- **Return Type**: `Result<(), String>`
+- **Errors**: `[CRYPTO] DECRYPT_FAILURE` if master password is invalid or ciphertext is corrupted.
+
+### `persist_vault`
+- **Description**: Serializes, compresses (Zstandard), encrypts (AES-256-GCM), and writes the current in-memory SQLite state to the active profile on disk.
+- **Input Arguments**: None.
+- **Return Type**: `Result<(), String>`
+
+### `list_profiles`
+- **Description**: Lists all local workspace profiles found in the profile data directory.
+- **Input Arguments**: None.
+- **Return Type**: `Result<Vec<String>, String>`
+
+### `select_profile`
+- **Description**: Sets the active profile and attempts to unlock it using the provided password.
+- **Input Arguments**:
+  ```typescript
+  { name: string, password: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `create_profile`
+- **Description**: Creates a new profile with an empty schema, encrypted with the specified password.
+- **Input Arguments**:
+  ```typescript
+  { name: string, password: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `delete_profile`
+- **Description**: Permanently removes a profile file from disk. Protected behind vault unlock.
+- **Input Arguments**:
+  ```typescript
+  { name: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `rename_profile`
+- **Description**: Renames an existing profile file on disk.
+- **Input Arguments**:
+  ```typescript
+  { oldName: string, newName: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `change_master_password`
+- **Description**: Re-keys the in-memory database with a new Argon2id salt/key and writes the newly encrypted blob to disk.
+- **Input Arguments**:
+  ```typescript
+  { oldPassword: string, newPassword: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `export_profile`
+- **Description**: Exports the encrypted profile binary blob to a destination path selected by the user.
+- **Input Arguments**:
+  ```typescript
+  { name: string, destPath: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `import_profile_save`
+- **Description**: Validates and saves an imported `.subterm` / `.submarine` file into the application profile directory.
+- **Input Arguments**:
+  ```typescript
+  { name: string, sourcePath: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+---
+
+## 2. Server & Infrastructure Node Management
+
+### `get_servers`
+- **Description**: Retrieves all server records from the active vault.
+- **Input Arguments**: None.
+- **Return Type**: `Result<Vec<ServerNode>, String>`
+
+### `add_server`
+- **Description**: Adds a new server entry to the database and commits the vault.
+- **Input Arguments**:
+  ```typescript
+  { server: NewServerPayload }
+  ```
+- **Return Type**: `Result<i64, String>` (Returns auto-generated Server ID)
+
+### `edit_server`
+- **Description**: Updates fields of an existing server.
+- **Input Arguments**:
+  ```typescript
+  { id: number, server: UpdateServerPayload }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `delete_server`
+- **Description**: Removes a server and cascades deletion to associated monitor configurations.
+- **Input Arguments**:
+  ```typescript
+  { id: number }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `set_server_is_production`
+- **Description**: Sets the production safety flag on a server.
+- **Input Arguments**:
+  ```typescript
+  { id: number, isProduction: boolean }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `reveal_server_password`
+- **Description**: Unmasks the plaintext password for a server. Protected behind vault unlock.
+- **Input Arguments**:
+  ```typescript
+  { id: number }
+  ```
+- **Return Type**: `Result<String, String>`
+
+### `clone_server`
+- **Description**: Duplicates a server definition under a new name.
+- **Input Arguments**:
+  ```typescript
+  { id: number, newName: string }
+  ```
+- **Return Type**: `Result<i64, String>`
+
+### `reorder_servers`
+- **Description**: Updates manual ordering positions for server list presentation.
+- **Input Arguments**:
+  ```typescript
+  { orderedIds: number[] }
+  ```
+- **Return Type**: `Result<(), String>`
+
+---
+
+## 3. SSH Credentials & Private Keys
+
+### `get_credentials`
+- **Description**: Returns all reusable credentials stored in the vault.
+- **Return Type**: `Result<Vec<CredentialRecord>, String>`
+
+### `add_credential` / `edit_credential` / `delete_credential`
+- **Description**: CRUD operations for reusable username/password/key credentials.
+
+### `reveal_credential_password`
+- **Description**: Returns the plaintext password for a credential ID.
+
+### `get_ssh_keys` / `add_ssh_key` / `edit_ssh_key` / `delete_ssh_key`
+- **Description**: CRUD operations for SSH private/public key pairs stored in the vault.
+
+### `generate_ssh_key`
+- **Description**: Generates a new Ed25519 or RSA-4096 key pair in memory with optional passphrase.
+- **Input Arguments**:
+  ```typescript
+  { keyType: "ed25519" | "rsa", bits?: number, passphrase?: string }
+  ```
+- **Return Type**: `Result<{ publicKey: string, privateKey: string }, String>`
+
+---
+
+## 4. SSH Session Lifecycle
+
+### `initiate_connection`
+- **Description**: Establishes an asynchronous SSH connection to a remote host. Supports direct host, jump hosts (`ProxyJump`), password auth, key auth, and interactive keyboard auth.
+- **Input Arguments**:
+  ```typescript
+  {
+    sessionId: string,
+    host: string,
+    port: number,
+    username: string,
+    auth: AuthConfig,
+    jumpHostId?: number
+  }
+  ```
+- **Return Type**: `Result<ConnectionStatus, String>`
+
+### `verify_fingerprint_response`
+- **Description**: Submits the user's accept/reject response when an unknown host key fingerprint is presented.
+- **Input Arguments**:
+  ```typescript
+  { sessionId: string, accepted: boolean }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `submit_kbi_response`
+- **Description**: Sends keyboard-interactive responses (e.g. 2FA/MFA OTP token or PAM prompt).
+- **Input Arguments**:
+  ```typescript
+  { sessionId: string, responses: string[] }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `disconnect_session`
+- **Description**: Closes all channels, terminates associated tunnels and mirrors, and tears down the SSH connection.
+- **Input Arguments**:
+  ```typescript
+  { sessionId: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+---
+
+## 5. Terminal Operations
+
+### `open_terminal`
+- **Description**: Opens an interactive remote PTY shell over an existing SSH session.
+- **Input Arguments**:
+  ```typescript
+  {
+    sessionId: string,
+    terminalId: string,
+    cols: number,
+    rows: number
+  }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `open_local_terminal`
+- **Description**: Spawns a native local PTY process (PowerShell/CMD on Windows, Bash/Zsh on Unix).
+- **Input Arguments**:
+  ```typescript
+  {
+    terminalId: string,
+    cols: number,
+    rows: number,
+    shellPath?: string,
+    cwd?: string
+  }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `get_available_local_shells`
+- **Description**: Detects installed system shells on the host machine.
+- **Return Type**: `Result<Vec<LocalShellInfo>, String>`
+
+### `write_terminal_data`
+- **Description**: Sends input keystrokes or pasted text into the PTY stream.
+- **Input Arguments**:
+  ```typescript
+  { terminalId: string, data: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `resize_terminal`
+- **Description**: Emits a window-change event to adjust PTY rows and columns.
+- **Input Arguments**:
+  ```typescript
+  { terminalId: string, cols: number, rows: number }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `close_terminal`
+- **Description**: Terminates the local PTY process or closes the remote SSH terminal channel.
+- **Input Arguments**:
+  ```typescript
+  { terminalId: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+---
+
+## 6. SFTP File Operations
+
+All remote path operations validate path safety against directory traversal vulnerabilities.
+
+| Command | Arguments | Return Type | Description |
+|---|---|---|---|
+| `sftp_list_dir` | `{ sessionId, path }` | `Result<Vec<FileEntry>, String>` | Lists remote folder entries |
+| `sftp_create_dir` | `{ sessionId, path }` | `Result<(), String>` | Creates remote directory |
+| `sftp_remove_file` | `{ sessionId, path }` | `Result<(), String>` | Deletes remote file |
+| `sftp_remove_dir` | `{ sessionId, path }` | `Result<(), String>` | Deletes remote directory recursively |
+| `sftp_rename` | `{ sessionId, oldPath, newPath }` | `Result<(), String>` | Renames/moves remote path |
+| `sftp_set_permissions` | `{ sessionId, path, mode }` | `Result<(), String>` | Chmod remote file (`mode: u32`) |
+| `sftp_download_file` | `{ sessionId, remotePath, localPath, transferId }` | `Result<(), String>` | Downloads remote file |
+| `sftp_upload_file` | `{ sessionId, localPath, remotePath, transferId }` | `Result<(), String>` | Uploads local file |
+| `sftp_cancel_transfer` | `{ transferId }` | `Result<(), String>` | Aborts in-flight transfer |
+| `sftp_read_file_text` | `{ sessionId, path, maxBytes? }` | `Result<String, String>` | Reads remote file content into text editor |
+| `sftp_write_file_text` | `{ sessionId, path, content }` | `Result<(), String>` | Saves modified text back to remote path |
+
+---
+
+## 7. Port Forwarding (Tunnels)
+
+### `start_tunnel`
+- **Description**: Initiates a local, remote, or dynamic tunnel.
+- **Input Arguments**:
+  ```typescript
+  {
+    sessionId: string,
+    spec: {
+      kind: "local" | "remote" | "dynamic",
+      local: string,    // e.g. "127.0.0.1:8080"
+      remote?: string   // e.g. "127.0.0.1:80" (omitted for dynamic)
+    }
+  }
+  ```
+- **Return Type**: `Result<string, String>` (Returns unique `tunnelId`)
+
+### `stop_tunnel`
+- **Description**: Closes the specified listener and all active forwarding streams.
+- **Input Arguments**:
+  ```typescript
+  { tunnelId: string }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `list_tunnels`
+- **Description**: Returns all running and configured tunnels for a session.
+- **Input Arguments**:
+  ```typescript
+  { sessionId: string }
+  ```
+- **Return Type**: `Result<Vec<ActiveTunnelInfo>, String>`
+
+---
+
+## 8. Docker Operations (Over Remote SSH)
+
+Commands in this module interact with the remote Docker daemon via SSH exec:
+
+- `ssh_docker_containers({ sessionId, all: boolean })`: Returns running or all containers.
+- `ssh_docker_container_action({ sessionId, containerId, action: "start"|"stop"|"restart"|"pause"|"unpause" })`: Executes container lifecycle actions.
+- `ssh_docker_stats({ sessionId, containerId })`: Fetches live CPU/Memory utilization.
+- `ssh_docker_logs_start({ sessionId, containerId, streamId, tail?: number })`: Begins background log streaming.
+- `ssh_docker_logs_stop({ streamId })`: Stops streaming container logs.
+- `ssh_docker_images_list({ sessionId })`: Lists Docker images on remote host.
+- `ssh_docker_volumes_list({ sessionId })`: Lists Docker volumes.
+- `ssh_docker_compose_list({ sessionId })`: Discovers running Docker Compose stacks.
+- `ssh_docker_compose_action({ sessionId, composeFile, action })`: Controls Compose stacks (`up`, `down`, `restart`).
+
+---
+
+## 9. Background Monitoring Commands
+
+- `monitor_list()`: Returns all configured server monitors.
+- `monitor_add({ nodeId, metrics: string[] })`: Attaches monitoring poller to server ID.
+- `monitor_remove({ nodeId })`: Drops monitoring poller.
+- `monitor_resume({ nodeId })` / `monitor_pause({ nodeId })`: Toggles active polling.
+- `monitor_get_settings()` / `monitor_set_settings({ settings })`: Configures polling intervals and CPU/RAM alert thresholds.
+
+---
+
+## 10. Cloud Sync Commands
+
+- `cloud_set_api_base({ url: string })`: Configures the remote cloud backend URL (stored in memory; defaults to `https://api.subterm.com`).
+- `cloud_status()`: Checks current auth status, user email, and last sync timestamp.
+- `cloud_signup({ email: string })`: Requests registration verification link.
+- `cloud_login({ email: string, password: string })`: Logs in and persists `cloud_token.json`.
+- `cloud_logout()`: Clears stored bearer token.
+- `sync_now()`: Triggers bidirectional sync of active encrypted profile with cloud server.
+- `force_push_profile({ name: string })`: Force-uploads local encrypted profile blob, overwriting cloud copy.
+
+---
+
+## 11. Tauri Event Streams (Rust -> Frontend)
+
+Events emitted from Rust to the Webview via `app.emit(...)`:
+
+| Event Name | Payload Format | Description |
+|---|---|---|
+| `terminal-data-{terminalId}` | Base64 or Hex encoded batch string | Coalesced PTY terminal stdout |
+| `terminal-exit-{terminalId}` | `{ code: number }` | Terminal process exit notification |
+| `transfer-progress-{transferId}` | `{ bytesTransferred: number, totalBytes: number, speed: number }` | SFTP transfer progress updates |
+| `docker-log-{streamId}` | `{ line: string }` | Live Docker container log output line |
+| `monitor-pulse` | `{ nodeId: number, cpu: number, mem: number, disk: number, load: number }` | Real-time system health metrics |
+| `fingerprint-request` | `{ sessionId: string, fingerprint: string, keyType: string }` | Host key verification prompt |
+| `kbi-request` | `{ sessionId: string, prompts: string[] }` | Keyboard-interactive 2FA prompt |
