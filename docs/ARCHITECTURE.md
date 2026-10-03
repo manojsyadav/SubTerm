@@ -68,34 +68,56 @@ graph TD
 
 ## 2. Component Breakdown
 
-### 2.1 Backend State Singletons (`src-tauri/src/lib.rs`)
+### 2.1 Backend Module Layout (`src-tauri/src/`)
 
-The Rust application initializes and manages several concurrent thread-safe states passed to Tauri command handlers:
+`lib.rs` is deliberately thin: it holds only `DbState`, a handful of profile-path helpers, and `pub fn run()` (the Tauri `Builder` setup + `invoke_handler![]` command registry). Every command domain lives in its own module, split out so each file has one clear responsibility:
 
-1. **`DbState`**:
+| Module | Responsibility |
+|---|---|
+| `vault.rs` | Argon2id key derivation, AES-256-GCM encrypt/decrypt, vault blob framing, zstd compress/decompress. |
+| `ssh_manager.rs` | `SshState` (all live per-session connection/channel maps) and `ClientHandler` (the `russh::client::Handler` impl — host-key TOFU prompts, forwarded-tcpip bridging, SSH agent forwarding channel routing). |
+| `ssh_agent.rs` | Connects to the local SSH agent (Unix socket / Windows named pipe) for agent forwarding. Proxies raw bytes only — never parses the ssh-agent protocol. |
+| `tunnel.rs` | Local/remote/dynamic (SOCKS5) port-forward implementation. |
+| `monitor.rs` | Background per-host polling loops (`MonitorMap`, `SharedSettings`) — the engine; DB bridging lives in `commands/monitor_settings.rs`. |
+| `mirror.rs` | Bidirectional local↔remote folder sync engine (`MirrorMap`) using the `notify` crate — the engine; thin command wrappers live in `commands/mirror.rs`. |
+| `cloud.rs` / `cloud_config.rs` | Cloud account auth, bearer token persistence, encrypted blob upload/download, self-hosted endpoint config. |
+| `identity.rs` / `hlc.rs` | Per-member sealed-box key wrapping for profile sharing, and the Hybrid Logical Clock used to order synced row versions. |
+| `docker.rs` | `DockerStreams` — live container log streaming handles over SSH exec. |
+| `commands/connection.rs` | SSH connection establishment: keyboard-interactive auth, ProxyJump/bastion handshakes, `initiate_connection` (transport selection, auth ladder, per-session health watcher), disconnect/teardown, SSH error classification, and the sleep/resume + network-change watchers (§4.8). |
+| `commands/profile.rs` | Profile lifecycle (list/select/switch/close/rename/delete/export/import), master-password change, the vault schema bootstrap (`setup_master_db`), known-hosts management. |
+| `commands/sync.rs` | The HLC-based per-entity sync engine (schema backfill, triggers, LWW merge) and profile sharing/escrow (identity/share/invite/accept/revoke). |
+| `commands/servers.rs`, `commands/sftp.rs`, `commands/terminal.rs`, `commands/tunnels.rs`, `commands/network.rs` | Server/credential/key CRUD, SFTP operations, terminal PTY commands, tunnel commands, and standalone network probes (WoL, port knocking). |
+| `commands/diagnostics.rs` | Info-panel read-only probes, OS detection, iptables/nft inspection, systemctl/kill-process actions. |
+| `commands/monitor_settings.rs` | DB↔poller glue for the Monitoring panel (reads/writes `monitor_configs`, drives `monitor.rs`'s `MonitorMap`). |
+| `commands/mirror.rs` | Thin `#[tauri::command]` wrappers forwarding into `mirror.rs`. |
+
+### 2.2 State Singletons
+
+The Rust application manages several concurrent thread-safe states passed to Tauri command handlers:
+
+1. **`DbState`** (`lib.rs`):
    - `conn`: `Arc<StdMutex<Option<rusqlite::Connection>>>` - In-memory SQLite connection holding unencrypted session data when unlocked.
-   - `master_key`: `StdMutex<Option<[u8; 32]>>` - AES-256 key derived via Argon2id from the master password.
+   - `master_key`: `StdMutex<Option<Zeroizing<[u8; 32]>>>` - AES-256 key derived via Argon2id from the master password; zeroized on drop.
    - `salt`: `StdMutex<Option<[u8; 16]>>` - 16-byte random salt stored in the vault blob header.
    - `db_path`: `StdMutex<Option<PathBuf>>` - Active `.subterm` profile path on disk.
    - `active_profile`: `StdMutex<Option<String>>` - Name of active workspace profile.
-   - `hlc`: `StdMutex<Option<Hlc>>` - Hybrid Logical Clock instance for distributed conflict-free ordering across multi-device sync.
-   - `session_password`: `StdMutex<Option<String>>` - In-memory master password used to seamlessly persist or switch profiles without re-prompting.
+   - `hlc`: `StdMutex<Option<Arc<Hlc>>>` - Hybrid Logical Clock instance for distributed conflict-free ordering across multi-device sync.
+   - `session_password`: `StdMutex<Option<Zeroizing<String>>>` - In-memory master password used to seamlessly persist or switch profiles without re-prompting.
 
-2. **`SshState` (`src-tauri/src/commands/servers.rs`)**:
-   - Manages active remote connections indexed by `session_id`.
-   - Owns `russh::client::Handle` instances, active channel handlers, jump host proxies, and tunnel forwarders.
+2. **`SshState`** (`ssh_manager.rs`):
+   - Manages active remote connections indexed by `session_id`: `russh::client::Handle` instances, terminal/resize channels, SFTP sessions, tunnels, forwarded-target maps, per-session passwords (for sudo elevation), and — new in this release — `agent_forward_sessions` (which sessions have SSH agent forwarding turned on) and, per `ClientHandler` instance, `agent_forward_channels` (routes inbound agent-protocol bytes to the right local-agent bridge task).
 
-3. **`DockerStreams` (`src-tauri/src/docker.rs`)**:
+3. **`DockerStreams`** (`docker.rs`):
    - Tracks live streaming handles (`tokio::task::AbortHandle`) for remote container log tailing (`ssh_docker_logs_start`).
 
-4. **`MonitorMap` & `SharedSettings` (`src-tauri/src/monitor.rs`)**:
+4. **`MonitorMap` & `SharedSettings`** (`monitor.rs`):
    - Manages background Tokio polling loops per remote host that collect CPU, memory, load, and disk metrics via SSH exec commands.
    - Hot-reloads global polling intervals and thresholds without restarting monitors.
 
-5. **`MirrorMap` (`src-tauri/src/mirror.rs`)**:
+5. **`MirrorMap`** (`mirror.rs`):
    - Manages real-time bidirectional local-to-remote folder file synchronization tasks using filesystem watchers (`notify` crate).
 
-6. **`CloudState` (`src-tauri/src/cloud.rs`)**:
+6. **`CloudState`** (`cloud.rs`):
    - Handles account authentication, bearer token persistence (`cloud_token.json`), and uploading/downloading encrypted vault blobs to the sync API.
 
 ---
@@ -183,6 +205,34 @@ SubTerm provides enterprise-grade network traversal using clean, native primitiv
    - **Binary Footprint & Maintainability**: Bundling Go sidecars for every CPU target (x86_64, aarch64, arm64-v8a, armeabi-v7a) adds ~50MB+ to package downloads and requires separate CGo/Go Mobile toolchains.
    - **Usability & UX**: Users running Tailscale or WireGuard already benefit from OS-level virtual interfaces (MagicDNS / WireGuard IPs) routing transparently through standard SSH without app restart or separate daemon credential management.
    - **Security**: Eliminates privileged helper daemons, unverified local loopback control servers, and extra attack surfaces.
+
+### 4.8 SSH Agent Forwarding (`-A`)
+
+When a server has **Forward SSH Agent** enabled, `open_pty_channel` (`ssh_manager.rs`) requests forwarding (`Channel::agent_forward(true)`) on every shell/exec channel before starting the shell — the same ordering OpenSSH's own client uses, so `SSH_AUTH_SOCK` is already set by the time the remote shell's first command runs.
+
+Because russh only hands the client's `Handler` a bare `ChannelId` (not a `Channel<Msg>` stream) for server-opened channels, bytes flow through a small bridge instead of a direct stream:
+
+```mermaid
+graph LR
+    RemoteProg[Remote ssh/git process] -->|auth-agent@openssh.com channel| Server[Remote sshd]
+    Server -->|server_channel_open_agent_forward| Handler[ClientHandler]
+    Handler -->|connect_local_agent| LocalAgent[Local agent socket/pipe]
+    LocalAgent -->|agent response bytes| BridgeTask[Bridge task]
+    BridgeTask -->|Handle::data channel_id| Server
+    Server -->|data callback| Handler
+    Handler -->|agent_forward_channels lookup| LocalAgent
+```
+
+`connect_local_agent` (`ssh_agent.rs`) only proxies raw bytes — it never parses the ssh-agent wire protocol — so it works unmodified with any agent that speaks the standard protocol: OpenSSH's own agent, Pageant, and the agent-compatible sockets/pipes exposed by 1Password, KeePassXC, and Vaultwarden/Bitwarden. No per-vendor integration code is needed.
+
+### 4.9 Auto-Reconnect: Sleep/Resume & Network-Change Detection
+
+Two background watchers, spawned from `run()`'s `.setup()` hook (`commands::connection::spawn_connection_health_watchers`), exist to make the frontend's reconnect loop (`SessionView.tsx`) notice a dead link faster than its passive health-watcher probe (15–30s) would on its own:
+
+- **Resume detector**: a 2s `tokio::time::interval` timer whose ticks are compared against a monotonic `Instant` baseline. A gap of more than 5s between ticks can only mean the process (and its scheduler) was suspended — no OS-specific power-event API is needed. Emits `system-resume`.
+- **Network watcher**: wraps the `if-watch` crate to detect interface up/down/address changes (Wi-Fi roam, VPN toggle, cable unplug), debounced to one emission per second. Emits `network-changed`.
+
+The frontend listens for both events and, for any session currently mid-backoff or already given up on a non-auth failure, retries immediately instead of waiting out the remaining delay. The retry delay itself is capped exponential backoff (2s → 4s → 8s → 16s → 30s max), not a fixed interval.
 
 ---
 
