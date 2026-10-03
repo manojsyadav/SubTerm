@@ -57,6 +57,12 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
 - **Prominent Linux Distro Badges in Node Cards**:
   - Server cards in the grid now automatically showcase prominent high-resolution logos for detected Linux distributions (Ubuntu, Debian, Fedora, Arch, CentOS, Alpine, etc.) alongside connection latency and OS specs.
 
+- **Terminal Context Menu & Buffer Export**:
+  - Added a modern glassmorphic right-click context menu in terminal sessions with immediate shortcuts for Copy (`Ctrl+C`), Paste (`Ctrl+V`), Select All (`Ctrl+A`), Find in Terminal (`Ctrl+F`), Clear Scrollback, Reset Terminal, and Export Buffer.
+  - 1-click **Export Buffer** action dumps the entire terminal history to a timestamped `.log` file for auditability and incident post-mortems.
+  - Added **Right-Click Action** user preference under *Settings > Terminal* allowing users to toggle between opening the context menu or instant clipboard pasting (PuTTY style).
+  - Added **Copy on select** toggle in *Settings > Terminal* to automatically copy highlighted text into the system clipboard.
+
 ---
 
 ### ⚡ Improvements & Performance

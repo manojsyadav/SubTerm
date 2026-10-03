@@ -39,6 +39,9 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager with interactive key recording, conflict detection, and category filters.
 - **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
 - **Hardware-Accelerated Terminal**: WebGL GPU rasterization with automatic canvas fallback for 60–120+ FPS throughput and reduced CPU overhead.
+- **Terminal Context Menu & Buffer Export**: Glassmorphic right-click menu with Copy, Paste, Select All, Find, Clear, Reset, 1-click buffer export to `.log`, configurable right-click behavior (Context Menu vs PuTTY-style immediate paste), and automatic copy-on-select.
+- **Multi-Tab Fleet Broadcast**: Concurrently fan out keystrokes and commands across multiple server sessions with live session targeting and armed safety banners.
+- **Parameterized Snippets Engine**: Runbook automation with `{{variable:defaultValue}}` placeholders and interactive variable prompting.
 - **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
 - **VS Code-Style Settings Panel**: 11 focused category pages with a vertical left-sidebar navigator and vault-gated security screens.
 

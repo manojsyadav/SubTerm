@@ -49,6 +49,12 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
    - Any keystroke typed or command executed is fanned out to all selected sessions simultaneously.
    - Click **Disarm This Tab** or **Disable All** on the safety banner to immediately stop fan-out.
 
+8. **Terminal Context Menu & Buffer Export**:
+   - **Right-Click Context Menu**: Right-click anywhere in the active terminal to open a modern glassmorphic context menu with actions for **Copy** (`Ctrl+C`), **Paste** (`Ctrl+V`), **Select All** (`Ctrl+A`), **Find in Terminal** (`Ctrl+F`), **Clear Scrollback**, **Reset Terminal**, and **Export Buffer**.
+   - **Export Buffer to .log**: Click **Export Buffer** in the context menu to download the complete scrollback history into a timestamped `.log` file (e.g., `terminal-serverName-YYYY-MM-DDTHH-mm-ss.log`) for offline analysis or audit trails.
+   - **Right-Click Action Preference**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, choose between **Open Context Menu** or **Paste Immediately (PuTTY style)**.
+   - **Copy on Select**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, toggle **Copy on select** to automatically copy highlighted terminal text to your system clipboard without pressing any key.
+
 ### Workflow 2: Managing Remote Files with SFTP & Quick Editor
 
 *Goal*: Browse, upload, download, and edit configuration files directly on the remote server.
