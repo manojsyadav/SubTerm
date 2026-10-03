@@ -1053,15 +1053,27 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   sendItemsRef.current = provider.id === "remote" ? downloadItems : uploadItems;
 
+  const openingPathsRef = useRef<Set<string>>(new Set());
+
   // Remote: open in OS default editor with a save-watcher that re-uploads on
   // every change. Backed by the existing `sftp_open_remote_file` command.
   const liveEditEntry = async (entry: FileEntry) => {
     if (!sessionId || entry.isDir) return;
+    if (openingPathsRef.current.has(entry.path)) {
+      notify(`${entry.name} is already downloading`, "info");
+      return;
+    }
+    openingPathsRef.current.add(entry.path);
+    const transferId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       notify(`Opening ${entry.name} in default editor…`, "info");
-      await invoke("sftp_open_remote_file", { sessionId, remotePath: entry.path });
+      await invoke("sftp_open_remote_file", { sessionId, remotePath: entry.path, transferId });
     } catch (err: any) {
-      notify(`Open failed: ${err}`, "error");
+      if (String(err) !== "cancelled") {
+        notify(`Open failed: ${err}`, "error");
+      }
+    } finally {
+      openingPathsRef.current.delete(entry.path);
     }
   };
 

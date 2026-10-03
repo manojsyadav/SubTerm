@@ -1587,24 +1587,182 @@ pub async fn sftp_open_remote_file(
     state: tauri::State<'_, SshState>,
     session_id: String,
     remote_path: String,
+    transfer_id: Option<String>,
 ) -> Result<(), String> {
     use tauri::Emitter;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
-    let sftp = get_sftp_session(&state, &session_id).await?;
+    let tid = transfer_id.unwrap_or_else(|| self::transfer_id());
     let filename = safe_temp_leaf_name(&remote_path)?;
+    let event_name = format!("sftp-open-{}", session_id);
+    let transfer_event = format!("sftp-transfer-{}", session_id);
 
-    // Read file data
-    let data = sftp.read(&remote_path).await.map_err(|e| format!("Failed to read remote file: {}", e))?;
+    // Register cancel flag so transfers bar can cancel it while downloading
+    let cancel = Arc::new(AtomicBool::new(false));
+    let cancels_map = Arc::clone(&state.transfer_cancels);
+    cancels_map.lock().await.insert(tid.clone(), Arc::clone(&cancel));
+    struct CancelGuard {
+        map: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>>,
+        id: String,
+    }
+    impl Drop for CancelGuard {
+        fn drop(&mut self) {
+            if let Ok(mut g) = self.map.try_lock() {
+                g.remove(&self.id);
+            }
+        }
+    }
+    let _cancel_guard = CancelGuard { map: Arc::clone(&cancels_map), id: tid.clone() };
 
-    // Per-session subdirectory so we can sweep everything cleanly on
-    // disconnect rather than leaving loose `submarine_sftp_*` files in the global
-    // temp dir. The directory is also a smaller blast radius for any path-
-    // related shenanigans (each editor sees only files from one session).
+    let emit_open = |bytes: u64, total: u64, status: &str| {
+        let _ = app_handle.emit(
+            &event_name,
+            serde_json::json!({
+                "path": remote_path,
+                "bytes": bytes,
+                "total": total,
+                "status": status,
+            }),
+        );
+    };
+
+    let emit_transfer = |bytes: u64, total: u64, status: &str, error: Option<String>, launching: bool| {
+        let _ = app_handle.emit(
+            &transfer_event,
+            serde_json::json!({
+                "id": tid,
+                "name": filename,
+                "kind": "download",
+                "bytes": bytes,
+                "total": total,
+                "status": status,
+                "error": error,
+                "launching": launching && status == "progress",
+            }),
+        );
+    };
+
+    emit_open(0, 0, "progress");
+    emit_transfer(0, 0, "progress", None, false);
+
+    let sftp = match get_sftp_session(&state, &session_id).await {
+        Ok(s) => s,
+        Err(e) => {
+            emit_open(0, 0, "error");
+            emit_transfer(0, 0, "error", Some(e.clone()), false);
+            return Err(e);
+        }
+    };
+
+    if cancel.load(Ordering::Relaxed) {
+        emit_open(0, 0, "cancelled");
+        emit_transfer(0, 0, "cancelled", None, false);
+        return Err("cancelled".into());
+    }
+
+    let stat = match sftp.metadata(&remote_path).await {
+        Ok(st) => st,
+        Err(e) => {
+            let err_msg = format!("Failed to stat remote file: {}", e);
+            emit_open(0, 0, "error");
+            emit_transfer(0, 0, "error", Some(err_msg.clone()), false);
+            return Err(err_msg);
+        }
+    };
+    let total_size = stat.size.unwrap_or(0);
+
     let session_temp_dir = session_sftp_dir(&session_id);
-    std::fs::create_dir_all(&session_temp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    if let Err(e) = std::fs::create_dir_all(&session_temp_dir) {
+        let err_msg = format!("Failed to create temp dir: {}", e);
+        emit_open(0, total_size, "error");
+        emit_transfer(0, total_size, "error", Some(err_msg.clone()), false);
+        return Err(err_msg);
+    }
     let temp_file_path = session_temp_dir.join(&filename);
-    std::fs::write(&temp_file_path, &data).map_err(|e| format!("Failed to write temporary file: {}", e))?;
+    let part_path = session_temp_dir.join(format!("{}.part", &filename));
+
+    let mut remote_file = match sftp.open(&remote_path).await {
+        Ok(f) => f,
+        Err(e) => {
+            let err_msg = format!("Failed to open remote file: {}", e);
+            emit_open(0, total_size, "error");
+            emit_transfer(0, total_size, "error", Some(err_msg.clone()), false);
+            return Err(err_msg);
+        }
+    };
+
+    let mut local_file = match tokio::fs::File::create(&part_path).await {
+        Ok(f) => f,
+        Err(e) => {
+            let err_msg = format!("Failed to create temporary file: {}", e);
+            emit_open(0, total_size, "error");
+            emit_transfer(0, total_size, "error", Some(err_msg.clone()), false);
+            return Err(err_msg);
+        }
+    };
+
+    use tokio::io::AsyncWriteExt;
+    let mut buf = vec![0u8; 256 * 1024];
+    let mut transferred: u64 = 0;
+    let mut last_report = std::time::Instant::now();
+
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            drop(local_file);
+            let _ = tokio::fs::remove_file(&part_path).await;
+            emit_open(transferred, total_size, "cancelled");
+            emit_transfer(transferred, total_size, "cancelled", None, false);
+            return Err("cancelled".into());
+        }
+        let n = match remote_file.read(&mut buf).await {
+            Ok(n) => n,
+            Err(e) => {
+                drop(local_file);
+                let _ = tokio::fs::remove_file(&part_path).await;
+                let err_msg = format!("read: {}", e);
+                emit_open(transferred, total_size, "error");
+                emit_transfer(transferred, total_size, "error", Some(err_msg.clone()), false);
+                return Err(err_msg);
+            }
+        };
+        if n == 0 { break; }
+        if let Err(e) = local_file.write_all(&buf[..n]).await {
+            drop(local_file);
+            let _ = tokio::fs::remove_file(&part_path).await;
+            let err_msg = format!("write: {}", e);
+            emit_open(transferred, total_size, "error");
+            emit_transfer(transferred, total_size, "error", Some(err_msg.clone()), false);
+            return Err(err_msg);
+        }
+        transferred += n as u64;
+        if last_report.elapsed() >= std::time::Duration::from_millis(100) {
+            emit_open(transferred, total_size, "progress");
+            emit_transfer(transferred, total_size, "progress", None, false);
+            last_report = std::time::Instant::now();
+        }
+    }
+    if let Err(e) = local_file.flush().await {
+        drop(local_file);
+        let _ = tokio::fs::remove_file(&part_path).await;
+        let err_msg = format!("flush: {}", e);
+        emit_open(transferred, total_size, "error");
+        emit_transfer(transferred, total_size, "error", Some(err_msg.clone()), false);
+        return Err(err_msg);
+    }
+    drop(local_file);
+
+    // Install the .part file over the editor copy
+    if let Err(e) = std::fs::rename(&part_path, &temp_file_path) {
+        let _ = std::fs::remove_file(&part_path);
+        let err_msg = format!("Failed to install editor copy: {}", e);
+        emit_open(transferred, total_size, "error");
+        emit_transfer(transferred, total_size, "error", Some(err_msg.clone()), false);
+        return Err(err_msg);
+    }
+
+    // Download installed! Emit progress with launching: true
+    emit_open(transferred, total_size, "progress");
+    emit_transfer(transferred, total_size, "progress", None, true);
 
     // Open local temp file in system default application. The whole
     // live-edit-in-default-editor feature is desktop-only — Android's
@@ -1614,15 +1772,23 @@ pub async fn sftp_open_remote_file(
     #[cfg(target_os = "android")]
     {
         let _ = &temp_file_path;
+        emit_open(transferred, total_size, "error");
+        emit_transfer(transferred, total_size, "error", Some("Live edit in system editor is not available on Android.".into()), false);
         return Err("Live edit in system editor is not available on Android.".into());
     }
     #[cfg(not(target_os = "android"))]
     {
         let open_res = open::that(&temp_file_path);
         if let Err(e) = open_res {
-            return Err(format!("Failed to open file: {}", e));
+            let err_msg = format!("Failed to open file: {}", e);
+            emit_open(transferred, total_size, "error");
+            emit_transfer(transferred, total_size, "error", Some(err_msg.clone()), false);
+            return Err(err_msg);
         }
     }
+
+    emit_open(transferred, total_size, "done");
+    emit_transfer(transferred, total_size, "done", None, false);
 
     // Spawn modification watcher task in background
     let connections_clone = Arc::clone(&state.connections);
@@ -1695,6 +1861,26 @@ pub async fn sftp_open_remote_file(
                             break;
                         }
                     }
+
+                    let sync_tid = self::transfer_id();
+                    let content_len = match std::fs::metadata(&temp_file_path_clone) {
+                        Ok(m) => m.len(),
+                        Err(_) => 0,
+                    };
+
+                    let _ = app_handle_clone.emit(
+                        &format!("sftp-transfer-{}", session_id_clone),
+                        serde_json::json!({
+                            "id": sync_tid,
+                            "name": filename_clone,
+                            "kind": "upload",
+                            "bytes": 0,
+                            "total": content_len,
+                            "status": "progress",
+                            "source": "sync"
+                        })
+                    );
+
                     let upload_res = async {
                     let session_arc = {
                         let connections = connections_clone.lock().await;
@@ -1748,10 +1934,35 @@ pub async fn sftp_open_remote_file(
                             &format!("sftp-sync-status-{}", session_id_clone),
                             serde_json::json!({ "status": "error", "message": format!("Auto-sync failed: {}", e) })
                         );
+                        let _ = app_handle_clone.emit(
+                            &format!("sftp-transfer-{}", session_id_clone),
+                            serde_json::json!({
+                                "id": sync_tid,
+                                "name": filename_clone,
+                                "kind": "upload",
+                                "bytes": 0,
+                                "total": content_len,
+                                "status": "error",
+                                "error": e,
+                                "source": "sync"
+                            })
+                        );
                     } else {
                         let _ = app_handle_clone.emit(
                             &format!("sftp-sync-status-{}", session_id_clone),
                             serde_json::json!({ "status": "success", "message": format!("Auto-synced {}", filename_clone) })
+                        );
+                        let _ = app_handle_clone.emit(
+                            &format!("sftp-transfer-{}", session_id_clone),
+                            serde_json::json!({
+                                "id": sync_tid,
+                                "name": filename_clone,
+                                "kind": "upload",
+                                "bytes": content_len,
+                                "total": content_len,
+                                "status": "done",
+                                "source": "sync"
+                            })
                         );
                     }
                 }
