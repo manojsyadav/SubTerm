@@ -165,3 +165,9 @@ npm run android:build
 The output installers will be located in:
 - Desktop: `src-tauri/target/release/bundle/`
 - Android: `src-tauri/gen/android/app/build/outputs/apk/release/`
+
+---
+
+## 6. Codebase Layout (`src-tauri/src/`)
+
+`lib.rs` is intentionally thin — `DbState`, a few profile-path helpers, and `pub fn run()` (the Tauri `Builder` setup + command registry). Every command domain lives in its own module under `src-tauri/src/commands/` (connection lifecycle, profile lifecycle, the sync engine, server/SFTP/terminal/tunnel CRUD, diagnostics, monitor settings, mirror wrappers), with shared engines (`ssh_manager.rs`, `vault.rs`, `ssh_agent.rs`, `monitor.rs`, `mirror.rs`, `cloud.rs`, `tunnel.rs`) at the top level. See `docs/ARCHITECTURE.md` §2.1 for the full module-by-module breakdown — read that before adding a new Tauri command so it lands in the right file instead of back in `lib.rs`.
