@@ -33,6 +33,14 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
    - Click **Save & Connect**.
    - Verify the host key fingerprint on the first connection prompt.
    - An interactive `xterm.js` terminal tab opens immediately.
+5. **Split Panes & Multiplexing**:
+   - **Split Right (Columns)**: Click the Columns icon in the tab strip or press `Ctrl+Shift+D` to spawn a side-by-side terminal pane.
+   - **Split Down (Rows)**: Click the Rows icon or press `Ctrl+Shift+E` to split the terminal vertically.
+   - **Resize Panes**: Drag the divider line between adjacent panes to adjust flex ratios.
+   - **Unsplit**: Click the `Unsplit` button in the active split pill or click the `X` button on any pane's top-right corner to detach it.
+   - **Multi-Session Splits**: Select multiple sessions from the top bar or session menu to tile multiple servers side-by-side or stacked in a unified canvas.
+6. **Hardware Acceleration (WebGL)**:
+   - GPU-accelerated rendering is enabled by default. To toggle or check status, navigate to **Settings (`Ctrl+,`) > Terminal > Display > WebGL Hardware Acceleration**.
 
 ### Workflow 2: Managing Remote Files with SFTP & Quick Editor
 

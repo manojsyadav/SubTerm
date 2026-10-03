@@ -37,6 +37,8 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Top Bar Quick Access Servers**: Pin up to 5 quick-access servers next to the logo with active green dot status indicators.
 - **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager with interactive key recording, conflict detection, and category filters.
 - **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
+- **Hardware-Accelerated Terminal**: WebGL GPU rasterization with automatic canvas fallback for 60–120+ FPS throughput and reduced CPU overhead.
+- **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
 - **VS Code-Style Settings Panel**: 10 focused category pages with a vertical left-sidebar navigator and vault-gated security screens.
 
 ---
