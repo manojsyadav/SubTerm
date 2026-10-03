@@ -79,6 +79,11 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
   - Added configurable **Terminal Bell** support triggering on ASCII bell (`\a` or `BEL`): choose between *Visual Flash* (amber screen glow), *Audible Chime* (pure Web Audio API synthesizer), *Both*, or *Disabled*.
   - Upgraded in-terminal search widget (`Ctrl+F`) with real-time match counter (`X of Y` / `No matches`), case-sensitive toggle (`Aa`), whole-word boundary matching (`\b`), and regex pattern matching (`.*`).
 
+- **Terminal Typography, Line Height & Scrollback Customization**:
+  - **Font Family Presets**: Choose between curated developer fonts (*JetBrains Mono*, *Fira Code*, *Cascadia Code*, *Consolas*, *Monaco / Menlo*, *Source Code Pro*) or enter any custom font family stack.
+  - **Row Line Height Slider**: Adjust vertical spacing (1.00x–1.60x) with real-time feedback and dynamic terminal re-fitting without session reconnection.
+  - **Configurable Scrollback Buffer**: Select scrollback history limit per session from 1,000 lines (low memory) up to 50,000 lines (deep build & streaming log retention).
+
 ---
 
 ### ⚡ Improvements & Performance

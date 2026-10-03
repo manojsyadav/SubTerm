@@ -144,6 +144,9 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
 - **Appearance**: Select your preferred accent color and dark/light UI theme.
 - **Terminal**:
   - **Curated Color Schemes**: Select from 8 curated terminal themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, *Solarized Dark*) with full 16-color ANSI rendering and live preview swatches. Active terminals update instantly without reconnecting.
+  - **Typography & Font Family**: Choose from curated developer font presets (*JetBrains Mono*, *Fira Code*, *Cascadia Code*, *Consolas*, *Monaco / Menlo*, *Source Code Pro*) or specify a custom font family stack.
+  - **Line Height & Vertical Spacing**: Interactive slider (1.00x–1.60x) to fine-tune row density for optimal reading comfort.
+  - **Scrollback Buffer Limit**: Configure memory buffer size per session (1,000, 5,000, 10,000, 25,000, or 50,000 lines) to support long-running build outputs and container logs.
   - **Cursor Customization**: Configure cursor shape (*Block*, *Underline*, *Bar / Vertical Line*) and toggle animated cursor blinking.
   - **Terminal Bell Alerts**: Choose between *Visual Flash* (amber border glow), *Audible Chime* (pure Web Audio synthesizer), *Both*, or *Disabled* when an ASCII Bell (`\a` or `BEL`) is triggered by completed builds or shell alerts.
   - **Pro Terminal Search (`Ctrl+F`)**: Floating search widget featuring live match counter badge (`3 of 15` / `No matches`), case-sensitive matching (`Aa`), whole-word boundaries (`\b`), regular expressions (`.*`), and navigation arrows.
