@@ -2,6 +2,23 @@
 
 ---
 
+## [Unreleased]
+
+### 🚀 New Features
+
+- **`feat(ssh)` — SSH Agent Forwarding (`-A`)**:
+  New **Forward SSH Agent** toggle in the Add/Edit Server panel. When enabled, the remote server can use your local SSH agent (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) to authenticate onward — `ssh` to a further host, `git` over SSH — without SubTerm ever touching those keys itself. Works with any agent speaking the standard ssh-agent protocol out of the box, since forwarding is implemented as a raw byte proxy rather than protocol-specific integration. See `docs/SECURITY.md` §7 for the trust model before enabling it on a server.
+
+- **`feat(connection)` — Faster auto-reconnect on sleep/resume and network changes**:
+  SubTerm now detects a laptop sleep/resume cycle and network interface changes (Wi-Fi roam, VPN toggle, cable unplug) and immediately retries a pending reconnect instead of waiting for the passive connection-health check to notice. The retry interval is also now capped exponential backoff (2s → 4s → 8s → 16s → 30s max) instead of a fixed 5-second retry.
+
+### 🏗️ Internal
+
+- **`refactor(backend)` — `lib.rs` modularization**:
+  The 7,385-line `src-tauri/src/lib.rs` monolith has been split into focused modules (`vault.rs` and seven `commands/*.rs` files covering connection lifecycle, profile lifecycle, the sync engine, diagnostics, monitor settings, and mirror commands). `lib.rs` is now 419 lines, holding only `DbState` and the Tauri builder setup. No behavior change — every step was verified with a full build and the existing unit test suite. See `docs/ARCHITECTURE.md` §2.1 for the new module map.
+
+---
+
 ## [v0.4.1] — 2026-10-03
 
 ### Summary
