@@ -20,6 +20,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - [**Developer & Setup Guide**](docs/DEVELOPMENT.md): Toolchain prerequisites, local development, cargo feature flags, Android builds, and Linux WebKit workarounds.
 - [**Security & Threat Model**](docs/SECURITY.md): Argon2id KDF specifications, AES-256-GCM AEAD encryption, zero-knowledge cloud sync, and safety controls.
 - [**User Guide & Workflows**](docs/USER_GUIDE.md): Step-by-step guides for server connectivity, SFTP editing, port forwarding, and settings.
+- [**Release Notes**](docs/RELEASE_NOTES.md): Customer-ready changelog and feature announcements for version releases.
 
 ---
 
