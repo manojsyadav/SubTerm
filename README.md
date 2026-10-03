@@ -34,6 +34,8 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **1-Click OpenSSH `~/.ssh/config` & Client Importer**: Direct toolbar launcher to import existing SSH hosts from `~/.ssh/config`, PuTTY sessions, or Termius vaults.
 - **Interactive Network Diagnostics & Port Prober**: TCP port ping with millisecond round-trip latency, concurrent common service port audits (SSH, HTTP/S, DBs, Cache), Wake-on-LAN (WOL), and firewall port knocking.
 - **Configurable SSH Keep-Alive Settings**: Dynamic 15s–120s keep-alive packet intervals to prevent dropped sessions across NAT firewalls and cloud proxies.
+- **Auto-Reconnect with Sleep/Resume & Network-Change Detection**: Detects laptop sleep/resume cycles and network interface changes (Wi-Fi roam, VPN toggle) and retries immediately instead of waiting on the passive health check, with capped exponential backoff (2s–30s) and a live "Reconnecting · attempt N" status banner.
+- **SSH Agent Forwarding (`-A`)**: Per-server toggle to forward your local SSH agent (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) for onward authentication from the remote session, without SubTerm ever touching your keys.
 - **Port Forwarding**: Easily configure local (`-L`), remote (`-R`), and dynamic SOCKS5 (`-D`) tunnels.
 - **Folder Sync**: Keep your local and remote directories mirrored with real-time two-way sync tools.
 - **Cross-Platform**: Compiles natively for Windows, macOS, Linux, and Android.
