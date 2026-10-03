@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use std::sync::Mutex as StdMutex;
 use std::path::PathBuf;
 use tauri::Manager;
+mod ssh_agent;
 mod ssh_manager;
 mod tunnel;
 mod monitor;

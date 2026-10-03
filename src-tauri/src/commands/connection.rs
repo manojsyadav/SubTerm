@@ -481,6 +481,11 @@ pub(crate) async fn connect_jump_host(
         fp_rx: Some(fp_rx),
         forwarded_targets: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         fp_outcome,
+        // Jump/bastion hops never request agent forwarding on themselves —
+        // these are throwaway, never-populated maps so the struct is valid.
+        connections: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        agent_forward_channels: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        agent_forward_socket: None,
     };
 
     // 4. Handshake.
@@ -647,6 +652,7 @@ pub(crate) async fn initiate_connection(
     state.jump_connections.lock().await.remove(&session_id);
     state.sftp_sessions.lock().await.remove(&session_id);
     state.session_passwords.lock().await.remove(&session_id);
+    state.agent_forward_sessions.lock().await.remove(&session_id);
     // Terminal IDs are `${session_id}-term-N` (see SessionView.tsx), so we
     // sweep every PTY task tied to the old handle. Match by the exact
     // `${session_id}-term-` prefix so id `session-1` doesn't sweep the
@@ -689,6 +695,7 @@ pub(crate) async fn initiate_connection(
     let state_session_tunnel_specs = Arc::clone(&state.session_tunnel_specs);
     let state_session_generation = Arc::clone(&state.session_generation);
     let state_session_passwords = Arc::clone(&state.session_passwords);
+    let state_agent_forward_sessions = Arc::clone(&state.agent_forward_sessions);
     let fp_txs_clone = Arc::clone(&state.fp_txs);
     let kbi_txs_clone = Arc::clone(&state.kbi_txs);
     let state_jump_connections = Arc::clone(&state.jump_connections);
@@ -771,6 +778,7 @@ pub(crate) async fn initiate_connection(
             None,                       // effective_key_id (auth code branches on key_data, not this)
             "[]".to_string(),           // tunnels_json — no auto-start tunnels
             None,                       // jump_host_id — quick connect never bounces through a bastion
+            false,                      // forward_agent — not offered in quick-connect mode
         ))
     } else {
     // Fetch DB record inside a nested block to drop non-Send Rows/Statement before any await
@@ -790,7 +798,7 @@ pub(crate) async fn initiate_connection(
                    s.key_id   as s_key,  c.key_id   as c_key,
                    s.proxy_type, s.proxy_host, s.proxy_port,
                    s.auth_type, c.auth_type as cred_auth_type, s.tunnels,
-                   s.jump_host_id
+                   s.jump_host_id, s.forward_agent
             FROM servers s
             LEFT JOIN credentials c ON s.credential_id = c.id
             WHERE s.id=?1
@@ -817,6 +825,7 @@ pub(crate) async fn initiate_connection(
             let cred_auth_type: Option<String> = row.get::<_, Option<String>>(12).unwrap_or_default();
             let tunnels_json: String = row.get::<_, Option<String>>(13).unwrap_or_default().unwrap_or_else(|| "[]".to_string());
             let jump_host_id: Option<i32> = row.get::<_, Option<i32>>(14).unwrap_or_default();
+            let forward_agent: bool = row.get::<_, Option<i32>>(15).unwrap_or_default().unwrap_or(0) != 0;
 
             // Single source of truth per auth_type — no field mixing.
             // - vault: identity comes ENTIRELY from the credential row. Any
@@ -856,14 +865,14 @@ pub(crate) async fn initiate_connection(
                 None
             };
 
-            Some((host, port, username, password, key_data, proxy_type, proxy_host, proxy_port, server_auth_type, cred_auth_type, key_id, effective_key_id, tunnels_json, jump_host_id))
+            Some((host, port, username, password, key_data, proxy_type, proxy_host, proxy_port, server_auth_type, cred_auth_type, key_id, effective_key_id, tunnels_json, jump_host_id, forward_agent))
         } else {
             None
         }
     }
     };
 
-    let (host, port, user, password, key_data, proxy_type, proxy_host, proxy_port, server_auth_type, cred_auth_type, db_key_id, effective_key_id, tunnels_json, jump_host_id) = match db_res {
+    let (host, port, user, password, key_data, proxy_type, proxy_host, proxy_port, server_auth_type, cred_auth_type, db_key_id, effective_key_id, tunnels_json, jump_host_id, forward_agent) = match db_res {
         Some(val) => val,
         None => {
             return Err("Server not found".into());
@@ -891,6 +900,9 @@ pub(crate) async fn initiate_connection(
         fp_rx: Some(fp_rx),
         forwarded_targets: Arc::clone(&session_forwarded_targets),
         fp_outcome: std::sync::Arc::clone(&fp_outcome),
+        connections: Arc::clone(&state.connections),
+        agent_forward_channels: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        agent_forward_socket: None,
     };
 
     let cleanup_nonce = connect_nonce.clone();
@@ -1242,6 +1254,14 @@ pub(crate) async fn initiate_connection(
                                         .await
                                         .insert(session_id_clone.clone(), p.clone());
                                 }
+                                // Always set (not just when true) so toggling
+                                // the setting off takes effect on the next
+                                // reconnect instead of leaving a stale `true`
+                                // from a prior connect in the map.
+                                state_agent_forward_sessions
+                                    .lock()
+                                    .await
+                                    .insert(session_id_clone.clone(), forward_agent);
                                 true
                             } else {
                                 false
@@ -1793,6 +1813,7 @@ pub(crate) async fn disconnect_session(
     state.sftp_sessions.lock().await.remove(&session_id);
     state.connections.lock().await.remove(&session_id);
     state.session_passwords.lock().await.remove(&session_id);
+    state.agent_forward_sessions.lock().await.remove(&session_id);
     // Drop any ProxyJump bastion handle for this session — closes the jump
     // connection once the target it was carrying is gone.
     state.jump_connections.lock().await.remove(&session_id);

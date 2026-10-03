@@ -754,6 +754,37 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
               </button>
             </div>
 
+            {/* Forward SSH Agent — orthogonal to the auth method above (how we
+                log into THIS server). When on, the server we connect to can
+                use whatever local agent is running (OpenSSH agent, Pageant,
+                1Password, KeePassXC, Vaultwarden's SSH agent) to authenticate
+                onward — e.g. `ssh` to a further host, `git` over SSH — without
+                SubTerm ever touching those keys itself. Requires a running
+                local agent; harmless no-op if forwarding isn't actually used. */}
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-zinc-300">Forward SSH Agent</div>
+                <div className="text-[10.5px] text-zinc-500 leading-snug">
+                  Let this server use your local SSH agent for further hops (requires one running).
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewNode({ ...newNode, forward_agent: !newNode.forward_agent })}
+                role="switch"
+                aria-checked={!!newNode.forward_agent}
+                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
+                  newNode.forward_agent ? "bg-primary" : "bg-white/10"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-zinc-100 rounded-full shadow transition-transform ${
+                    newNode.forward_agent ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Production Environment Toggle */}
             <div className="flex items-center justify-between gap-3 pt-2 pb-1 border-t border-white/5">
               <div className="min-w-0">

@@ -433,6 +433,7 @@ function DesktopApp() {
     password_dirty: false,
     is_production: false,
     icon: "server",
+    forward_agent: false,
   };
 
   // Live width-based "narrow viewport" flag. Replaces a one-shot UA check
@@ -585,6 +586,7 @@ function DesktopApp() {
       password_dirty: false,
       is_production: Boolean(server.is_production),
       icon: server.icon || "server",
+      forward_agent: Boolean(server.forward_agent),
     });
     setIsPanelOpen(true);
   };
@@ -2690,6 +2692,7 @@ function DesktopApp() {
               autostart: !!newNode.autostart,
               mirrors: newNode.mirrors || [],
               color: newNode.color ?? null,
+              forwardAgent: !!newNode.forward_agent,
               // Edit-mode + untouched password field = ask the backend to
               // keep the existing column. Otherwise the bind below sends
               // whatever's in the field (including empty / null) which

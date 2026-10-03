@@ -111,6 +111,11 @@ pub struct SshState {
     /// probes (e.g. docker, systemctl, process management) via `sudo -S -p ''`
     /// on appliance systems like TrueNAS where users have sudo rights with password.
     pub session_passwords: Arc<Mutex<HashMap<String, String>>>,
+    /// Sessions whose server has SSH agent forwarding (-A) turned on. Set by
+    /// `initiate_connection` right after a successful connect; consulted by
+    /// `open_pty_channel` so every shell/exec channel opened on the session
+    /// requests forwarding, not just the first one.
+    pub agent_forward_sessions: Arc<Mutex<HashMap<String, bool>>>,
 }
 
 impl SshState {
@@ -144,9 +149,26 @@ impl SshState {
         let (resize_tx, mut resizes) = tokio::sync::watch::channel(PtySize { cols, rows });
         self.resize_txs.lock().await.insert(terminal_id.to_string(), resize_tx);
 
+        let forward_agent = self
+            .agent_forward_sessions
+            .lock()
+            .await
+            .get(session_id)
+            .copied()
+            .unwrap_or(false);
+
         let opened = async {
             let session = session_arc.lock().await;
             let channel = session.channel_open_session().await?;
+            // Request agent forwarding before starting the shell/exec, same
+            // ordering OpenSSH's own client uses — so the remote shell's
+            // SSH_AUTH_SOCK is already set by the time the user's first
+            // command runs. Best-effort: a request failure here shouldn't
+            // fail the whole connection, since forwarding is a convenience
+            // on top of an otherwise-working session.
+            if forward_agent {
+                let _ = channel.agent_forward(true).await;
+            }
             let size = *resizes.borrow_and_update();
             channel.request_pty(false, "xterm-256color", size.cols, size.rows, 0, 0, &[]).await?;
             match &program {
@@ -184,6 +206,7 @@ impl SshState {
             session_tunnel_specs: Arc::new(Mutex::new(HashMap::new())),
             session_generation: Arc::new(Mutex::new(HashMap::new())),
             session_passwords: Arc::new(Mutex::new(HashMap::new())),
+            agent_forward_sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -217,6 +240,21 @@ pub struct ClientHandler {
     /// tell "user dismissed the prompt" from "network drop", which used to
     /// surface as "Auth failed" in the UI.
     pub fp_outcome: std::sync::Arc<std::sync::atomic::AtomicI8>,
+    /// Shared with `SshState.connections` so an agent-forward channel's
+    /// background bridge task can call `Handle::data()` to write responses
+    /// back to the server — the handler itself only ever sees the ephemeral
+    /// per-callback `Session`, not a persistent handle to its own
+    /// connection, so this is the only way to send data outside a callback.
+    pub connections: Arc<Mutex<HashMap<String, Arc<Mutex<client::Handle<ClientHandler>>>>>>,
+    /// One entry per currently-open `auth-agent@openssh.com` channel the
+    /// server has opened back to us (SSH agent forwarding). `data()` looks
+    /// up the channel id here and forwards the bytes to the bridge task
+    /// that owns the local agent socket/pipe connection for that channel.
+    pub agent_forward_channels: Arc<Mutex<HashMap<russh::ChannelId, mpsc::UnboundedSender<Vec<u8>>>>>,
+    /// Forwarded-agent socket/pipe path override (empty = platform default).
+    /// Lets a server be configured against a non-standard agent (e.g.
+    /// 1Password's own named pipe) instead of the OS default.
+    pub agent_forward_socket: Option<String>,
 }
 
 #[async_trait]
@@ -453,6 +491,90 @@ impl client::Handler for ClientHandler {
                 // No tunnel registered for this port — let the channel drop,
                 // which closes it on the server's side.
             }
+        }
+        Ok((self, session))
+    }
+
+    /// The server opened an `auth-agent@openssh.com` channel back to us —
+    /// something on the remote side (an `ssh` to a further host, `git`,
+    /// etc.) wants to use our forwarded agent. Unlike
+    /// `server_channel_open_forwarded_tcpip` we're only handed a bare
+    /// `ChannelId` here (russh gives no `Channel<Msg>` for server-opened
+    /// session/agent-forward channels), so bytes flow through the generic
+    /// `data()` callback below instead of a dedicated stream.
+    ///
+    /// Connects to the local agent, registers a sender for this channel id
+    /// so `data()` can route inbound (server -> local agent) bytes to it,
+    /// and spawns a task that reads the agent's responses and writes them
+    /// back to the server via `Handle::data()`.
+    async fn server_channel_open_agent_forward(
+        self,
+        channel: russh::ChannelId,
+        session: client::Session,
+    ) -> Result<(Self, client::Session), Self::Error> {
+        let agent = match crate::ssh_agent::connect_local_agent(self.agent_forward_socket.as_deref()).await {
+            Ok(a) => a,
+            Err(e) => {
+                let _ = self.app.emit(&format!("session-log-{}", self.session_id), serde_json::json!({
+                    "msg": format!("Agent forwarding requested but no local agent is reachable: {}", e),
+                    "type": "warn"
+                }));
+                // Let the channel die quietly — the remote program just sees
+                // its agent query fail, same as if forwarding weren't on.
+                return Ok((self, session));
+            }
+        };
+
+        let (to_agent_tx, mut to_agent_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        self.agent_forward_channels.lock().await.insert(channel, to_agent_tx);
+
+        let connections = self.connections.clone();
+        let session_id = self.session_id.clone();
+        let agent_forward_channels = self.agent_forward_channels.clone();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let (mut agent_read, mut agent_write) = tokio::io::split(agent);
+
+            let write_task = tokio::spawn(async move {
+                while let Some(buf) = to_agent_rx.recv().await {
+                    if agent_write.write_all(&buf).await.is_err() {
+                        break;
+                    }
+                }
+            });
+
+            let mut buf = [0u8; 16 * 1024];
+            loop {
+                match agent_read.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let handle = connections.lock().await.get(&session_id).cloned();
+                        if let Some(handle) = handle {
+                            let data = russh::CryptoVec::from_slice(&buf[..n]);
+                            if handle.lock().await.data(channel, data).await.is_err() {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+            write_task.abort();
+            agent_forward_channels.lock().await.remove(&channel);
+        });
+
+        Ok((self, session))
+    }
+
+    async fn data(
+        self,
+        channel: russh::ChannelId,
+        data: &[u8],
+        session: client::Session,
+    ) -> Result<(Self, client::Session), Self::Error> {
+        if let Some(tx) = self.agent_forward_channels.lock().await.get(&channel) {
+            let _ = tx.send(data.to_vec());
         }
         Ok((self, session))
     }
