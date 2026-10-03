@@ -17,6 +17,7 @@ import { SftpBookmarksPopover, loadSftpBookmarks } from "./SftpBookmarksPopover"
 import { archiveKind } from "../fs/archive";
 import { useElementWidth } from "../hooks/useViewport";
 import { canMoveInto, rulesFor, takenNames } from "../fs/moveRules";
+import { pathCrumbs } from "../fs/pathCrumbs";
 
 // Batch overwrite state shared across items in a single download/upload run.
 // Once the user picks "Overwrite all" or "Skip all" the kind is sticky and we
@@ -294,31 +295,12 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   const pathSegments = useMemo(() => {
     if (!currentPath) return [];
-    const isWin = /^[a-zA-Z]:[\\/]/.test(currentPath) || currentPath.includes("\\");
-    if (isWin) {
-      const parts = currentPath.split(/[\\/]/).filter(Boolean);
-      const drive = currentPath.match(/^[a-zA-Z]:/)?.[0] || "";
-      const result: { label: string; fullPath: string }[] = [];
-      if (drive) {
-        let accumulated = drive + "\\";
-        result.push({ label: drive + "\\", fullPath: accumulated });
-        for (let i = 1; i < parts.length; i++) {
-          accumulated = accumulated + parts[i] + "\\";
-          result.push({ label: parts[i], fullPath: accumulated.replace(/\\+$/, "") });
-        }
-      }
-      return result;
-    } else {
-      const parts = currentPath.split("/").filter(Boolean);
-      const result: { label: string; fullPath: string }[] = [{ label: "/", fullPath: "/" }];
-      let accumulated = "";
-      for (const p of parts) {
-        accumulated = accumulated + "/" + p;
-        result.push({ label: p, fullPath: accumulated });
-      }
-      return result;
-    }
-  }, [currentPath]);
+    return pathCrumbs(currentPath, provider.pathSep).map((c) => ({
+      label: c.label,
+      fullPath: c.path,
+      navigable: c.navigable,
+    }));
+  }, [currentPath, provider.pathSep]);
 
   const extractArchive = async (entry: FileEntry) => {
     if (!sessionId) return;
@@ -1352,22 +1334,31 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 <div className="flex-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar font-mono text-[11px] min-w-0">
                   {pathSegments.map((seg, idx) => (
                     <React.Fragment key={seg.fullPath}>
-                      <button
-                        onClick={() => fetch(seg.fullPath)}
-                        data-fs-drop-path={seg.fullPath}
-                        className={`px-1 py-0.5 rounded transition-colors truncate max-w-[140px] shrink-0 ${
-                          dropHover === seg.fullPath ? "text-indigo-200 bg-indigo-500/30 rounded ring-1 ring-indigo-400" : ""
-                        } ${
-                          idx === pathSegments.length - 1
-                            ? "text-indigo-300 font-bold bg-white/[0.06]"
-                            : "text-zinc-400 hover:text-white hover:bg-white/10"
-                        }`}
-                        title={seg.fullPath}
-                      >
-                        {seg.label}
-                      </button>
+                      {seg.navigable ? (
+                        <button
+                          onClick={() => fetch(seg.fullPath)}
+                          data-fs-drop-path={seg.fullPath}
+                          className={`px-1 py-0.5 rounded transition-colors truncate max-w-[140px] shrink-0 ${
+                            dropHover === seg.fullPath ? "text-indigo-200 bg-indigo-500/30 rounded ring-1 ring-indigo-400" : ""
+                          } ${
+                            idx === pathSegments.length - 1
+                              ? "text-indigo-300 font-bold bg-white/[0.06]"
+                              : "text-zinc-400 hover:text-white hover:bg-white/10"
+                          }`}
+                          title={seg.fullPath}
+                        >
+                          {seg.label}
+                        </button>
+                      ) : (
+                        <span
+                          className="px-1 py-0.5 text-zinc-500 truncate max-w-[140px] shrink-0"
+                          title={seg.fullPath}
+                        >
+                          {seg.label}
+                        </span>
+                      )}
                       {idx < pathSegments.length - 1 && (
-                        <span className="text-zinc-600 select-none text-[10px] shrink-0">/</span>
+                        <span className="text-zinc-600 select-none text-[10px] shrink-0">{provider.pathSep}</span>
                       )}
                     </React.Fragment>
                   ))}
