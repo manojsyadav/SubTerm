@@ -14,6 +14,10 @@ import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions
 import { IS_ANDROID } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
 import { SftpBookmarksPopover, loadSftpBookmarks } from "./SftpBookmarksPopover";
+import { archiveKind } from "../fs/archive";
+import { useElementWidth } from "../hooks/useViewport";
+import { canMoveInto, rulesFor, takenNames } from "../fs/moveRules";
+import { pathCrumbs } from "../fs/pathCrumbs";
 
 // Batch overwrite state shared across items in a single download/upload run.
 // Once the user picks "Overwrite all" or "Skip all" the kind is sticky and we
@@ -68,12 +72,23 @@ async function transferWithOverwriteCheck(
 // tree. Drag-out and drop integration are handled by the parent workspace —
 // FilePanel just emits lifecycle callbacks.
 
-type SortColumn = "name" | "size" | "modified" | "permissions";
+type SortColumn = "name" | "size" | "modified" | "owner" | "permissions";
 interface SortState { column: SortColumn; asc: boolean; }
+interface SftpOwner { uid: number; name: string; }
+interface SftpOwnerLookup {
+  owners: SftpOwner[];
+  status: "complete" | "transient_error" | "unsupported";
+}
+
+const listFailures = (failures: string[]) =>
+  failures.length > 3
+    ? `${failures.slice(0, 3).join(", ")} +${failures.length - 3} more`
+    : failures.join(", ");
 
 export interface ActiveDrag {
   paneId: "local" | "remote";
   entry: FileEntry;
+  items: FileEntry[];
   x: number;
   y: number;
 }
@@ -101,11 +116,21 @@ export interface FilePanelProps {
    * download lands there directly instead of popping a folder picker.
    */
   getOppositeDir?: () => string | undefined;
+  /** Optional server ID for scoping bookmarks and settings per server. */
+  serverId?: number | string;
+  /** Optional active profile for scoping bookmarks per profile. */
+  profile?: string;
+  /** Focused PTY terminal ID. */
+  terminalId?: string;
+  /** Compact layout: reveal terminal. */
+  onRevealTerminal?: () => void;
 }
 
 export interface FilePanelHandle {
   refresh: () => Promise<void>;
   currentDir: () => string;
+  notify: (msg: string, type?: "info" | "success" | "error") => void;
+  sendItems: (items: FileEntry[], destDir: string) => Promise<void>;
 }
 
 const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
@@ -116,6 +141,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   initialPath,
   onPathChange,
   getOppositeDir,
+  serverId,
+  profile,
+  terminalId,
+  onRevealTerminal,
 }, ref) => {
   const [currentPath, setCurrentPath] = useState("");
   // Last five distinct directories visited in this panel, MRU first. Lives
@@ -132,12 +161,79 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   // anchor. lastSelectedPathRef remembers that anchor across renders.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastSelectedPathRef = useRef<string | null>(null);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const [dropHover, setDropHover] = useState<string | null>(null);
+  const dropHoverRef = useRef<string | null>(null);
+  const dragJustEndedRef = useRef(false);
+  const movingRef = useRef(false);
+  const [pendingMove, setPendingMove] = useState<{ label: string; targetDir: string; waiting: boolean } | null>(null);
+  const cancelPendingMoveRef = useRef<() => void>(() => {});
+  const sendItemsRef = useRef<(items: FileEntry[], destDir: string) => Promise<void>>(async () => {});
   const [sort, setSort] = useState<SortState>({ column: "name", asc: true });
   const [showHiddenFiles, setShowHiddenFiles] = useState<boolean>(() => {
     return localStorage.getItem("subterm-sftp-show-hidden") !== "false";
   });
   type FileTypeFilter = "all" | "dirs" | "code" | "logs" | "archives" | "media";
   const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
+
+  const dropTargetRef = useRef<HTMLDivElement | null>(null);
+  const listWidth = useElementWidth(dropTargetRef);
+  const [ownerNames, setOwnerNames] = useState<Record<number, string>>({});
+  const requestedOwnerUidsRef = useRef(new Set<number>());
+  const ownerLookupUnavailableRef = useRef(false);
+  const failedOwnerLookupListGenRef = useRef<number | null>(null);
+  const ownerLookupGenerationRef = useRef(0);
+  const listGenRef = useRef(0);
+
+  useEffect(() => {
+    ownerLookupGenerationRef.current++;
+    requestedOwnerUidsRef.current.clear();
+    ownerLookupUnavailableRef.current = false;
+    failedOwnerLookupListGenRef.current = null;
+    setOwnerNames({});
+  }, [provider, sessionId, disabled]);
+
+  useEffect(() => {
+    if (
+      provider.id !== "remote"
+      || !sessionId
+      || disabled
+      || ownerLookupUnavailableRef.current
+      || failedOwnerLookupListGenRef.current === listGenRef.current
+    ) return;
+    const uids = [...new Set(entries.map((entry) => entry.uid).filter((uid): uid is number => uid != null))]
+      .filter((uid) => !requestedOwnerUidsRef.current.has(uid));
+    if (uids.length === 0) return;
+
+    uids.forEach((uid) => requestedOwnerUidsRef.current.add(uid));
+    const generation = ownerLookupGenerationRef.current;
+    const listGeneration = listGenRef.current;
+    invoke<SftpOwnerLookup>("sftp_resolve_owners", { sessionId, uids })
+      .then((result) => {
+        if (ownerLookupGenerationRef.current !== generation) return;
+        if (result.status === "unsupported") ownerLookupUnavailableRef.current = true;
+        if (result.status === "transient_error") {
+          failedOwnerLookupListGenRef.current = listGeneration;
+          const resolved = new Set(result.owners.map((owner) => owner.uid));
+          uids.filter((uid) => !resolved.has(uid))
+            .forEach((uid) => requestedOwnerUidsRef.current.delete(uid));
+        }
+        if (result.owners.length > 0) {
+          setOwnerNames((current) => ({
+            ...current,
+            ...Object.fromEntries(result.owners.map((owner) => [owner.uid, owner.name])),
+          }));
+        }
+      })
+      .catch(() => {
+        if (ownerLookupGenerationRef.current !== generation) return;
+        failedOwnerLookupListGenRef.current = listGeneration;
+        uids.forEach((uid) => requestedOwnerUidsRef.current.delete(uid));
+      });
+  }, [entries, provider.id, sessionId, disabled]);
+
+  const ownerLabel = (uid?: number) => uid == null ? "" : ownerNames[uid] ?? uid.toString();
 
   const [tempInput, setTempInput] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
@@ -163,7 +259,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   useEffect(() => {
     const check = () => {
-      const bms = loadSftpBookmarks();
+      const bms = loadSftpBookmarks(sessionId, serverId, profile);
       const norm = currentPath.replace(/\/+$/, "") || "/";
       setIsCurrentBookmarked(
         bms.some((b) => b.isRemote === (provider.id === "remote") && (b.path.replace(/\/+$/, "") || "/") === norm)
@@ -172,7 +268,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     check();
     window.addEventListener("subterm-bookmarks-updated", check);
     return () => window.removeEventListener("subterm-bookmarks-updated", check);
-  }, [currentPath, provider.id]);
+  }, [currentPath, provider.id, sessionId, serverId, profile]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -199,31 +295,12 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   const pathSegments = useMemo(() => {
     if (!currentPath) return [];
-    const isWin = /^[a-zA-Z]:[\\/]/.test(currentPath) || currentPath.includes("\\");
-    if (isWin) {
-      const parts = currentPath.split(/[\\/]/).filter(Boolean);
-      const drive = currentPath.match(/^[a-zA-Z]:/)?.[0] || "";
-      const result: { label: string; fullPath: string }[] = [];
-      if (drive) {
-        let accumulated = drive + "\\";
-        result.push({ label: drive + "\\", fullPath: accumulated });
-        for (let i = 1; i < parts.length; i++) {
-          accumulated = accumulated + parts[i] + "\\";
-          result.push({ label: parts[i], fullPath: accumulated.replace(/\\+$/, "") });
-        }
-      }
-      return result;
-    } else {
-      const parts = currentPath.split("/").filter(Boolean);
-      const result: { label: string; fullPath: string }[] = [{ label: "/", fullPath: "/" }];
-      let accumulated = "";
-      for (const p of parts) {
-        accumulated = accumulated + "/" + p;
-        result.push({ label: p, fullPath: accumulated });
-      }
-      return result;
-    }
-  }, [currentPath]);
+    return pathCrumbs(currentPath, provider.pathSep).map((c) => ({
+      label: c.label,
+      fullPath: c.path,
+      navigable: c.navigable,
+    }));
+  }, [currentPath, provider.pathSep]);
 
   const extractArchive = async (entry: FileEntry) => {
     if (!sessionId) return;
@@ -273,7 +350,6 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   }, []);
 
   const [dragOver, setDragOver] = useState(false);
-  const dropTargetRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const currentPathRef = useRef(currentPath);
   useEffect(() => { currentPathRef.current = currentPath; }, [currentPath]);
@@ -332,6 +408,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     setLoading(true);
     try {
       const result = await provider.list(path);
+      listGenRef.current++;
       setEntries(result.entries);
       setCurrentPath(result.currentPath);
       setTempInput(result.currentPath);
@@ -416,6 +493,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   useImperativeHandle(ref, () => ({
     refresh: () => fetch(currentPathRef.current),
     currentDir: () => currentPathRef.current,
+    notify: (msg, type) => notify(msg, type),
+    sendItems: (items, destDir) => sendItemsRef.current(items, destDir),
   }), []);
 
   const goUp = () => fetch(provider.parentPath(currentPath));
@@ -429,6 +508,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   // Shift-extend uses `sortedEntries` (the rendered order), not `entries`,
   // so the visual range matches what the user just dragged across.
   const onRowClick = (e: React.MouseEvent, entry: FileEntry, ordered: FileEntry[]) => {
+    if (dragJustEndedRef.current) return;
     if (e.shiftKey && lastSelectedPathRef.current) {
       const a = ordered.findIndex(x => x.path === lastSelectedPathRef.current);
       const b = ordered.findIndex(x => x.path === entry.path);
@@ -548,17 +628,113 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     setContextMenu({ x: Math.max(4, x), y: Math.max(4, y), entry });
   };
 
-  // ---- drag-source -------------------------------------------------------------
+  // ---- drag-source & in-pane move --------------------------------------------
+
+  const moveRules = () => rulesFor(provider.id, provider.pathSep);
+
+  const dropTargetAt = (x: number, y: number, items: FileEntry[]): string | null => {
+    const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+    if (!hit || hit.closest("[data-fs-pane]")?.getAttribute("data-fs-pane") !== provider.id) return null;
+    const target = hit.closest("[data-fs-drop-path]")?.getAttribute("data-fs-drop-path");
+    const rules = moveRules();
+    if (!target || !items.some((it) => canMoveInto(it, target, rules))) return null;
+    return target;
+  };
+
+  const moveInto = async (items: FileEntry[], targetDir: string) => {
+    const rules = moveRules();
+    const movable = items.filter((it) => canMoveInto(it, targetDir, rules));
+    if (movable.length === 0) return;
+    if (movingRef.current) {
+      notify("Another move is still in progress. Wait for it, or cancel it.", "info");
+      return;
+    }
+    movingRef.current = true;
+    let cancelled = false;
+    let waiting = false;
+    let ownsPanel = true;
+    cancelPendingMoveRef.current = () => {
+      cancelled = true;
+      if (!waiting) return;
+      ownsPanel = false;
+      movingRef.current = false;
+      setPendingMove(null);
+    };
+    const label = movable.length === 1 ? movable[0].name : `${movable.length} items`;
+    const showRow = () => { if (ownsPanel) setPendingMove({ label, targetDir, waiting }); };
+    let rowTimer: number | null = window.setTimeout(showRow, 250);
+    try {
+      if (cancelled) return;
+      let taken: Set<string>;
+      try {
+        const existing = (await provider.list(targetDir)).entries.map((e) => e.name);
+        taken = takenNames(movable.map((it) => it.name), existing, rules);
+      } catch (err: any) {
+        notify(`Move failed: ${err}`, "error");
+        return;
+      }
+      const moved: string[] = [];
+      const failures: string[] = [];
+      for (const it of movable) {
+        if (cancelled) break;
+        if (taken.has(it.name)) {
+          failures.push(`${it.name} (already exists there)`);
+          continue;
+        }
+        try {
+          await provider.rename(it.path, provider.joinPath(targetDir, it.name));
+          moved.push(it.path);
+        } catch (err: any) {
+          failures.push(`${it.name} (${err})`);
+        }
+      }
+      const stopped = movable.length - moved.length - failures.length;
+      const notMoved = failures.length > 0 ? ` Not moved: ${listFailures(failures)}` : "";
+      const stoppedNote = stopped > 0 ? ` (${stopped} cancelled)` : "";
+      if (failures.length === 0 && stopped === 0) {
+        notify(movable.length === 1 ? `Moved ${movable[0].name} → ${targetDir}` : `Moved ${moved.length} items → ${targetDir}`, "success");
+      } else if (moved.length > 0) {
+        notify(`Moved ${moved.length} of ${movable.length} → ${targetDir}${stoppedNote}.${notMoved}`, failures.length > 0 ? "error" : "info");
+      } else if (failures.length > 0) {
+        notify(`Nothing moved${stoppedNote}.${notMoved}`, "error");
+      } else {
+        notify("Move cancelled", "info");
+      }
+      if (moved.length > 0) {
+        const gone = new Set(moved);
+        const keep = new Set([...selectedRef.current].filter((path) => !gone.has(path)));
+        const anchor = lastSelectedPathRef.current;
+        await fetch(currentPathRef.current);
+        setSelected(keep);
+        lastSelectedPathRef.current = anchor && keep.has(anchor) ? anchor : null;
+      }
+    } finally {
+      if (rowTimer != null) window.clearTimeout(rowTimer);
+      if (ownsPanel) {
+        ownsPanel = false;
+        setPendingMove(null);
+        movingRef.current = false;
+      }
+    }
+  };
 
   const DRAG_START_THRESHOLD = 6;
 
   const handleRowMouseDown = (e: React.MouseEvent, entry: FileEntry) => {
     if (disabled || e.button !== 0) return;
-    if (entry.isDir) return; // folder drag handled later
 
     const startX = e.clientX;
     const startY = e.clientY;
     let dragStarted = false;
+    const items = selected.has(entry.path)
+      ? sortedEntries.filter((en) => selected.has(en.path))
+      : [entry];
+
+    const setHover = (path: string | null) => {
+      if (dropHoverRef.current === path) return;
+      dropHoverRef.current = path;
+      setDropHover(path);
+    };
 
     const onMove = (ev: MouseEvent) => {
       if (!dragStarted) {
@@ -569,18 +745,23 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       onDragMove({
         paneId: provider.id as "local" | "remote",
         entry,
+        items,
         x: ev.clientX,
         y: ev.clientY,
       });
+      setHover(dropTargetAt(ev.clientX, ev.clientY, items));
     };
 
-    const onUp = () => {
+    const onUp = (ev: MouseEvent) => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      // Workspace listens for its own `mouseup` and uses the active drag (which
-      // we keep up to date via `onDragMove`) to dispatch the cross-pane
-      // transfer. We just clear our local indicator here.
       onDragMove(null);
+      setHover(null);
+      if (!dragStarted) return;
+      dragJustEndedRef.current = true;
+      window.setTimeout(() => { dragJustEndedRef.current = false; }, 0);
+      const target = dropTargetAt(ev.clientX, ev.clientY, items);
+      if (target) moveInto(items, target);
     };
 
     window.addEventListener("mousemove", onMove);
@@ -759,7 +940,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     if (!ok) return;
     let count = 0;
     for (const it of items) {
-      try { await provider.remove(it.path, it.isDir); count++; }
+      try { await provider.remove(it.path, it.isDir && !it.isSymlink); count++; }
       catch (err: any) { notify(`Delete failed for ${it.name}: ${err}`, "error"); }
     }
     if (count > 0) {
@@ -781,16 +962,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   // and preserves structure; individual files go through the single-file
   // command. Both paths emit progress on the same `sftp-transfer-{id}`
   // channel so the user sees uniform cards.
-  const downloadItems = async (items: FileEntry[]) => {
+  const downloadItems = async (items: FileEntry[], destDir?: string) => {
     if (!sessionId || items.length === 0) return;
-    let dest = getOppositeDir?.();
+    let dest = destDir || getOppositeDir?.();
     if (!dest) {
-      // Fallback destination when the sibling pane hasn't reported a dir
-      // yet. Desktop opens the rfd folder picker; Android has no picker
-      // that returns a real filesystem path we can hand to Rust, so we
-      // land in the app-visible default (Downloads or, if scoped storage
-      // blocks it, app-scoped external files). Users can navigate from
-      // there if they want a different subfolder.
       try {
         dest = IS_ANDROID
           ? ((await invoke<string>("android_default_local_dir")) || undefined)
@@ -833,14 +1008,9 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     }
   };
 
-  // Local → remote upload. Mirror of downloadItems — handles both files
-  // (sftp_upload_file) and directories (sftp_upload_dir recursive walk).
-  // Destination is whatever directory the remote pane is showing; if the
-  // remote pane hasn't reported one yet (still loading), we bail with a
-  // clear error rather than guessing the home dir.
-  const uploadItems = async (items: FileEntry[]) => {
+  const uploadItems = async (items: FileEntry[], destDir?: string) => {
     if (!sessionId || items.length === 0) return;
-    const dest = getOppositeDir?.();
+    const dest = destDir || getOppositeDir?.();
     if (!dest) { notify("Open a directory in the remote pane first.", "error"); return; }
     const trimmed = dest.replace(/[\\/]+$/, "");
     const fileCount = items.filter((e) => !e.isDir).length;
@@ -855,10 +1025,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     for (const e of items) {
       if (cancelled) break;
       try {
-        // For files we pass the remote target as a full file path; for dirs
-        // we pass the remote PARENT and sftp_upload_dir hangs the source
-        // basename underneath it (same convention as sftp_download_dir).
-        const remotePath = e.isDir ? trimmed : `${trimmed}/${e.name}`;
+        const remotePath = e.isDir ? trimmed || "/" : `${trimmed}/${e.name}`;
         const cmd = e.isDir ? "sftp_upload_dir" : "sftp_upload_file";
         const res = await transferWithOverwriteCheck(
           (ow) => invoke(cmd, { sessionId, localPath: e.path, remotePath, overwrite: ow }),
@@ -878,15 +1045,29 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     }
   };
 
+  sendItemsRef.current = provider.id === "remote" ? downloadItems : uploadItems;
+
+  const openingPathsRef = useRef<Set<string>>(new Set());
+
   // Remote: open in OS default editor with a save-watcher that re-uploads on
   // every change. Backed by the existing `sftp_open_remote_file` command.
   const liveEditEntry = async (entry: FileEntry) => {
     if (!sessionId || entry.isDir) return;
+    if (openingPathsRef.current.has(entry.path)) {
+      notify(`${entry.name} is already downloading`, "info");
+      return;
+    }
+    openingPathsRef.current.add(entry.path);
+    const transferId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       notify(`Opening ${entry.name} in default editor…`, "info");
-      await invoke("sftp_open_remote_file", { sessionId, remotePath: entry.path });
+      await invoke("sftp_open_remote_file", { sessionId, remotePath: entry.path, transferId });
     } catch (err: any) {
-      notify(`Open failed: ${err}`, "error");
+      if (String(err) !== "cancelled") {
+        notify(`Open failed: ${err}`, "error");
+      }
+    } finally {
+      openingPathsRef.current.delete(entry.path);
     }
   };
 
@@ -936,6 +1117,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         case "name": va = a.name.toLowerCase(); vb = b.name.toLowerCase(); break;
         case "size": va = a.isDir ? -1 : a.size; vb = b.isDir ? -1 : b.size; break;
         case "modified": va = a.modified || 0; vb = b.modified || 0; break;
+        case "owner": va = ownerLabel(a.uid).toLowerCase(); vb = ownerLabel(b.uid).toLowerCase(); break;
         case "permissions": va = a.permissions || 0; vb = b.permissions || 0; break;
       }
       if (va < vb) return sort.asc ? -1 : 1;
@@ -1035,6 +1217,20 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   const isRemote = provider.id === "remote";
   const showPerms = isRemote; // local entries don't carry perms here
+  const showDetails = listWidth >= (showPerms ? 650 : 465);
+  const showOwnerColumn = showPerms && listWidth >= 325;
+  const showRightsColumn = showPerms && listWidth >= 410;
+  const gridColumns = showPerms
+    ? showDetails
+      ? "grid-cols-[22px_minmax(180px,1fr)_65px_125px_100px_85px]"
+      : showRightsColumn
+        ? "grid-cols-[22px_minmax(140px,1fr)_100px_85px]"
+        : showOwnerColumn
+          ? "grid-cols-[22px_minmax(140px,1fr)_100px]"
+          : "grid-cols-[22px_1fr]"
+    : showDetails
+      ? "grid-cols-[22px_minmax(180px,1fr)_75px_125px]"
+      : "grid-cols-[22px_1fr]";
 
   return (
     <div
@@ -1050,15 +1246,31 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         </div>
       )}
 
-      {notification && (
-        // Bottom-right of the pane, not top-right — top-right used to sit
-        // on top of the path-bar header and obscure the first row of
-        // entries on a short pane. Bottom keeps the file list visible.
-        <div className={`absolute bottom-3 right-3 z-50 max-w-[80%] px-3 py-1.5 rounded-lg border text-[11px] font-mono shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 ${
-          notification.type === "success" ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-400" :
-          notification.type === "error"   ? "bg-rose-950/90 border-rose-500/30 text-rose-400" :
-                                            "bg-indigo-950/90 border-indigo-500/30 text-indigo-400"
-        }`}>{notification.msg}</div>
+      {(notification || pendingMove) && (
+        <div className="absolute bottom-3 right-3 z-50 max-w-[80%] flex flex-col gap-1.5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {notification && (
+            <div className={`px-3 py-1.5 rounded-lg border text-[11px] font-mono shadow-2xl backdrop-blur-md ${
+              notification.type === "success" ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-400" :
+              notification.type === "error"   ? "bg-rose-950/90 border-rose-500/30 text-rose-400" :
+                                                "bg-indigo-950/90 border-indigo-500/30 text-indigo-400"
+            }`}>{notification.msg}</div>
+          )}
+          {pendingMove && (
+            <div className="px-3 py-1.5 rounded-lg border text-[11px] font-mono shadow-2xl backdrop-blur-md bg-indigo-950/90 border-indigo-500/30 text-indigo-400 flex items-center gap-2">
+              <span className="min-w-0">
+                {`Moving ${pendingMove.label} → ${pendingMove.targetDir}…`}
+              </span>
+              <button
+                type="button"
+                title="Cancel move"
+                onClick={() => cancelPendingMoveRef.current()}
+                className="shrink-0 p-0.5 rounded hover:bg-white/15 text-zinc-300 hover:text-rose-300"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Header */}
@@ -1068,7 +1280,16 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         </span>
         <div className="h-5 w-px bg-white/10 shrink-0" />
         <div className="flex-1 flex items-center gap-1.5 min-w-0 relative">
-          <button onClick={goUp} title="Up" className="p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0">
+          <button
+            onClick={goUp}
+            title="Up"
+            data-fs-drop-path={provider.parentPath(currentPath)}
+            className={`p-1 rounded border text-zinc-200 hover:bg-white/10 shrink-0 transition-colors ${
+              dropHover === provider.parentPath(currentPath)
+                ? "bg-indigo-500/30 text-white ring-1 ring-indigo-400 border-indigo-400"
+                : "bg-white/[0.04] border-white/10"
+            }`}
+          >
             <ArrowUp size={11} />
           </button>
           <div className="relative shrink-0">
@@ -1113,19 +1334,31 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 <div className="flex-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar font-mono text-[11px] min-w-0">
                   {pathSegments.map((seg, idx) => (
                     <React.Fragment key={seg.fullPath}>
-                      <button
-                        onClick={() => fetch(seg.fullPath)}
-                        className={`px-1 py-0.5 rounded transition-colors truncate max-w-[140px] shrink-0 ${
-                          idx === pathSegments.length - 1
-                            ? "text-indigo-300 font-bold bg-white/[0.06]"
-                            : "text-zinc-400 hover:text-white hover:bg-white/10"
-                        }`}
-                        title={seg.fullPath}
-                      >
-                        {seg.label}
-                      </button>
+                      {seg.navigable ? (
+                        <button
+                          onClick={() => fetch(seg.fullPath)}
+                          data-fs-drop-path={seg.fullPath}
+                          className={`px-1 py-0.5 rounded transition-colors truncate max-w-[140px] shrink-0 ${
+                            dropHover === seg.fullPath ? "text-indigo-200 bg-indigo-500/30 rounded ring-1 ring-indigo-400" : ""
+                          } ${
+                            idx === pathSegments.length - 1
+                              ? "text-indigo-300 font-bold bg-white/[0.06]"
+                              : "text-zinc-400 hover:text-white hover:bg-white/10"
+                          }`}
+                          title={seg.fullPath}
+                        >
+                          {seg.label}
+                        </button>
+                      ) : (
+                        <span
+                          className="px-1 py-0.5 text-zinc-500 truncate max-w-[140px] shrink-0"
+                          title={seg.fullPath}
+                        >
+                          {seg.label}
+                        </span>
+                      )}
                       {idx < pathSegments.length - 1 && (
-                        <span className="text-zinc-600 select-none text-[10px] shrink-0">/</span>
+                        <span className="text-zinc-600 select-none text-[10px] shrink-0">{provider.pathSep}</span>
                       )}
                     </React.Fragment>
                   ))}
@@ -1237,6 +1470,9 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               currentPath={currentPath}
               isRemote={isRemote}
               onNavigate={(targetPath) => fetch(targetPath)}
+              sessionId={sessionId}
+              serverId={serverId}
+              profile={profile}
             />
           </div>
           {isRemote && (
@@ -1485,11 +1721,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             row click (single select), Ctrl/Shift-click (extend), Ctrl+A
             (select all), right-click → context menu, and the header bar's
             select-all toggle to the right of the address bar. */}
-        <div className={`group min-w-full grid ${
-          showPerms
-            ? "grid-cols-[22px_1fr] sm:grid-cols-[22px_minmax(180px,1fr)_65px_115px_85px]"
-            : "grid-cols-[22px_1fr] sm:grid-cols-[22px_minmax(180px,1fr)_75px_125px]"
-        } gap-1.5 px-2.5 bg-[#161619] border-b border-white/5 font-mono text-[10.5px] text-zinc-300 select-none font-bold shrink-0 sticky top-0 z-10 shadow-md`}>
+        <div className={`group min-w-full grid ${gridColumns} gap-1.5 px-2.5 bg-[#161619] border-b border-white/5 font-mono text-[10.5px] text-zinc-300 select-none font-bold shrink-0 sticky top-0 z-10 shadow-md`}>
           {/* Select-all — the 22px column is ALWAYS reserved (both here and in
               every row) so starting a selection never shifts the columns
               sideways. The control is revealed on header hover, or whenever a
@@ -1504,14 +1736,23 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           <div className="bg-[#161619] cursor-pointer hover:text-white py-1.5" onClick={() => toggleSort("name")}>
             NAME {sortIcon("name")}
           </div>
-          <div className="hidden sm:block bg-[#161619] cursor-pointer hover:text-white text-right py-1.5" onClick={() => toggleSort("size")}>
-            SIZE {sortIcon("size")}
-          </div>
-          <div className="hidden sm:block bg-[#161619] cursor-pointer hover:text-white text-right py-1.5" onClick={() => toggleSort("modified")}>
-            CHANGED {sortIcon("modified")}
-          </div>
-          {showPerms && (
-            <div className="hidden sm:block bg-[#161619] cursor-pointer hover:text-white text-right py-1.5" onClick={() => toggleSort("permissions")}>
+          {showDetails && (
+            <>
+              <div className="bg-[#161619] cursor-pointer hover:text-white text-right py-1.5" onClick={() => toggleSort("size")}>
+                SIZE {sortIcon("size")}
+              </div>
+              <div className="bg-[#161619] cursor-pointer hover:text-white text-right py-1.5" onClick={() => toggleSort("modified")}>
+                CHANGED {sortIcon("modified")}
+              </div>
+            </>
+          )}
+          {showOwnerColumn && (
+            <div className="bg-[#161619] cursor-pointer hover:text-white text-left py-1.5" onClick={() => toggleSort("owner")}>
+              OWNER {sortIcon("owner")}
+            </div>
+          )}
+          {showRightsColumn && (
+            <div className="bg-[#161619] cursor-pointer hover:text-white text-right py-1.5" onClick={() => toggleSort("permissions")}>
               RIGHTS {sortIcon("permissions")}
             </div>
           )}
@@ -1523,7 +1764,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                // rows stopPropagation via their own onClick chain implicitly
                // by being the click target). Clear selection so users can
                // escape a multi-selection without a keyboard shortcut.
-               if (e.target === e.currentTarget) {
+               if (e.target === e.currentTarget && !dragJustEndedRef.current) {
                  setSelected(new Set());
                  lastSelectedPathRef.current = null;
                }
@@ -1553,12 +1794,11 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 }}
                 data-fs-row-path={entry.path}
                 data-fs-row-isdir={entry.isDir ? "1" : "0"}
-                className={`group grid ${
-                  showPerms
-                    ? "grid-cols-[22px_1fr] sm:grid-cols-[22px_minmax(180px,1fr)_65px_115px_85px]"
-                    : "grid-cols-[22px_1fr] sm:grid-cols-[22px_minmax(180px,1fr)_75px_125px]"
-                } gap-1.5 px-2.5 py-1 border-l-2 cursor-pointer transition-colors items-center ${
-                  isSel
+                data-fs-drop-path={entry.isDir ? entry.path : undefined}
+                className={`group grid ${gridColumns} gap-1.5 px-2.5 py-1 border-l-2 cursor-pointer transition-colors items-center ${
+                  dropHover === entry.path
+                    ? "bg-indigo-500/20 ring-1 ring-inset ring-indigo-400 border-indigo-400 text-white"
+                    : isSel
                     ? "bg-indigo-950/40 border-indigo-400 text-indigo-100 font-bold"
                     : "border-transparent text-zinc-200 hover:bg-white/5 hover:text-white"
                 }`}
@@ -1612,27 +1852,41 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                         </span>
                       )}
                     </div>
-                    {/* Narrow-viewport subline: on < sm the SIZE / CHANGED /
-                        RIGHTS cells are display:none (so they don't force
-                        horizontal scroll), and their info collapses into
-                        this muted second line under the filename. */}
-                    <div className="sm:hidden truncate text-[10px] text-zinc-500 font-mono">
-                      {[
-                        entry.isDir ? null : formatSize(entry.size),
-                        formatTime(entry.modified),
-                        showPerms ? formatRights(entry.isDir, entry.permissions) : null,
-                      ].filter(Boolean).join(" · ")}
-                    </div>
+                    {/* Panel-width fallback for metadata columns that do not fit.
+                        Their values stay visible below the filename instead of
+                        forcing horizontal scrolling in a narrow tool pane. */}
+                    {(!showDetails || (showPerms && (!showOwnerColumn || !showRightsColumn))) && (
+                      <div className="truncate text-[10px] text-zinc-500 font-mono">
+                        {[
+                          !showDetails && !entry.isDir ? formatSize(entry.size) : null,
+                          !showDetails ? formatTime(entry.modified) : null,
+                          showPerms && !showOwnerColumn && entry.uid != null ? `Owner ${ownerLabel(entry.uid)}` : null,
+                          showPerms && !showRightsColumn ? formatRights(entry.isDir, entry.permissions) : null,
+                        ].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="hidden sm:block text-right text-[10.5px] text-zinc-300 font-sans">
-                  {entry.isDir ? "" : formatSize(entry.size)}
-                </div>
-                <div className="hidden sm:block text-right text-[9.5px] text-zinc-400 truncate">
-                  {formatTime(entry.modified)}
-                </div>
-                {showPerms && (
-                  <div className="hidden sm:flex text-right text-[10.5px] text-zinc-300 font-mono opacity-90 items-center justify-end gap-1">
+                {showDetails && (
+                  <>
+                    <div className="text-right text-[10.5px] text-zinc-300 font-sans">
+                      {entry.isDir ? "" : formatSize(entry.size)}
+                    </div>
+                    <div className="text-right text-[9.5px] text-zinc-400 truncate">
+                      {formatTime(entry.modified)}
+                    </div>
+                  </>
+                )}
+                {showOwnerColumn && (
+                  <div
+                    className="text-left text-[10.5px] text-zinc-300 font-mono truncate"
+                    title={entry.uid == null ? undefined : `${ownerLabel(entry.uid)} (UID ${entry.uid})`}
+                  >
+                    {ownerLabel(entry.uid)}
+                  </div>
+                )}
+                {showRightsColumn && (
+                  <div className="flex text-right text-[10.5px] text-zinc-300 font-mono opacity-90 items-center justify-end gap-1">
                     <span className="truncate">{formatRights(entry.isDir, entry.permissions)}</span>
                     <button onClick={(e) => openMenu(e, entry)} title="Options"
                       className="opacity-60 hover:opacity-100 p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white shrink-0">
@@ -1717,7 +1971,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           )}
 
           {/* Extract / Compress for remote archives */}
-          {isRemote && !multi && /\.(tar\.gz|tgz|tar|zip)$/i.test(contextMenu.entry.name) && (
+          {isRemote && !multi && Boolean(archiveKind(contextMenu.entry.name)) && (
             <button onClick={() => { setContextMenu(null); extractArchive(contextMenu.entry); }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
               <Archive size={11} className="text-violet-400" /><span>Extract Archive Here</span>
@@ -1730,15 +1984,35 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             </button>
           )}
 
-          {/* Copy full path */}
-          {!multi && (
+          {/* Copy name / path */}
+          {!multi ? (
+            <>
+              <button onClick={async () => {
+                  setContextMenu(null);
+                  await navigator.clipboard.writeText(contextMenu.entry.name);
+                  notify(`Copied name: ${contextMenu.entry.name}`, "info");
+                }}
+                className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+                <Copy size={11} className="text-zinc-400" /><span>Copy Name</span>
+              </button>
+              <button onClick={async () => {
+                  setContextMenu(null);
+                  await navigator.clipboard.writeText(contextMenu.entry.path);
+                  notify(`Copied path: ${contextMenu.entry.path}`, "info");
+                }}
+                className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+                <Copy size={11} className="text-zinc-400" /><span>Copy Path</span>
+              </button>
+            </>
+          ) : (
             <button onClick={async () => {
                 setContextMenu(null);
-                await navigator.clipboard.writeText(contextMenu.entry.path);
-                notify(`Copied path: ${contextMenu.entry.path}`, "info");
+                const allPaths = acting.map(e => e.path).join("\n");
+                await navigator.clipboard.writeText(allPaths);
+                notify(`Copied ${acting.length} paths`, "info");
               }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
-              <Copy size={11} className="text-zinc-400" /><span>Copy Path</span>
+              <Copy size={11} className="text-zinc-400" /><span>{`Copy ${acting.length} Paths`}</span>
             </button>
           )}
 

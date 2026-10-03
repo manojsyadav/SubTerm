@@ -15,6 +15,7 @@ mod ssh_manager;
 mod tunnel;
 mod monitor;
 mod cloud;
+mod cloud_config;
 mod about;
 mod mirror;
 mod docker;
@@ -7267,6 +7268,7 @@ pub fn run() {
         // (to load any persisted bearer token). Setup is the earliest hook we
         // get an AppHandle, so initialise it there and `manage` it for commands.
         .setup(|app| {
+            cloud_config::init(&app.handle());
             let cloud_state = cloud::CloudState::new(&app.handle());
             app.manage(cloud_state);
             Ok(())
@@ -7281,6 +7283,7 @@ pub fn run() {
             cloud::cloud_set_password, cloud::cloud_login, cloud::cloud_logout,
             cloud::cloud_request_password_reset, cloud::cloud_reset_password,
             cloud::cloud_request_login_link, cloud::cloud_login_with_link,
+            cloud_config::cloud_get_server, cloud_config::cloud_set_server,
             sync_now,
             identity_status, setup_identity, reset_identity,
             share_current_profile, invite_to_share, list_shares, share_member_list,
@@ -7324,7 +7327,7 @@ pub fn run() {
             commands::sftp::android_quick_dirs, commands::sftp::android_default_local_dir,
             commands::sftp::parse_ssh_config,
             commands::sftp::parse_client_import,
-            commands::sftp::sftp_list_dir, commands::sftp::sftp_create_dir, commands::sftp::sftp_remove_file, commands::sftp::sftp_remove_dir,
+            commands::sftp::sftp_list_dir, commands::sftp::sftp_resolve_owners, commands::sftp::sftp_create_dir, commands::sftp::sftp_remove_file, commands::sftp::sftp_remove_dir,
             commands::sftp::sftp_rename, commands::sftp::sftp_set_permissions, commands::sftp::sftp_set_owner,
             commands::sftp::sftp_download_file, commands::sftp::sftp_download_dir, commands::sftp::sftp_upload_file, commands::sftp::sftp_upload_dir, commands::sftp::sftp_cancel_transfer, commands::sftp::sftp_open_remote_file,
             commands::sftp::sftp_read_file_text, commands::sftp::sftp_write_file_text, commands::sftp::local_read_file_text, commands::sftp::local_write_file_text, commands::sftp::sftp_exec_command,

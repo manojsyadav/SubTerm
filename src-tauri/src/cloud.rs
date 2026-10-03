@@ -24,16 +24,10 @@ use tokio::sync::Mutex;
 // Config
 // ---------------------------------------------------------------------------
 
-/// Where the cloud API lives. Configured via the UI settings.
-static CLOUD_API_BASE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+pub const CLOUD_API_BASE: &str = "https://api.subterm.com";
 
 pub fn get_api_base() -> String {
-    let base = CLOUD_API_BASE.lock().unwrap().clone();
-    if base.is_empty() {
-        "https://api.subterm.com".to_string()
-    } else {
-        base
-    }
+    crate::cloud_config::base()
 }
 
 /// HTTP request timeout. Uploads of large vaults can take time but we
@@ -331,10 +325,7 @@ use tauri::Manager as _;
 // errors leave the stored token untouched.
 
 #[tauri::command]
-pub async fn cloud_set_api_base(url: String) -> Result<(), String> {
-    if let Ok(mut base) = CLOUD_API_BASE.lock() {
-        *base = url.trim().trim_end_matches('/').to_string();
-    }
+pub async fn cloud_set_api_base(_url: String) -> Result<(), String> {
     Ok(())
 }
 

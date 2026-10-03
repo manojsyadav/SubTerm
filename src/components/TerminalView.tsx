@@ -1237,8 +1237,26 @@ const TerminalView = ({
       setShowCopilot(true);
     };
 
+    const onDocKeyDown = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+      if (ev.key.toLowerCase() !== 'v') return;
+      const container = terminalRef.current;
+      if (!container) return;
+      const active = document.activeElement;
+      if (!(active instanceof Node) || !container.contains(active)) return;
+      if (active instanceof HTMLElement) {
+        const tag = active.tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || active.isContentEditable) return;
+      }
+      ev.preventDefault();
+      navigator.clipboard?.readText().then((text) => {
+        if (text) handlePaste(text);
+      }).catch(() => {});
+    };
+
     terminalRef.current.addEventListener('mousedown', onMouseDown);
     document.addEventListener('mouseup', onDocMouseUp);
+    document.addEventListener('keydown', onDocKeyDown);
     window.addEventListener('blur', onWindowBlur);
     terminalRef.current.addEventListener('contextmenu', onContextMenu);
     terminalRef.current.addEventListener('paste', onPaste);
@@ -1456,6 +1474,7 @@ const TerminalView = ({
       }
       window.removeEventListener(`submarine-open-copilot-${sessionId}`, handleOpenCopilot);
       document.removeEventListener('mouseup', onDocMouseUp);
+      document.removeEventListener('keydown', onDocKeyDown);
       window.removeEventListener('blur', onWindowBlur);
       window.visualViewport?.removeEventListener('resize', onVvResize);
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);

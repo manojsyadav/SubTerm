@@ -171,6 +171,19 @@ SubTerm supports arbitrary horizontal and vertical session multiplexing:
 - **Fan-Out Logic**: In `src/components/TerminalView.tsx`, when broadcast is enabled and the session is an armed target, terminal `onData` keystrokes fan out to all targeted sessions concurrently via their respective backend session IDs.
 - **Safety Protections**: Visual glowing indicators and safety warning banners notify the user whenever fleet broadcast is armed.
 
+### 4.7 Network Transports, Jump Hosts & Virtual Overlays (Evaluation of PR #44)
+SubTerm provides enterprise-grade network traversal using clean, native primitives:
+1. **Native ProxyJump / Bastion Chains**:
+   - Single-hop and multi-hop bastion authentication executed directly in Rust via Tokio async streams (`connect_jump_host`).
+   - Tunnels traffic over an established SSH channel (`direct-tcpip`) without external processes or sidecars.
+2. **Proxy Support**:
+   - Native HTTP and SOCKS5 proxy support configured per server node.
+3. **Comparison with Embedded Sidecars (PR #44 - Tailcat / Embedded Tailscale)**:
+   - **Performance**: Native socket connections and ProxyJump avoid inter-process IPC serialization and additional memory buffers required by external Go daemons.
+   - **Binary Footprint & Maintainability**: Bundling Go sidecars for every CPU target (x86_64, aarch64, arm64-v8a, armeabi-v7a) adds ~50MB+ to package downloads and requires separate CGo/Go Mobile toolchains.
+   - **Usability & UX**: Users running Tailscale or WireGuard already benefit from OS-level virtual interfaces (MagicDNS / WireGuard IPs) routing transparently through standard SSH without app restart or separate daemon credential management.
+   - **Security**: Eliminates privileged helper daemons, unverified local loopback control servers, and extra attack surfaces.
+
 ---
 
 ## 5. Settings Panel Architecture

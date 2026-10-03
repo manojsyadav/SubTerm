@@ -1,6 +1,6 @@
 {
   "productName": "SubTerm",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "identifier": "com.subterm.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -8,7 +8,7 @@
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
-"app": {
+  "app": {
     "windows": [
       {
         "title": "SubTerm",
@@ -23,7 +23,9 @@
     ],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: https://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: https://ipc.localhost https://api.subterm.com; frame-src 'none'; object-src 'none'; base-uri 'self'",
-      "dangerousDisableAssetCspModification": ["style-src"]
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
     }
   },
   "bundle": {
