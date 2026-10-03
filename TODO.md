@@ -16,6 +16,61 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ---
 
+## 🏗️ Engineering Health: Architecture, Testing & CI
+
+- [ ] 🔴 **P1 · L** — **Finish `lib.rs` Modularization (Phase 6 Follow-Through)**
+  - `src-tauri/src/lib.rs` is still 7,385 lines despite `commands/servers.rs`, `commands/sftp.rs`, `commands/terminal.rs`, `commands/tunnels.rs`, and `commands/network.rs` already existing — the extraction added sibling modules but didn't shrink the original file.
+  - Move remaining command handlers, vault/crypto logic, and SSH session bootstrapping out of `lib.rs` into dedicated modules (e.g. `commands/vault.rs`, `commands/ssh.rs`) so `lib.rs` is left as Tauri builder/registration glue only.
+  - Also split `commands/sftp.rs` (3,048 lines) — it has effectively become its own monolith.
+  - **Validation:** `cargo check` passes cleanly; `lib.rs` under ~500 lines; no behavior change.
+
+- [ ] 🔴 **P1 · M** — **Finish `DesktopApp.tsx` Decomposition**
+  - `src/hooks/useSessionManager.ts`, `useWallManager.ts`, and `useProfileVault.ts` already exist and are wired in, but [`src/DesktopApp.tsx`](file:///d:/REPO/SubTerm/src/DesktopApp.tsx) is still 3,137 lines — the root component itself was never trimmed after the hook extraction.
+  - Move remaining view-wiring/layout logic out of the root component; target was originally <400 lines.
+  - **Validation:** `npm run typecheck` passes; all tabs, wall, and vault operations behave identically.
+
+- [ ] 🔴 **P1 · L** — **Add an Automated Test Suite (Currently Zero Tests)**
+  - No test files exist anywhere in the repo for either the Rust backend or the frontend.
+  - Minimum viable coverage: vault encrypt/decrypt round-trip (Argon2id + AES-256-GCM), KDF parameter regression test, mirror sync diff/reconciliation logic, and SFTP path-handling edge cases.
+  - **Validation:** `cargo test` in `src-tauri` and a frontend test runner (e.g. Vitest) both pass in CI.
+
+- [ ] 🔴 **P1 · M** — **Wire Test/Lint Gates into CI**
+  - [`.github/workflows/release.yml`](file:///d:/REPO/SubTerm/.github/workflows/release.yml) only builds and packages release artifacts — there is no `cargo test`, `cargo clippy`, `tsc --noEmit`, or lint step gating merges.
+  - Add a separate `ci.yml` workflow that runs on PRs: `cargo clippy -- -D warnings`, `cargo test`, `npm run typecheck`, and lint.
+  - **Validation:** A PR with a deliberate type error or failing test is blocked from merging.
+
+- [ ] 🟡 **P2 · S** — **Add ESLint Configuration**
+  - No `.eslintrc*` and no lint script exist in `package.json`, so there's nothing catching regressions in the frontend.
+  - Add a baseline config (`@typescript-eslint` recommended + React hooks rules) and a `lint` script.
+  - **Validation:** `npm run lint` runs clean on current code or produces a tracked baseline of existing violations.
+
+- [ ] 🟡 **P2 · L** — **Triage `.unwrap()` / `.expect()` in the Rust Backend**
+  - 219 occurrences across `src-tauri/src` (168 in `lib.rs` alone, 23 in `tunnel.rs`, 15 in `identity.rs`). A panic in any of these can crash the whole Tauri process, killing every open SSH session, not just one request.
+  - Prioritize paths touching untrusted network input (SSH packet/channel handling) and on-disk vault/config parsing — replace with `Result` propagation and surfaced errors.
+  - **Validation:** `grep -rc unwrap\|expect` count trends down in connection/vault-handling modules; fuzzed/malformed inputs no longer crash the app.
+
+- [ ] 🟢 **P3 · L** — **Reduce `any` / `as any` in the TypeScript Frontend**
+  - 239 occurrences across `src/**/*.tsx`/`*.ts` with no lint rule currently flagging new ones.
+  - Backfill proper types incrementally, starting with session/file-path handling code where a mistyped value has real consequences.
+  - **Validation:** `grep -rc ": any\|as any"` count trends down; new PRs can't introduce more once ESLint's `no-explicit-any` is enabled.
+
+- [ ] 🟡 **P2 · S** — **Reconcile `russh` Version Drift**
+  - README advertises `russh` 0.45+ but [`src-tauri/Cargo.toml`](file:///d:/REPO/SubTerm/src-tauri/Cargo.toml) pins `russh = "0.40.2"` / `russh-keys = "0.40.1"`. Either the doc is aspirational or the dependency is behind on releases that may include SSH protocol fixes.
+  - Audit changelog between 0.40.2 and latest, upgrade if safe, and correct whichever side (doc or dependency) is wrong.
+  - **Validation:** `cargo update -p russh` (or doc correction) reviewed; `cargo test` / manual SSH connect still passes.
+
+- [ ] 🟢 **P3 · S** — **Document TOFU Host-Key Verification UX in `SECURITY.md`**
+  - `docs/SECURITY.md` covers the vault crypto spec thoroughly but doesn't document the first-connect trust-on-first-use host key flow, which is the control most responsible for actually preventing MITM in practice.
+  - Add a section describing fingerprint prompt UX, storage location, and revocation flow (ties into the existing "Known Hosts" settings category).
+  - **Validation:** Doc review only; no code change required unless a gap in the actual flow is found while writing it.
+
+- [ ] 🟢 **P3 · M** — **Vault Format/KDF Rotation Strategy for Deployed Users**
+  - No documented process exists for rotating Argon2id parameters or the vault binary format for users who already have `v0x02` vaults on disk.
+  - Define a migration path (e.g. lazy re-encrypt on next unlock when params change) before it's needed under pressure.
+  - **Validation:** Design doc covers old-vault detection and forward migration without data loss; no immediate code required.
+
+---
+
 ## ⚡ Core Performance & IPC Optimizations
 
 - [ ] 🔴 **P1 · M** — **High-Throughput IPC: Tauri 2 Binary Channels**
