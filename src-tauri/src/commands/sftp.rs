@@ -967,6 +967,44 @@ pub async fn sftp_download_dir(
     Ok(())
 }
 
+async fn open_upload_target(
+    sftp: &russh_sftp::client::SftpSession,
+    remote_path: &str,
+) -> Result<(russh_sftp::client::fs::File, bool), russh_sftp::client::error::Error> {
+    use russh_sftp::protocol::OpenFlags;
+    let overwrite = OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE;
+    if let Ok(file) = sftp.open_with_flags(remote_path, overwrite | OpenFlags::EXCLUDE).await {
+        return Ok((file, true));
+    }
+    let file = sftp.open_with_flags(remote_path, overwrite).await?;
+    Ok((file, false))
+}
+
+async fn finish_cancelled_upload(
+    sftp: Arc<russh_sftp::client::SftpSession>,
+    mut remote_file: russh_sftp::client::fs::File,
+    remote_path: String,
+    created: bool,
+) -> Option<String> {
+    use tokio::io::AsyncWriteExt;
+    let cleanup = tokio::spawn(async move {
+        let _ = remote_file.shutdown().await;
+        if !created {
+            return None;
+        }
+        let removed = sftp.remove_file(remote_path).await;
+        removed.err().map(|e| format!("The partial file is still on the server: {}", e))
+    });
+    if !created {
+        return Some("The file on the server was overwritten and is now incomplete".to_string());
+    }
+    match tokio::time::timeout(std::time::Duration::from_secs(5), cleanup).await {
+        Ok(Ok(note)) => note,
+        Ok(Err(e)) => Some(format!("The partial file may still be on the server: {}", e)),
+        Err(_) => Some("The partial file is still being removed from the server".to_string()),
+    }
+}
+
 #[tauri::command]
 pub async fn sftp_upload_file(
     app: tauri::AppHandle,
@@ -976,7 +1014,6 @@ pub async fn sftp_upload_file(
     remote_path: String,
     overwrite: Option<bool>,
 ) -> Result<(), String> {
-    use russh_sftp::protocol::OpenFlags;
     use tauri::Emitter;
     use tokio::io::AsyncWriteExt;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -1043,11 +1080,7 @@ pub async fn sftp_upload_file(
     let mut local_file = tokio::fs::File::open(&local_path)
         .await
         .map_err(|e| { emit_progress(0, "error", Some(e.to_string())); format!("Failed to read local file: {}", e) })?;
-    let mut remote_file = sftp
-        .open_with_flags(
-            remote_path,
-            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
-        )
+    let (mut remote_file, creates_file) = open_upload_target(&sftp, &remote_path)
         .await
         .map_err(|e| { emit_progress(0, "error", Some(e.to_string())); format!("Failed to open remote file: {}", e) })?;
 
@@ -1058,10 +1091,8 @@ pub async fn sftp_upload_file(
     use tokio::io::AsyncReadExt;
     loop {
         if cancel.load(Ordering::Relaxed) {
-            // Close the remote handle so the server doesn't keep an
-            // open-write descriptor for a file we'll never finish.
-            let _ = remote_file.shutdown().await;
-            emit_progress(transferred, "cancelled", None);
+            let note = finish_cancelled_upload(Arc::clone(&sftp), remote_file, remote_path.clone(), creates_file).await;
+            emit_progress(transferred, "cancelled", note);
             return Err("cancelled".into());
         }
         let n = local_file
@@ -1101,7 +1132,6 @@ pub async fn sftp_upload_dir(
     remote_path: String,
     overwrite: Option<bool>,
 ) -> Result<(), String> {
-    use russh_sftp::protocol::OpenFlags;
     use tauri::Emitter;
     use tokio::io::AsyncWriteExt;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -1317,11 +1347,8 @@ pub async fn sftp_upload_dir(
                 return Err(format!("open {:?}: {}", local_file_path, e));
             }
         };
-        let mut remote_file = match sftp.open_with_flags(
-            remote_full.clone(),
-            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
-        ).await {
-            Ok(f) => f,
+        let (mut remote_file, creates_file) = match open_upload_target(&sftp, &remote_full).await {
+            Ok(opened) => opened,
             Err(e) => {
                 emit_progress(transferred, total_bytes, "error",
                     Some(format!("open remote {}: {}", remote_full, e)));
@@ -1331,8 +1358,8 @@ pub async fn sftp_upload_dir(
 
         loop {
             if cancel.load(Ordering::Relaxed) {
-                let _ = remote_file.shutdown().await;
-                emit_progress(transferred, total_bytes, "cancelled", None);
+                let note = finish_cancelled_upload(Arc::clone(&sftp), remote_file, remote_full.clone(), creates_file).await;
+                emit_progress(transferred, total_bytes, "cancelled", note);
                 return Err("cancelled".into());
             }
             let n = local_file.read(&mut buf).await
