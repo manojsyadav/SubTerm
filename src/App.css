@@ -101,6 +101,7 @@ select optgroup {
   to {
     opacity: 1;
   }
+}
 
 /* Indeterminate fill for an open-in-editor download whose size is unknown.
    The bar is 1/3 of the row; this slides it across the clipped row. */
