@@ -63,6 +63,12 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
   - Added **Right-Click Action** user preference under *Settings > Terminal* allowing users to toggle between opening the context menu or instant clipboard pasting (PuTTY style).
   - Added **Copy on select** toggle in *Settings > Terminal* to automatically copy highlighted text into the system clipboard.
 
+- **Curated Terminal Color Schemes & Cursor Customization**:
+  - Added 8 built-in developer-favorite terminal themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, and *Solarized Dark*).
+  - Full 16-color ANSI rendering support for command output, logs, and syntax highlighters.
+  - Live color palette swatches in the Settings panel with instant zero-reconnect live hot-reloading across all active terminal sessions.
+  - Added cursor shape configuration (*Block*, *Underline*, *Bar*) and animated cursor blinking toggle.
+
 ---
 
 ### ⚡ Improvements & Performance

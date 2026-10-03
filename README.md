@@ -39,6 +39,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager with interactive key recording, conflict detection, and category filters.
 - **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
 - **Hardware-Accelerated Terminal**: WebGL GPU rasterization with automatic canvas fallback for 60–120+ FPS throughput and reduced CPU overhead.
+- **Curated Terminal Color Schemes & Cursor Customization**: 8 pro color schemes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin*, *Tokyo Night*, *Monokai*, *Solarized Dark*) with full 16-color ANSI support, live palette swatches, and configurable cursor styles (*Block*, *Underline*, *Bar*).
 - **Terminal Context Menu & Buffer Export**: Glassmorphic right-click menu with Copy, Paste, Select All, Find, Clear, Reset, 1-click buffer export to `.log`, configurable right-click behavior (Context Menu vs PuTTY-style immediate paste), and automatic copy-on-select.
 - **Multi-Tab Fleet Broadcast**: Concurrently fan out keystrokes and commands across multiple server sessions with live session targeting and armed safety banners.
 - **Parameterized Snippets Engine**: Runbook automation with `{{variable:defaultValue}}` placeholders and interactive variable prompting.

@@ -129,7 +129,11 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon or `Ctrl+,`):
 
 - **Appearance**: Select your preferred accent color and dark/light UI theme.
-- **Terminal**: Adjust font family, font size, line height, cursor styles, and terminal scrollback buffer size.
+- **Terminal**:
+  - **Curated Color Schemes**: Select from 8 curated terminal themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, *Solarized Dark*) with full 16-color ANSI rendering and live preview swatches. Active terminals update instantly without reconnecting.
+  - **Cursor Customization**: Configure cursor shape (*Block*, *Underline*, *Bar / Vertical Line*) and toggle animated cursor blinking.
+  - **Font Size & WebGL Acceleration**: Real-time font size adjustment (8px–24px) and WebGL GPU rasterization toggle.
+  - **Clipboard & Mouse Behavior**: Choose between glassmorphic Context Menu or instant PuTTY-style paste on right-click, and toggle automatic Copy on Select.
 - **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization.
