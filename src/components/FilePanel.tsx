@@ -7,6 +7,7 @@ import {
   X, ChevronUp, ChevronDown, Plus, MoreVertical, FolderSearch,
   Download, Upload, ExternalLink, Move, CheckSquare, Square, Search,
   TerminalSquare, FileCode, Archive, Copy, Check, Bookmark, Star,
+  Eye, EyeOff,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions } from "../ui/confirm";
@@ -132,6 +133,9 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastSelectedPathRef = useRef<string | null>(null);
   const [sort, setSort] = useState<SortState>({ column: "name", asc: true });
+  const [showHiddenFiles, setShowHiddenFiles] = useState<boolean>(() => {
+    return localStorage.getItem("subterm-sftp-show-hidden") !== "false";
+  });
 
   const [tempInput, setTempInput] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
@@ -884,8 +888,14 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   // ---- sorting ----------------------------------------------------------------
 
+  const hiddenCount = entries.filter((e) => e.name.startsWith(".")).length;
+
   const sortedEntries = (() => {
-    const sorted = [...entries].sort((a, b) => {
+    let source = entries;
+    if (!showHiddenFiles) {
+      source = source.filter((e) => !e.name.startsWith("."));
+    }
+    const sorted = [...source].sort((a, b) => {
       if (a.isDir !== b.isDir) return b.isDir ? 1 : -1;
       let va: any, vb: any;
       switch (sort.column) {
@@ -923,20 +933,31 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "a") return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       // Only fire when this panel owns the focus, so two side-by-side
-      // FilePanel instances don't both select all on the same press.
+      // FilePanel instances don't both trigger on the same press.
       const root = dropTargetRef.current;
       if (root && document.activeElement && !root.contains(document.activeElement)) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        setShowHiddenFiles((prev) => {
+          const next = !prev;
+          localStorage.setItem("subterm-sftp-show-hidden", next ? "true" : "false");
+          return next;
+        });
+        return;
+      }
+
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "a") return;
       e.preventDefault();
       toggleSelectAll();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedEntries.length, allSelected]);
+  }, [sortedEntries.length, allSelected, showHiddenFiles]);
 
   const toggleSort = (col: SortColumn) =>
     setSort((p) => ({ column: col, asc: p.column === col ? !p.asc : true }));
@@ -1246,6 +1267,23 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             <Folder size={11} />
           </button>
           <button
+            onClick={() => {
+              setShowHiddenFiles((prev) => {
+                const next = !prev;
+                localStorage.setItem("subterm-sftp-show-hidden", next ? "true" : "false");
+                return next;
+              });
+            }}
+            title={showHiddenFiles ? "Hide dotfiles / hidden files (Ctrl+H)" : `Show dotfiles / hidden files (${hiddenCount} hidden) (Ctrl+H)`}
+            className={`p-1 rounded border border-white/10 hover:bg-white/10 transition-colors ${
+              !showHiddenFiles
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                : "bg-white/[0.04] text-zinc-400 hover:text-white"
+            }`}
+          >
+            {showHiddenFiles ? <Eye size={11} /> : <EyeOff size={11} />}
+          </button>
+          <button
             onClick={toggleSelectAll}
             disabled={sortedEntries.length === 0}
             title={allSelected ? "Deselect all (Ctrl+A)" : "Select all (Ctrl+A)"}
@@ -1264,7 +1302,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           the rendered list by name without touching sort or the path bar.
           Sticky across cd so they can hunt the same name across sibling
           dirs; the X clears, Esc on the input clears too. */}
-      <div className="shrink-0 flex items-center gap-1 px-2 py-1 bg-[#0e0e10] border border-white/5 rounded text-[10.5px] font-mono">
+      <div className="shrink-0 flex items-center gap-1.5 px-2 py-1 bg-[#0e0e10] border border-white/5 rounded text-[10.5px] font-mono">
         <Search size={11} className="text-zinc-500 shrink-0" />
         <input
           type="text"
@@ -1274,6 +1312,18 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           placeholder="Filter by name…"
           className="flex-1 min-w-0 h-5 bg-transparent text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
         />
+        {!showHiddenFiles && hiddenCount > 0 && (
+          <span
+            className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-300/90 border border-amber-500/20 rounded shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
+            title="Click to reveal dotfiles (Ctrl+H)"
+            onClick={() => {
+              setShowHiddenFiles(true);
+              localStorage.setItem("subterm-sftp-show-hidden", "true");
+            }}
+          >
+            {hiddenCount} hidden
+          </span>
+        )}
         {nameFilter && (
           <>
             <span className="text-[9.5px] text-zinc-500 shrink-0">
