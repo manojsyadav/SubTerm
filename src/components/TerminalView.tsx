@@ -14,6 +14,7 @@ import HistorySearchOverlay from './HistorySearchOverlay';
 import { AiCopilotModal } from './AiCopilotModal';
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
+import { getTerminalTheme } from '../terminal/themes';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
 
@@ -511,16 +512,16 @@ const TerminalView = ({
   useEffect(() => {
     if (!terminalRef.current) return;
 
+    const themeId = localStorage.getItem('subterm-terminal-theme') || 'subterm-dark';
+    const cursorBlink = localStorage.getItem('subterm-terminal-cursor-blink') !== 'false';
+    const cursorStyle = (localStorage.getItem('subterm-terminal-cursor-style') || 'block') as 'block' | 'underline' | 'bar';
+
     const term = new Terminal({
-      cursorBlink: true,
-      fontSize: parseInt(localStorage.getItem('submarine-terminal-font-size') || '14'),
+      cursorBlink,
+      cursorStyle,
+      fontSize: parseInt(localStorage.getItem('subterm-terminal-font-size') || localStorage.getItem('submarine-terminal-font-size') || '14'),
       fontFamily: 'Consolas, "Courier New", monospace',
-      theme: {
-        background: '#09090b',
-        foreground: '#e4e4e7',
-        cursor: '#60a5fa',
-        selectionBackground: 'rgba(96, 165, 250, 0.3)',
-      },
+      theme: getTerminalTheme(themeId),
       allowProposedApi: true
     });
 
@@ -1311,12 +1312,19 @@ const TerminalView = ({
     
     // Handle Settings Change
     const handleSettingsChange = () => {
-      const newSize = parseInt(localStorage.getItem('submarine-terminal-font-size') || '14');
+      const newSize = parseInt(localStorage.getItem('subterm-terminal-font-size') || localStorage.getItem('submarine-terminal-font-size') || '14');
       if (term.options.fontSize !== newSize) {
         term.options.fontSize = newSize;
         fitAddon.fit();
       }
+      const newThemeId = localStorage.getItem('subterm-terminal-theme') || 'subterm-dark';
+      term.options.theme = getTerminalTheme(newThemeId);
+      const newCursorStyle = (localStorage.getItem('subterm-terminal-cursor-style') || 'block') as 'block' | 'underline' | 'bar';
+      term.options.cursorStyle = newCursorStyle;
+      const newCursorBlink = localStorage.getItem('subterm-terminal-cursor-blink') !== 'false';
+      term.options.cursorBlink = newCursorBlink;
     };
+    window.addEventListener('subterm-settings-changed', handleSettingsChange);
     window.addEventListener('submarine-settings-changed', handleSettingsChange);
 
     // ── Mobile QoL ───────────────────────────────────────────────────────────
@@ -1361,6 +1369,7 @@ const TerminalView = ({
     window.visualViewport?.addEventListener('resize', onVvResize);
 
     return () => {
+      window.removeEventListener('subterm-settings-changed', handleSettingsChange);
       window.removeEventListener('submarine-settings-changed', handleSettingsChange);
       resizeObserver.disconnect();
       onDataDisposable.dispose();

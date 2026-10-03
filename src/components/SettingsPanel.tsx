@@ -10,6 +10,7 @@ import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
+import { TERMINAL_THEMES } from "../terminal/themes";
 
 type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
 
@@ -144,26 +145,67 @@ const PageAppearance = ({ settings, setSettings }: any) => (
   </div>
 );
 
-const PageTerminal = ({ settings, setSettings }: any) => (
-  <div className="space-y-6">
-    <SectionCard title="Display">
-      <Row label="Font Size (px)" desc="Terminal character size in pixels">
-        <div className="flex items-center gap-3">
-          <input type="range" min="8" max="24" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-32 accent-primary" />
-          <input type="number" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
-        </div>
-      </Row>
-      <Row label="WebGL Hardware Acceleration" desc="Enable GPU-accelerated rendering for 60fps throughput and lower CPU usage">
-        <Toggle
-          checked={settings.terminalWebgl !== false}
-          onChange={() => {
-            const next = settings.terminalWebgl === false;
-            setSettings({ ...settings, terminalWebgl: next });
-            localStorage.setItem('subterm-terminal-webgl', next ? 'true' : 'false');
-          }}
-        />
-      </Row>
-    </SectionCard>
+const PageTerminal = ({ settings, setSettings }: any) => {
+  const currentThemeId = settings.terminalTheme || 'subterm-dark';
+  const currentTheme = TERMINAL_THEMES.find((t) => t.id === currentThemeId) || TERMINAL_THEMES[0];
+
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Display & Theme">
+        <Row label="Color Scheme / Theme" desc="Curated palette and full ANSI 16-color theme for terminal sessions">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 p-1 bg-black/40 rounded-md border border-white/10" title="Palette preview">
+              {currentTheme.previewColors.map((color, i) => (
+                <span key={i} className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: color }} />
+              ))}
+            </div>
+            <select
+              value={currentThemeId}
+              onChange={(e) => setSettings({ ...settings, terminalTheme: e.target.value })}
+              className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+            >
+              {TERMINAL_THEMES.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {theme.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Row>
+        <Row label="Font Size (px)" desc="Terminal character size in pixels">
+          <div className="flex items-center gap-3">
+            <input type="range" min="8" max="24" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-32 accent-primary" />
+            <input type="number" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
+          </div>
+        </Row>
+        <Row label="Cursor Style" desc="Visual shape of the terminal cursor">
+          <select
+            value={settings.terminalCursorStyle || 'block'}
+            onChange={(e) => setSettings({ ...settings, terminalCursorStyle: e.target.value })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            <option value="block">Block</option>
+            <option value="underline">Underline</option>
+            <option value="bar">Bar (Vertical Line)</option>
+          </select>
+        </Row>
+        <Row label="Cursor Blinking" desc="Animate cursor blinking when the terminal is focused">
+          <Toggle
+            checked={settings.terminalCursorBlink !== false}
+            onChange={() => setSettings({ ...settings, terminalCursorBlink: settings.terminalCursorBlink === false ? true : false })}
+          />
+        </Row>
+        <Row label="WebGL Hardware Acceleration" desc="Enable GPU-accelerated rendering for 60fps throughput and lower CPU usage">
+          <Toggle
+            checked={settings.terminalWebgl !== false}
+            onChange={() => {
+              const next = settings.terminalWebgl === false;
+              setSettings({ ...settings, terminalWebgl: next });
+              localStorage.setItem('subterm-terminal-webgl', next ? 'true' : 'false');
+            }}
+          />
+        </Row>
+      </SectionCard>
     <SectionCard title="Session Behaviour">
       <Row label="Auto-close tab on exit" desc="Close the session tab when the shell process exits">
         <Toggle checked={!!settings.autoCloseOnExit} onChange={() => setSettings({ ...settings, autoCloseOnExit: !settings.autoCloseOnExit })} />
@@ -214,7 +256,8 @@ const PageTerminal = ({ settings, setSettings }: any) => (
       )}
     </SectionCard>
   </div>
-);
+  );
+};
 
 const PageServers = ({ settings, setSettings, servers }: any) => {
   const [selectedToAdd, setSelectedToAdd] = useState("");
