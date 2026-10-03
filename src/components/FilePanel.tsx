@@ -136,6 +136,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const [showHiddenFiles, setShowHiddenFiles] = useState<boolean>(() => {
     return localStorage.getItem("subterm-sftp-show-hidden") !== "false";
   });
+  type FileTypeFilter = "all" | "dirs" | "code" | "logs" | "archives" | "media";
+  const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
 
   const [tempInput, setTempInput] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
@@ -916,6 +918,17 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     if (!showHiddenFiles) {
       source = source.filter((e) => !e.name.startsWith("."));
     }
+    if (typeFilter === "dirs") {
+      source = source.filter((e) => e.isDir);
+    } else if (typeFilter === "code") {
+      source = source.filter((e) => e.isDir || /\.(json|ya?ml|toml|conf|cfg|ini|env|xml|sh|bash|py|js|ts|tsx|jsx|rs|go|c|cpp|h|css|html|md|sql)$/i.test(e.name));
+    } else if (typeFilter === "logs") {
+      source = source.filter((e) => e.isDir || /\.(log|out|err|trace|audit)$/i.test(e.name));
+    } else if (typeFilter === "archives") {
+      source = source.filter((e) => e.isDir || /\.(tar(\.gz|\.bz2|\.xz)?|tgz|zip|gz|bz2|xz|7z|rar)$/i.test(e.name));
+    } else if (typeFilter === "media") {
+      source = source.filter((e) => e.isDir || /\.(png|jpe?g|gif|webp|svg|ico|mp4|webm|pdf)$/i.test(e.name));
+    }
     const sorted = [...source].sort((a, b) => {
       if (a.isDir !== b.isDir) return b.isDir ? 1 : -1;
       let va: any, vb: any;
@@ -1357,6 +1370,23 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           placeholder="Filter by name…"
           className="flex-1 min-w-0 h-5 bg-transparent text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
         />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as any)}
+          className={`h-5 px-1 rounded text-[10px] border outline-none font-mono transition-colors shrink-0 ${
+            typeFilter !== "all"
+              ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold"
+              : "bg-white/[0.04] text-zinc-400 border-white/5 hover:text-white"
+          }`}
+          title="Filter by file type"
+        >
+          <option value="all">All types</option>
+          <option value="dirs">📁 Folders</option>
+          <option value="code">⚙️ Code/Config</option>
+          <option value="logs">📜 Logs</option>
+          <option value="archives">📦 Archives</option>
+          <option value="media">🖼️ Media</option>
+        </select>
         {!showHiddenFiles && hiddenCount > 0 && (
           <span
             className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-300/90 border border-amber-500/20 rounded shrink-0 cursor-pointer hover:bg-amber-500/20 transition-colors"
