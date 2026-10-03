@@ -23,6 +23,97 @@ pub struct SftpListResult {
     pub entries: Vec<SftpFileEntry>,
 }
 
+#[derive(serde::Serialize)]
+pub struct SftpOwner {
+    pub uid: u32,
+    pub name: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct SftpOwnerLookup {
+    pub owners: Vec<SftpOwner>,
+    pub status: &'static str,
+}
+
+fn parse_sftp_owners(
+    output: &str,
+    requested: &std::collections::HashSet<u32>,
+) -> Vec<SftpOwner> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let (uid, name) = line.split_once('\t')?;
+            let uid = uid.parse().ok()?;
+            (requested.contains(&uid) && !name.is_empty())
+                .then(|| SftpOwner { uid, name: name.to_string() })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn sftp_resolve_owners(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    mut uids: Vec<u32>,
+) -> Result<SftpOwnerLookup, String> {
+    const BATCH_SIZE: usize = 64;
+    const MAX_UIDS: usize = 4096;
+    const SUCCESS_MARKER: &str = "__SUB_OWNER_LOOKUP_OK__";
+
+    uids.sort_unstable();
+    uids.dedup();
+    if uids.is_empty() {
+        return Ok(SftpOwnerLookup {
+            owners: Vec::new(),
+            status: "complete",
+        });
+    }
+    if uids.len() > MAX_UIDS {
+        return Err(format!("Owner lookup is limited to {MAX_UIDS} unique UIDs"));
+    }
+
+    let requested: std::collections::HashSet<u32> = uids.iter().copied().collect();
+    let mut owners = Vec::new();
+    for batch in uids.chunks(BATCH_SIZE) {
+        let uid_args = batch.iter().map(u32::to_string).collect::<Vec<_>>().join(" ");
+        let script = format!(
+            "for uid in {uid_args}; do \
+name=$(id -un \"$uid\" 2>/dev/null) || name=$(getent passwd \"$uid\" 2>/dev/null | awk -F: 'NR == 1 {{ print $1 }}'); \
+[ -n \"$name\" ] && printf '%s\\t%s\\n' \"$uid\" \"$name\"; \
+done; printf '%s\\n' {SUCCESS_MARKER}"
+        );
+        let command = format!("sh -c '{}'", script.replace('\'', "'\\''"));
+        let output = match exec_ssh_command_helper(&state, &session_id, &command).await {
+            Ok(output) => output,
+            Err(_) => {
+                return Ok(SftpOwnerLookup {
+                    owners,
+                    status: "transient_error",
+                });
+            }
+        };
+        let batch_owners = parse_sftp_owners(&output, &requested);
+        if !output.lines().any(|line| line == SUCCESS_MARKER) {
+            let status = if output.is_empty() || !batch_owners.is_empty() {
+                "transient_error"
+            } else {
+                "unsupported"
+            };
+            owners.extend(batch_owners);
+            return Ok(SftpOwnerLookup {
+                owners,
+                status,
+            });
+        }
+        owners.extend(batch_owners);
+    }
+
+    Ok(SftpOwnerLookup {
+        owners,
+        status: "complete",
+    })
+}
+
 pub async fn get_sftp_session(
     state: &SshState,
     session_id: &str,

@@ -7324,7 +7324,7 @@ pub fn run() {
             commands::sftp::android_quick_dirs, commands::sftp::android_default_local_dir,
             commands::sftp::parse_ssh_config,
             commands::sftp::parse_client_import,
-            commands::sftp::sftp_list_dir, commands::sftp::sftp_create_dir, commands::sftp::sftp_remove_file, commands::sftp::sftp_remove_dir,
+            commands::sftp::sftp_list_dir, commands::sftp::sftp_resolve_owners, commands::sftp::sftp_create_dir, commands::sftp::sftp_remove_file, commands::sftp::sftp_remove_dir,
             commands::sftp::sftp_rename, commands::sftp::sftp_set_permissions, commands::sftp::sftp_set_owner,
             commands::sftp::sftp_download_file, commands::sftp::sftp_download_dir, commands::sftp::sftp_upload_file, commands::sftp::sftp_upload_dir, commands::sftp::sftp_cancel_transfer, commands::sftp::sftp_open_remote_file,
             commands::sftp::sftp_read_file_text, commands::sftp::sftp_write_file_text, commands::sftp::local_read_file_text, commands::sftp::local_write_file_text, commands::sftp::sftp_exec_command,
