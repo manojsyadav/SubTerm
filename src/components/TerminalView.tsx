@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
+import { WebglAddon } from 'xterm-addon-webgl';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles } from 'lucide-react';
@@ -661,6 +662,24 @@ const TerminalView = ({
     }
 
     term.open(terminalRef.current);
+
+    // Hardware-accelerated WebGL rendering with automatic canvas/DOM fallback
+    let webglAddon: WebglAddon | null = null;
+    const isWebglEnabled = localStorage.getItem('subterm-terminal-webgl') !== 'false';
+    if (isWebglEnabled) {
+      try {
+        const addon = new WebglAddon();
+        addon.onContextLoss(() => {
+          console.warn("Terminal WebGL context lost; falling back to canvas.");
+          addon.dispose();
+          webglAddon = null;
+        });
+        term.loadAddon(addon);
+        webglAddon = addon;
+      } catch (err) {
+        console.warn("WebGL addon unavailable, falling back to standard renderer:", err);
+      }
+    }
     
     setTimeout(() => {
       fitAddon.fit();
@@ -1275,6 +1294,12 @@ const TerminalView = ({
       if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
       unlistenPromise.then(unlisten => unlisten());
       unlistenClosedPromise.then(unlisten => unlisten());
+      if (webglAddon) {
+        try {
+          webglAddon.dispose();
+        } catch { /* ignore */ }
+        webglAddon = null;
+      }
       searchAddon.dispose();
       searchAddonRef.current = null;
       term.dispose();

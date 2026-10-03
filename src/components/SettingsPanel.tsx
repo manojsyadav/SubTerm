@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   Settings, Palette, RefreshCw, List, Cloud, User,
   ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
@@ -150,6 +150,16 @@ const PageTerminal = ({ settings, setSettings }: any) => (
           <input type="range" min="8" max="24" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-32 accent-primary" />
           <input type="number" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
         </div>
+      </Row>
+      <Row label="WebGL Hardware Acceleration" desc="Enable GPU-accelerated rendering for 60fps throughput and lower CPU usage">
+        <Toggle
+          checked={settings.terminalWebgl !== false}
+          onChange={() => {
+            const next = settings.terminalWebgl === false;
+            setSettings({ ...settings, terminalWebgl: next });
+            localStorage.setItem('subterm-terminal-webgl', next ? 'true' : 'false');
+          }}
+        />
       </Row>
     </SectionCard>
     <SectionCard title="Session Behaviour">

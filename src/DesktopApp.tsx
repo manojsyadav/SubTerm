@@ -5,7 +5,7 @@ import {
   Plus, X, RefreshCw, Terminal, Key, Trash2,
   ArrowLeftRight, Shield, User, Cpu, TerminalSquare, List, Edit2,
   StickyNote, Search, Square, Copy, ChevronLeft, MoreVertical, Radio,
-  ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check,
+  ChevronDown, Columns, Rows, LayoutGrid, Pin, PinOff, Command, Lock, LogOut, Activity, UserCheck, Check,
   Layers, Settings
 } from "lucide-react";
 import { useBroadcast } from "./ui/broadcast";
@@ -94,6 +94,7 @@ function DesktopApp() {
     showAuditDownload: localStorage.getItem('subterm-show-audit-download') !== 'false',
     showAuditCopy: localStorage.getItem('subterm-show-audit-copy') !== 'false',
     enableMonitoring: (localStorage.getItem('subterm-enable-monitoring') || localStorage.getItem('submarine-enable-monitoring')) !== 'false',
+    terminalWebgl: localStorage.getItem('subterm-terminal-webgl') !== 'false',
     quickAccessServerIds: (() => {
       try {
         const raw = localStorage.getItem('subterm-quick-access-servers');
@@ -133,6 +134,8 @@ function DesktopApp() {
     handleSessionStatus,
     tabMenu, setTabMenu,
     mergedSessionIds, setMergedSessionIds,
+    sessionSplitOrientation, setSessionSplitOrientation,
+    sessionSplitRatios, setSessionSplitRatios,
     mobileSessionPickerOpen, setMobileSessionPickerOpen,
     getCloseHandler, closeSession,
     openServer, openMultipleServers, openQuickConnect, openLocalTerminal,
@@ -422,6 +425,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-show-audit-copy', appSettings.showAuditCopy ? 'true' : 'false');
     localStorage.setItem('subterm-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
     localStorage.setItem('submarine-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
+    localStorage.setItem('subterm-terminal-webgl', appSettings.terminalWebgl !== false ? 'true' : 'false');
     localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {
@@ -1799,91 +1803,147 @@ function DesktopApp() {
               const visibleIds = isTiled
                 ? mergedSessionIds.filter(id => sessions.some(s => s.id === id))
                 : (viewIsSession ? [activeView] : []);
+              const visibleSessions = visibleIds.map(id => sessions.find(s => s.id === id)).filter(Boolean) as Session[];
+              const hiddenSessions = sessions.filter(s => !visibleIds.includes(s.id));
               return (
                 <div className={`absolute inset-0 flex flex-col overflow-hidden ${!viewIsSession ? 'opacity-0 pointer-events-none' : ''}`}>
-                  <div className="flex-1 relative bg-black/40">
-                    {sessions.map(sess => {
-                      const idx = visibleIds.indexOf(sess.id);
-                      const isVisible = idx >= 0;
-                      const isFocused = activeView === sess.id;
-                      const style: React.CSSProperties = isVisible
-                        ? {
-                            position: 'absolute',
-                            top: 0,
-                            bottom: 0,
-                            left: `${(idx * 100) / visibleIds.length}%`,
-                            width: `${100 / visibleIds.length}%`,
-                          }
-                        : {
-                            position: 'absolute',
-                            inset: 0,
-                            opacity: 0,
-                            pointerEvents: 'none',
-                          };
-                      return (
+                  {isTiled && (
+                    <div className="h-8 shrink-0 bg-[#0e0e12] border-b border-white/5 flex items-center justify-between px-3 text-[11px] z-30">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                          <Layers size={13} className="text-primary" />
+                          Split Workspace ({visibleSessions.length} sessions)
+                        </span>
+                        <button
+                          onClick={() => setSessionSplitOrientation(o => o === "h" ? "v" : "h")}
+                          title={`Switch to ${sessionSplitOrientation === "h" ? "vertical (stacked)" : "horizontal (side-by-side)"} layout`}
+                          className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center gap-1.5 border border-white/10 transition-colors"
+                        >
+                          {sessionSplitOrientation === "h" ? <Columns size={12} className="text-primary" /> : <Rows size={12} className="text-primary" />}
+                          <span className="text-[10px] uppercase font-bold tracking-wider">{sessionSplitOrientation === "h" ? "Columns" : "Rows"}</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setMergedSessionIds([])}
+                        title="Unsplit: restore focused session to full view"
+                        className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white text-[10.5px] transition-colors"
+                      >
+                        Unsplit
+                      </button>
+                    </div>
+                  )}
+
+                  {isTiled ? (
+                    <div className={`flex-1 relative bg-black/40 flex ${sessionSplitOrientation === 'h' ? 'flex-row' : 'flex-col'} overflow-hidden`}>
+                      {visibleSessions.map((sess, idx) => {
+                        const isFocused = activeView === sess.id;
+                        const grow = sessionSplitRatios[idx] ?? 1;
+                        const notLast = idx < visibleSessions.length - 1;
+                        return (
+                          <div key={sess.id} className="contents">
+                            <div
+                              style={{ flexGrow: grow, flexBasis: 0 }}
+                              onMouseDownCapture={() => {
+                                if (!isFocused) setActiveView(sess.id);
+                              }}
+                              className={`relative min-w-0 min-h-0 flex flex-col overflow-hidden border ${
+                                isFocused
+                                  ? 'border-primary/40 shadow-[inset_0_0_0_1px_rgba(var(--primary),0.15)]'
+                                  : 'border-white/[0.05]'
+                              }`}
+                            >
+                              {!isFocused && (
+                                <div className="h-7 shrink-0 flex items-center gap-2 px-2 border-b border-white/5 bg-[#111114] text-[10.5px]">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    (sessionStatuses[sess.id] ?? 'connecting') === 'connected' ? 'bg-emerald-400' :
+                                    (sessionStatuses[sess.id] ?? 'connecting') === 'connecting' ? 'bg-amber-400' :
+                                    'bg-rose-500'
+                                  }`} />
+                                  <span className="font-bold text-zinc-200 uppercase tracking-wider truncate flex-1">
+                                    {sess.serverName}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const next = mergedSessionIds.filter(id => id !== sess.id);
+                                      setMergedSessionIds(next.length < 2 ? [] : next);
+                                    }}
+                                    title="Remove this pane from the split view"
+                                    className="h-5 w-5 rounded flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-white/[0.05] transition-all"
+                                  >
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              )}
+                              <ErrorBoundary
+                                label={sess.serverName}
+                                onReset={() => {
+                                  setSessions(prev => prev.filter(s => s.id !== sess.id));
+                                  if (activeView === sess.id) setActiveView("nodes");
+                                }}
+                              >
+                                <SessionView
+                                  session={sess}
+                                  onClose={getCloseHandler(sess.id)}
+                                  addLog={addLog}
+                                  onStatusChange={handleSessionStatus}
+                                  onTerminalsChange={handleTerminalsChange}
+                                  chromeless={!isFocused}
+                                  isSessionActive={isFocused && viewIsSession}
+                                  onOpenSettings={() => setActiveView("settings")}
+                                />
+                              </ErrorBoundary>
+                            </div>
+                            {notLast && (
+                              <div
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const container = e.currentTarget.parentElement;
+                                  if (!container) return;
+                                  const rect = container.getBoundingClientRect();
+                                  const total = sessionSplitOrientation === "h" ? rect.width : rect.height;
+                                  const startClient = sessionSplitOrientation === "h" ? e.clientX : e.clientY;
+                                  const sumGrow = sessionSplitRatios.reduce((a, b) => a + (b || 0), 0) || visibleSessions.length;
+                                  const pxPerUnit = total / sumGrow;
+                                  const startA = sessionSplitRatios[idx] ?? 1;
+                                  const startB = sessionSplitRatios[idx + 1] ?? 1;
+                                  const move = (ev: MouseEvent) => {
+                                    const client = sessionSplitOrientation === "h" ? ev.clientX : ev.clientY;
+                                    const deltaUnits = (client - startClient) / pxPerUnit;
+                                    const minPair = 0.3;
+                                    const combined = startA + startB;
+                                    const nextA = Math.max(minPair, Math.min(combined - minPair, startA + deltaUnits));
+                                    const nextB = combined - nextA;
+                                    setSessionSplitRatios(prev => {
+                                      const copy = prev.slice();
+                                      copy[idx] = nextA;
+                                      copy[idx + 1] = nextB;
+                                      return copy;
+                                    });
+                                  };
+                                  const up = () => {
+                                    window.removeEventListener("mousemove", move);
+                                    window.removeEventListener("mouseup", up);
+                                  };
+                                  window.addEventListener("mousemove", move);
+                                  window.addEventListener("mouseup", up);
+                                }}
+                                className={`z-20 shrink-0 ${
+                                  sessionSplitOrientation === "h"
+                                    ? "w-1.5 cursor-col-resize hover:bg-primary/50"
+                                    : "h-1.5 cursor-row-resize hover:bg-primary/50"
+                                } bg-white/[0.08] transition-colors`}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                      {hiddenSessions.map(sess => (
                         <div
                           key={sess.id}
-                          style={style}
-                          onMouseDownCapture={() => {
-                            // Focus shift ONLY — tile positions live in
-                            // mergedSessionIds and must stay stable across
-                            // focus changes. Reordering here was the cause
-                            // of the reported "left tile jumps to the other
-                            // server when I click the right one" bug.
-                            if (isTiled && !isFocused && isVisible) {
-                              setActiveView(sess.id);
-                            }
-                          }}
-                          // flex flex-col so SessionView's root `flex-1`
-                          // actually fills the tile. Without this the tile
-                          // has explicit position:absolute + top/bottom
-                          // dimensions but SessionView's internal flex
-                          // layout collapses to 0 height and the terminal
-                          // + tool panels never draw.
-                          className={`flex flex-col overflow-hidden ${
-                            isVisible && isTiled
-                              ? `border ${isFocused ? 'border-primary/40 shadow-[inset_0_0_0_1px_rgba(var(--primary),0.15)]' : 'border-white/[0.05]'}`
-                              : ''
-                          }`}
+                          style={{ position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none' }}
                         >
-                          {/* Merged (non-focused) tile header. Only the
-                              focused pane keeps its full tab strip + tool
-                              rail (via SessionView's default chrome);
-                              merged panes get a slim 28-px header with
-                              server name + a click-to-focus hint + a
-                              detach X. Everything below that header is a
-                              chromeless SessionView so it renders ONLY
-                              the currently-active terminal without
-                              stacking a second toolbar next to the
-                              focused one. Vertical space wasted per
-                              merged tile drops from ~48 px (full chrome)
-                              to ~28 px (slim header). */}
-                          {isVisible && isTiled && !isFocused && (
-                            <div className="h-7 shrink-0 flex items-center gap-2 px-2 border-b border-white/5 bg-[#111114] text-[10.5px]">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                (sessionStatuses[sess.id] ?? 'connecting') === 'connected' ? 'bg-emerald-400' :
-                                (sessionStatuses[sess.id] ?? 'connecting') === 'connecting' ? 'bg-amber-400' :
-                                'bg-rose-500'
-                              }`} />
-                              <span className="font-bold text-zinc-200 uppercase tracking-wider truncate flex-1">
-                                {sess.serverName}
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const next = mergedSessionIds.filter(id => id !== sess.id);
-                                  // Under 2 members isn't a split any more —
-                                  // clear the list so the remaining pane
-                                  // reverts to plain full-width single view.
-                                  setMergedSessionIds(next.length < 2 ? [] : next);
-                                }}
-                                title="Remove this pane from the split view"
-                                className="h-5 w-5 rounded flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-white/[0.05] transition-all"
-                              >
-                                <X size={11} />
-                              </button>
-                            </div>
-                          )}
                           <ErrorBoundary
                             label={sess.serverName}
                             onReset={() => {
@@ -1897,15 +1957,47 @@ function DesktopApp() {
                               addLog={addLog}
                               onStatusChange={handleSessionStatus}
                               onTerminalsChange={handleTerminalsChange}
-                              chromeless={isVisible && isTiled && !isFocused}
-                              isSessionActive={isFocused && viewIsSession}
+                              chromeless={true}
+                              isSessionActive={false}
                               onOpenSettings={() => setActiveView("settings")}
                             />
                           </ErrorBoundary>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex-1 relative bg-black/40">
+                      {sessions.map(sess => {
+                        const isFocused = activeView === sess.id;
+                        return (
+                          <div
+                            key={sess.id}
+                            style={isFocused ? { position: 'absolute', inset: 0 } : { position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none' }}
+                            className="flex flex-col overflow-hidden"
+                          >
+                            <ErrorBoundary
+                              label={sess.serverName}
+                              onReset={() => {
+                                setSessions(prev => prev.filter(s => s.id !== sess.id));
+                                if (activeView === sess.id) setActiveView("nodes");
+                              }}
+                            >
+                              <SessionView
+                                session={sess}
+                                onClose={getCloseHandler(sess.id)}
+                                addLog={addLog}
+                                onStatusChange={handleSessionStatus}
+                                onTerminalsChange={handleTerminalsChange}
+                                chromeless={false}
+                                isSessionActive={isFocused && viewIsSession}
+                                onOpenSettings={() => setActiveView("settings")}
+                              />
+                            </ErrorBoundary>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })()}
