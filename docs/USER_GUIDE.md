@@ -52,8 +52,8 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 8. **Terminal Context Menu & Buffer Export**:
    - **Right-Click Context Menu**: Right-click anywhere in the active terminal to open a modern glassmorphic context menu with actions for **Copy** (`Ctrl+C`), **Paste** (`Ctrl+V`), **Select All** (`Ctrl+A`), **Find in Terminal** (`Ctrl+F`), **Clear Scrollback**, **Reset Terminal**, and **Export Buffer**.
    - **Export Buffer to .log**: Click **Export Buffer** in the context menu to download the complete scrollback history into a timestamped `.log` file (e.g., `terminal-serverName-YYYY-MM-DDTHH-mm-ss.log`) for offline analysis or audit trails.
-   - **Right-Click Action Preference**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, choose between **Open Context Menu** or **Paste Immediately (PuTTY style)**.
-   - **Copy on Select**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, toggle **Copy on select** to automatically copy highlighted terminal text to your system clipboard without pressing any key.
+    - **Right-Click Action Preference**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, choose between **Open Context Menu** or **Paste Immediately (PuTTY style)**.
+    - **Copy on Select**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, toggle **Copy on select** to automatically copy highlighted terminal text to your system clipboard without pressing any key.
 
 9. **Tab Strip Context Menu & Session Management**:
    - Right-click any open session tab in the top tab strip to access the session menu:
@@ -63,6 +63,26 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
      - **Close Tab**: Disconnect and dismiss the active tab.
      - **Close Other Tabs**: Disconnect and close all tabs except the selected session.
      - **Close Tabs to the Right**: Batch-dismiss all tabs situated to the right of the current tab.
+
+10. **1-Click OpenSSH `~/.ssh/config` & Client Importer**:
+    - Effortlessly migrate existing SSH hosts without manual entry.
+    - Click **Import SSH Config** in the Node Toolbar (or the prominent button in the empty server state).
+    - SubTerm scans your local standard OpenSSH configuration (`~/.ssh/config` on Linux/macOS or `%USERPROFILE%\.ssh\config` on Windows), parses `Host`, `HostName`, `User`, `Port`, and `IdentityFile` declarations, and allows batch-importing into your encrypted vault with 1 click.
+    - Also supports importing from PuTTY session registry exports and Termius JSON vaults.
+
+11. **Configurable SSH Keep-Alive Settings**:
+    - Prevent SSH session timeouts and dropped connections caused by NAT gateways, corporate firewalls, and cloud load balancers.
+    - Navigate to **Settings (`Ctrl+,`) > Terminal > Session Behaviour > SSH Connection Keep-Alive Interval**.
+    - Choose between **Disabled**, **15 seconds** (recommended for strict NATs/firewalls), **30 seconds**, **60 seconds**, or **120 seconds**.
+    - Changes take effect dynamically across all active and newly spawned SSH connections.
+
+12. **Interactive Network Diagnostics & TCP Port Prober**:
+    - Rapidly troubleshoot connectivity before or during connection issues.
+    - Click **Network Tools** (`Activity` icon) in the node toolbar or select **Network Diagnostics** from any server card's context menu.
+    - **TCP Ping & Latency**: Test connectivity to any host/port and observe real-time round-trip latency (`ms`).
+    - **Common Port Audit**: 1-click audit scanning essential infrastructure ports simultaneously: SSH (22), HTTP (80), HTTPS (443), MySQL (3306), PostgreSQL (5432), Redis (6379), Web Alternative (8080), and HTTPS Alternative (8443).
+    - **Wake-on-LAN (WOL)**: Send magic broadcast packets (`FF:FF:FF:FF:FF:FF` + MACx16) to wake sleeping local network servers.
+    - **Port Knocking**: Execute sequential single-packet TCP knocks across designated firewall sequence ports with custom inter-knock delays.
 
 ### Workflow 2: Managing Remote Files with SFTP & Quick Editor
 
@@ -87,6 +107,19 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 6. **Toggle Hidden Files & Dotfiles (`Ctrl+H`)**:
    - Click the **Eye / Eye-Off** button in the SFTP toolbar (or press `Ctrl+H`) to toggle visibility of hidden files and Unix dotfiles (e.g. `.env`, `.git/`, `.bashrc`).
    - When hidden files are suppressed, SubTerm displays a discreet counter badge (e.g. `4 hidden`) indicating suppressed items; click the badge anytime to instantly reveal them.
+7. **Duplicate / Clone Files & Folders (`Ctrl+D`)**:
+   - Right-click any file or directory and select **Duplicate** (or select the item and press `Ctrl+D`).
+   - For files, SubTerm automatically appends `.copy` before the extension (e.g., `nginx.conf` -> `nginx.copy.conf`). If a copy already exists, it auto-increments (`nginx.copy 2.conf`).
+   - For folders, SubTerm performs an automatic recursive copy (e.g., `dist` -> `dist.copy`).
+   - Supported across both remote SFTP servers and local desktop file browsing.
+8. **File Type Category Filter**:
+   - Easily isolate specific file formats in large directories using the file category dropdown filter next to the filename search box:
+     - **All Types**: Displays every file and directory.
+     - **Folders Only**: Filters the list to directories only.
+     - **Code & Scripts**: Displays programming and script files (`.js`, `.ts`, `.py`, `.sh`, `.rs`, `.go`, `.html`, `.css`, etc.).
+     - **Logs & Text**: Displays log outputs, documentation, and configuration files (`.log`, `.txt`, `.md`, `.json`, `.yaml`, `.ini`, etc.).
+     - **Archives**: Displays compressed packages (`.zip`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.7z`, `.rar`).
+     - **Media & Images**: Displays graphic assets and video (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.mp4`).
 
 ### Workflow 3: Configuring Port Forwarding (Tunnels)
 
@@ -146,7 +179,11 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
 
 - **Appearance**: Select your preferred accent color and dark/light UI theme.
 - **Terminal**:
-  - **Curated Color Schemes**: Select from 8 curated terminal themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, *Solarized Dark*) with full 16-color ANSI rendering and live preview swatches. Active terminals update instantly without reconnecting.
+  - **Curated Color Schemes & Custom Theme Importer**:
+    - Select from 8 curated themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, *Solarized Dark*) with full 16-color ANSI rendering and live preview swatches.
+    - **Import Custom Theme**: Click the **+** button in the theme selector to paste any `xterm.js` theme JSON or Windows Terminal / Alacritty color scheme. Custom themes are saved locally and immediately selectable in the theme dropdown.
+    - **Export Theme JSON**: Click the **Download / Copy** button to copy the active theme's exact color specification JSON to your system clipboard for sharing or backup.
+    - **Delete Custom Theme**: Delete any user-created theme with a single click.
   - **Typography & Font Family**: Choose from curated developer font presets (*JetBrains Mono*, *Fira Code*, *Cascadia Code*, *Consolas*, *Monaco / Menlo*, *Source Code Pro*) or specify a custom font family stack.
   - **Line Height & Vertical Spacing**: Interactive slider (1.00x–1.60x) to fine-tune row density for optimal reading comfort.
   - **Scrollback Buffer Limit**: Configure memory buffer size per session (1,000, 5,000, 10,000, 25,000, or 50,000 lines) to support long-running build outputs and container logs.
@@ -155,6 +192,7 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
   - **Pro Terminal Search (`Ctrl+F`)**: Floating search widget featuring live match counter badge (`3 of 15` / `No matches`), case-sensitive matching (`Aa`), whole-word boundaries (`\b`), regular expressions (`.*`), and navigation arrows.
   - **Font Size & WebGL Acceleration**: Real-time font size adjustment (8px–24px) and WebGL GPU rasterization toggle.
   - **Clipboard & Mouse Behavior**: Choose between glassmorphic Context Menu or instant PuTTY-style paste on right-click, and toggle automatic Copy on Select.
+  - **SSH Keep-Alive Interval**: Configure keep-alive ping frequency (Disabled, 15s, 30s, 60s, 120s) to keep remote SSH tunnels and terminal sessions resilient across unstable networks and strict NAT firewalls.
 - **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization.

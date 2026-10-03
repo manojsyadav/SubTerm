@@ -89,6 +89,36 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
   - **Row Line Height Slider**: Adjust vertical spacing (1.00x–1.60x) with real-time feedback and dynamic terminal re-fitting without session reconnection.
   - **Configurable Scrollback Buffer**: Select scrollback history limit per session from 1,000 lines (low memory) up to 50,000 lines (deep build & streaming log retention).
 
+- **SFTP File & Directory Duplication (`Ctrl+D`)**:
+  - 1-click **Duplicate** action in the SFTP and local file manager context menu and global `Ctrl+D` shortcut.
+  - Automatically derives collision-free target names (`filename.copy.ext` or `filename.copy 2.ext`, and `folder.copy` for directories).
+  - High-performance recursive copying for directories on both remote SFTP servers and local desktop environments.
+
+- **1-Click OpenSSH `~/.ssh/config` & Client Importer**:
+  - Direct **Import SSH Config** button placed prominently in the node toolbar and empty state.
+  - Automatic zero-configuration parsing of OpenSSH config files (`~/.ssh/config` or `%USERPROFILE%\.ssh\config`) including host aliases, hostnames, ports, usernames, and identity keys.
+  - Supports importing sessions from PuTTY registry exports and Termius JSON vaults.
+
+- **Interactive Network Diagnostics & Port Prober**:
+  - Built-in multi-tool diagnostics modal accessible via the node toolbar (`Activity` icon) and server card context menus.
+  - Real-time TCP port probing with millisecond latency ping (`ms`) measurement.
+  - 1-click concurrent port audit scanning common production services: SSH (22), HTTP (80), HTTPS (443), MySQL (3306), Postgres (5432), Redis (6379), and web proxies (8080, 8443).
+  - Integrated Wake-on-LAN (WOL) magic packet broadcaster and sequential TCP port knocking for secured gateways.
+
+- **Configurable SSH Keep-Alive Settings**:
+  - Dynamic user-configurable keep-alive packet interval in **Settings > Terminal > SSH Connection Keep-Alive Interval**.
+  - Choose between Disabled, 15s, 30s, 60s, or 120s intervals to eliminate dropped connections across NAT firewalls and cloud load balancers.
+  - Dynamically updates active sessions and newly established connections without client restarts.
+
+- **SFTP File Type Category Filters**:
+  - Instant file filtering dropdown in the SFTP search bar allowing users to quickly filter directory contents by category: *All Types*, *Folders Only*, *Code & Scripts*, *Logs & Text*, *Archives*, and *Media & Images*.
+  - Matches across all common extensions for rapid browsing of massive project roots and server file trees.
+
+- **Custom Terminal Theme Importer & JSON Exporter**:
+  - Import custom color themes directly by pasting `xterm.js` theme JSON or Windows Terminal / Alacritty color profiles.
+  - 1-click **Copy Theme JSON** button in the theme selector to export color specifications to the system clipboard for sharing and backup.
+  - Full management of custom saved themes alongside SubTerm's 8 built-in curated palettes.
+
 ---
 
 ### ⚡ Improvements & Performance

@@ -29,6 +29,10 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 
 - **Integrated Terminal & SFTP**: Run terminal commands and manage remote files via SFTP side-by-side.
 - **SFTP Directory Bookmarks & Hidden Files Toggle**: 1-click folder starring, instant standard system quick jumps (`/`, `~`, `/var/log`, `/etc`, `/var/www`, `/opt`, `/tmp`), persistent bookmarks, and `Ctrl+H` toggle for Unix dotfiles with suppressed item counter badge.
+- **SFTP Duplication & File Category Filters**: Clone any file or directory with 1 click or `Ctrl+D` with intelligent collision-free naming, and instantly filter files by category (*Folders*, *Code*, *Logs*, *Archives*, *Media*).
+- **1-Click OpenSSH `~/.ssh/config` & Client Importer**: Direct toolbar launcher to import existing SSH hosts from `~/.ssh/config`, PuTTY sessions, or Termius vaults.
+- **Interactive Network Diagnostics & Port Prober**: TCP port ping with millisecond round-trip latency, concurrent common service port audits (SSH, HTTP/S, DBs, Cache), Wake-on-LAN (WOL), and firewall port knocking.
+- **Configurable SSH Keep-Alive Settings**: Dynamic 15s–120s keep-alive packet intervals to prevent dropped sessions across NAT firewalls and cloud proxies.
 - **Port Forwarding**: Easily configure local (`-L`), remote (`-R`), and dynamic SOCKS5 (`-D`) tunnels.
 - **Folder Sync**: Keep your local and remote directories mirrored with real-time two-way sync tools.
 - **Cross-Platform**: Compiles natively for Windows, macOS, Linux, and Android.
@@ -40,7 +44,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager with interactive key recording, conflict detection, and category filters.
 - **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
 - **Hardware-Accelerated Terminal**: WebGL GPU rasterization with automatic canvas fallback for 60–120+ FPS throughput and reduced CPU overhead.
-- **Curated Terminal Color Schemes & Cursor Customization**: 8 pro color schemes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin*, *Tokyo Night*, *Monokai*, *Solarized Dark*) with full 16-color ANSI support, live palette swatches, and configurable cursor styles (*Block*, *Underline*, *Bar*).
+- **Curated Terminal Color Schemes & Custom Theme Importer**: 8 pro color schemes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin*, *Tokyo Night*, *Monokai*, *Solarized Dark*) with full 16-color ANSI support, custom xterm.js / Windows Terminal JSON theme importer, and 1-click theme export to clipboard.
 - **Typography, Line Height & Scrollback Customization**: Font family presets (*JetBrains Mono*, *Fira Code*, *Cascadia Code*, *Consolas*, *Monaco*, *Source Code Pro*) with custom font support, interactive line-height slider (1.00x–1.60x), and configurable scrollback memory retention (1,000–50,000 lines).
 - **Terminal Bell & Pro Search Widget**: Configurable visual screen flash / Web Audio chime on ASCII bell, plus enhanced `Ctrl+F` search with match counts, case matching (`Aa`), whole words (`\b`), and regex (`.*`).
 - **Terminal Context Menu & Buffer Export**: Glassmorphic right-click menu with Copy, Paste, Select All, Find, Clear, Reset, 1-click buffer export to `.log`, configurable right-click behavior (Context Menu vs PuTTY-style immediate paste), and automatic copy-on-select.
