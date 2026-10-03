@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/logo.png" alt="SubTerm logo" width="120" />
   <h1>SubTerm</h1>
-  <p><strong>A Modern, Cross-Platform SSH & SFTP Client</strong></p>
+  <p><strong>A Modern, Cross-Platform SSH &amp; SFTP Client</strong></p>
   <p><i>SubTerm is a customized fork of <a href="https://github.com/sinaxhpm/submarine">Submarine</a>.</i></p>
 </div>
 
@@ -17,28 +17,43 @@ SubTerm is a fast, native, and highly customizable client for managing your serv
 - **Cross-Platform**: Compiles natively for Windows, macOS, Linux, and Android.
 - **Custom Cloud API**: Bring your own backend! SubTerm allows you to easily configure your own sync endpoints without recompiling.
 
-## 🛠️ SubTerm Features & Optimizations
+## SubTerm Features & Optimizations
 
 - **Native Local Terminal**: Integrated cross-platform local PTY shell (PowerShell/CMD on Windows, Bash/Zsh on macOS/Linux) with full xterm features (themes, shortcuts, OSC 133, copilot, split views). Launchable instantly from the Top Bar, Node Grid, Command Palette, or global shortcut (`Ctrl+Alt+T`).
-- **Production Node Safeguards & Identifier**: First-class explicit Production Server flag with persistent database tracking, high-visibility rose `PROD` badges in the Node Grid, Top Bar, and Session Tabs. Features active Safe Mode with destructive command interception (`rm -rf`, `drop database`, `reboot`, etc.), multi-line paste confirmation, and top hazard glowing indicators.
-- **Terminal Enhancements**: OSC 133 command block separation, 1-click output copy, exit code status, output link providers, paste preview, and production safety guardrails.
-- **In-App Quick File Editor & Picker**: 1-click terminal file path editing, `Alt+E` quick file search with interactive picker, and a resilient SSH execution fallback engine (supports minimal Linux/DietPi environments without `sftp-server`).
-- **Parallel Tool Tabs**: Dedicated first-class tabs on the session rail for **Docker** (containers & images), **Processes** (real-time task manager), and **Services** (systemd service control), cleanly decoupled from System Info.
-- **Top Bar Quick Access Servers**: Pin up to 5 quick-access servers next to the logo in the top bar with active green dot status indicators, direct switching/connecting without tab duplication, and settings page management (add, reorder, delete).
-- **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager in Settings with interactive key recording, conflict detection, category filters, and factory reset. Built with an xterm-safe interceptor so custom keys never clash with shell tools (`nano`, `vim`, `bash`).
-- **Advanced SFTP**: Clickable breadcrumbs, side-by-side visual diffs before overwriting, Smart Tar transfer acceleration for high-speed directory sync, and an in-app code editor.
-- **Universal Command Palette**: A universal Ctrl+K command palette for cluster fleet operations and quick actions.
-- **Docker & Git Integration**: 1-click container port tunneling, browser launch, and a dedicated Git drawer for branch inspection, diffs, and commits.
+- **Production Node Safeguards**: First-class Production Server flag with persistent database tracking, high-visibility `PROD` badges, active Safe Mode with destructive command interception, multi-line paste confirmation.
+- **Terminal Enhancements**: OSC 133 command block separation, 1-click output copy, exit code status, output link providers, paste preview.
+- **In-App Quick File Editor**: 1-click terminal file path editing, `Alt+E` quick file search with interactive picker.
+- **Parallel Tool Tabs**: Dedicated first-class tabs for **Docker** (containers & images), **Processes** (real-time task manager), and **Services** (systemd control).
+- **Top Bar Quick Access Servers**: Pin up to 5 quick-access servers next to the logo with active green dot status indicators.
+- **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager with interactive key recording, conflict detection, and category filters.
+- **Advanced SFTP**: Clickable breadcrumbs, side-by-side visual diffs, Smart Tar transfer acceleration, in-app code editor.
+- **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
+- **Docker & Git Integration**: 1-click container port tunneling, browser launch, dedicated Git drawer.
 - **Smart Tunnels**: Remote listening ports auto-discovery and local port conflict resolution.
-- **Network & Health**: Live server health pulses, outage alert badges, Wake-on-LAN magic packets, and port knocking connection options.
-- **Mobile & UI QoL**: Gesture-based terminal control, Shell AI Copilot, biometric vault unlock, keybar haptics, and quick-connect history.
-- **Performance**: Heavily optimized Vite bundle chunking for xterm and vendor packages, plus a massive backend refactor for stability.
-- **Session Audits & Clipboard Automation**: Automated session transcripts, configurable command dismiss timers, auto-copy output to clipboard, native file export for session logs, and configurable session-end actions with Esc/Enter quick close.
-- **Dynamic Cloud Backend**: The hardcoded cloud sync API has been replaced with a dynamic system. You can now define your own custom backend endpoint at runtime via the UI Settings without needing to recompile the source code.
+- **Network & Health**: Live server health pulses, outage alert badges, Wake-on-LAN, port knocking.
+- **Mobile & UI QoL**: Gesture-based terminal control, Shell AI Copilot, biometric vault unlock.
+- **Session Audits & Clipboard Automation**: Automated session transcripts, configurable command dismiss timers, auto-copy output to clipboard.
+- **Dynamic Cloud Backend**: Define your own backend endpoint at runtime via the UI Settings without recompiling.
+- **VS Code-Style Settings Panel**: Settings are organized into 10 focused category pages with a vertical left-sidebar navigator. Sensitive categories are gated behind the vault lock and display a full-page lock screen until the master password is entered.
+
+## Settings Categories & Security
+
+| Category | Requires Unlock | Contents |
+|---|:---:|---|
+| Appearance | — | Accent color, background theme |
+| Terminal | — | Font size, session behaviour, command widget |
+| Monitoring | — | Enable/disable resource polling |
+| Keyboard Shortcuts | — | Rebind global keyboard shortcuts |
+| Quick Access Servers | **Yes** | Pinned servers (exposes server names/IPs) |
+| Cloud & Sync | **Yes** | Force-push, invite members, sync operations |
+| Profile | **Yes** | Create, rename, delete workspaces; change master password |
+| Quick Commands | **Yes** | OS/environment quick commands (may contain secrets) |
+| Maintenance | **Yes** | Reset preferences to factory defaults |
+| Activity Log | **Yes** | Session diagnostics timeline |
 
 ## Getting Started
 
-To run SubTerm locally, you'll need [Node.js](https://nodejs.org/) and [Rust](https://rustup.rs/) installed on your machine.
+To run SubTerm locally, you need [Node.js](https://nodejs.org/) and [Rust](https://rustup.rs/).
 
 1. **Clone the repository**
    ```bash
@@ -63,9 +78,11 @@ To run SubTerm locally, you'll need [Node.js](https://nodejs.org/) and [Rust](ht
 
 ## Custom Configuration
 
-SubTerm supports dynamic configuration overrides. If you want to host your own cloud API for syncing profiles, you don't need to fork or modify the source code.
+SubTerm supports dynamic configuration overrides. If you want to host your own cloud API for syncing profiles, you do not need to fork or modify the source code.
 
-Simply open the **Settings** panel in the app and enter your API URL in the **Cloud Sync** section. SubTerm will automatically use this endpoint for all synchronization requests.
+Open the **Settings** panel, go to the **Cloud & Sync** category, and enter your API URL. SubTerm will automatically use this endpoint for all synchronization requests.
+
+> **Note:** Cloud & Sync settings require the vault to be unlocked.
 
 ## License
 
