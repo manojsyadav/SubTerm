@@ -301,15 +301,96 @@ pub async fn sftp_remove_file(
     Ok(())
 }
 
+pub(crate) fn is_no_such_file(err: &russh_sftp::client::error::Error) -> bool {
+    use russh_sftp::client::error::Error;
+    use russh_sftp::protocol::StatusCode;
+    matches!(err, Error::Status(status) if status.status_code == StatusCode::NoSuchFile)
+}
+
+fn removable_dir_path(path: &str) -> Result<&str, String> {
+    let trimmed = path.trim_end_matches(['/', '\\']);
+    let steps: Vec<&str> = trimmed.split(['/', '\\']).collect();
+    let is_root = steps.len() < 2 || (steps.len() == 2 && steps[1].ends_with(':'));
+    let steps_up = steps.iter().any(|step| *step == "." || *step == "..");
+    if !trimmed.starts_with('/') || is_root || steps_up {
+        return Err(format!("refusing to delete {:?}", path));
+    }
+    Ok(trimmed)
+}
+
+fn is_child_name(name: &str) -> bool {
+    !name.is_empty() && !name.contains('/') && !name.split('\\').any(|step| step == "..")
+}
+
+fn gone_is_ok(result: Result<(), russh_sftp::client::error::Error>) -> Result<(), russh_sftp::client::error::Error> {
+    match result {
+        Err(e) if is_no_such_file(&e) => Ok(()),
+        other => other,
+    }
+}
+
+async fn entry_is_dir(
+    sftp: &russh_sftp::client::SftpSession,
+    full: &str,
+    listed: russh_sftp::protocol::FileType,
+) -> Result<Option<bool>, String> {
+    if listed.is_file() || listed.is_symlink() {
+        return Ok(Some(false));
+    }
+    match sftp.symlink_metadata(full).await {
+        Ok(meta) => Ok(Some(meta.file_type().is_dir())),
+        Err(e) if is_no_such_file(&e) => Ok(None),
+        Err(e) => Err(format!("stat {}: {}", full, e)),
+    }
+}
+
+pub(crate) async fn sftp_remove_tree(sftp: &russh_sftp::client::SftpSession, path: &str) -> Result<(), String> {
+    let mut stack = vec![removable_dir_path(path)?.to_string()];
+    let mut dirs = Vec::new();
+    while let Some(dir) = stack.pop() {
+        let read = match sftp.read_dir(&dir).await {
+            Ok(read) => read,
+            Err(e) if is_no_such_file(&e) => continue,
+            Err(e) => return Err(format!("read_dir {}: {}", dir, e)),
+        };
+        for entry in read {
+            let name = entry.file_name();
+            if name == "." || name == ".." { continue; }
+            if !is_child_name(&name) {
+                return Err(format!("{}: the server listed an unsafe entry name {:?}", dir, name));
+            }
+            let full = format!("{}/{}", dir, name);
+            match entry_is_dir(sftp, &full, entry.file_type()).await? {
+                Some(true) => stack.push(full),
+                Some(false) => gone_is_ok(sftp.remove_file(&full).await).map_err(|e| format!("remove {}: {}", full, e))?,
+                None => {}
+            }
+        }
+        dirs.push(dir);
+    }
+    for dir in dirs.iter().rev() {
+        gone_is_ok(sftp.remove_dir(dir).await).map_err(|e| format!("rmdir {}: {}", dir, e))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn sftp_remove_dir(
     state: tauri::State<'_, SshState>,
     session_id: String,
     path: String,
 ) -> Result<(), String> {
+    let path = removable_dir_path(&path)?;
     let sftp = get_sftp_session(&state, &session_id).await?;
-    sftp.remove_dir(path).await.map_err(|e| e.to_string())?;
-    Ok(())
+    let meta = match sftp.symlink_metadata(path).await {
+        Ok(meta) => meta,
+        Err(e) if is_no_such_file(&e) => return Ok(()),
+        Err(e) => return Err(format!("stat {}: {}", path, e)),
+    };
+    if meta.file_type().is_symlink() {
+        return sftp.remove_file(path).await.map_err(|e| format!("remove {}: {}", path, e));
+    }
+    sftp_remove_tree(&sftp, path).await
 }
 
 #[tauri::command]

@@ -759,7 +759,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     if (!ok) return;
     let count = 0;
     for (const it of items) {
-      try { await provider.remove(it.path, it.isDir); count++; }
+      try { await provider.remove(it.path, it.isDir && !it.isSymlink); count++; }
       catch (err: any) { notify(`Delete failed for ${it.name}: ${err}`, "error"); }
     }
     if (count > 0) {

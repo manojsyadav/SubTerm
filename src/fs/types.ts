@@ -10,6 +10,7 @@ export interface FileEntry {
   name: string;
   path: string;
   isDir: boolean;
+  isSymlink?: boolean;
   size: number;
   permissions?: number; // unix mode bits
   uid?: number;
