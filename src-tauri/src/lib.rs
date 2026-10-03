@@ -4170,13 +4170,8 @@ fn apply_tcp_keepalive(stream: &tokio::net::TcpStream) {
     let _ = SockRef::from(stream).set_tcp_keepalive(&ka);
 }
 
-static SSH_KEEPALIVE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(20);
+pub static SSH_KEEPALIVE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(20);
 
-#[tauri::command]
-pub fn set_ssh_keepalive_interval(secs: u64) -> Result<(), String> {
-    SSH_KEEPALIVE_SECS.store(secs, std::sync::atomic::Ordering::Relaxed);
-    Ok(())
-}
 
 /// The russh client config shared by the primary connection and any ProxyJump
 /// hop, so both negotiate an identical algorithm set. Extracted verbatim from
@@ -7335,7 +7330,7 @@ pub fn run() {
             commands::sftp::sftp_read_file_text, commands::sftp::sftp_write_file_text, commands::sftp::local_read_file_text, commands::sftp::local_write_file_text, commands::sftp::sftp_exec_command,
             commands::sftp::local_open_file, commands::sftp::local_open_in_explorer, commands::sftp::sftp_prepare_drag,
             commands::sftp::local_copy_entry,
-            set_ssh_keepalive_interval,
+            commands::terminal::set_ssh_keepalive_interval,
             commands::network::send_wake_on_lan, commands::network::perform_port_knock,
             commands::network::probe_tcp_port, commands::network::batch_probe_ports,
             monitor_list, monitor_add, monitor_remove, monitor_set_metrics, monitor_set_custom_metrics,

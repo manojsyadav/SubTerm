@@ -524,4 +524,10 @@ pub async fn get_available_local_shells() -> Result<Vec<LocalShellOption>, Strin
     Ok(vec![])
 }
 
+#[tauri::command]
+pub fn set_ssh_keepalive_interval(secs: u64) -> Result<(), String> {
+    crate::SSH_KEEPALIVE_SECS.store(secs, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
 
