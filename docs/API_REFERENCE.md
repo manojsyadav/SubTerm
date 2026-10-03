@@ -128,6 +128,7 @@ This document provides a technical reference for all Tauri IPC commands register
   ```typescript
   { server: NewServerPayload }
   ```
+  `NewServerPayload` includes `forwardAgent?: boolean` — enables SSH agent forwarding (`-A`) on every connection to this server (see `docs/SECURITY.md` §7). Defaults to `false`.
 - **Return Type**: `Result<i64, String>` (Returns auto-generated Server ID)
 
 ### `edit_server`
@@ -136,6 +137,7 @@ This document provides a technical reference for all Tauri IPC commands register
   ```typescript
   { id: number, server: UpdateServerPayload }
   ```
+  `UpdateServerPayload` includes the same `forwardAgent?: boolean` field as `add_server`.
 - **Return Type**: `Result<(), String>`
 
 ### `delete_server`
@@ -413,3 +415,5 @@ Events emitted from Rust to the Webview via `app.emit(...)`:
 | `monitor-pulse` | `{ nodeId: number, cpu: number, mem: number, disk: number, load: number }` | Real-time system health metrics |
 | `fingerprint-request` | `{ sessionId: string, fingerprint: string, keyType: string }` | Host key verification prompt |
 | `kbi-request` | `{ sessionId: string, prompts: string[] }` | Keyboard-interactive 2FA prompt |
+| `system-resume` | *(none)* | App-wide, not session-scoped. Fired when the resume detector notices a sleep/resume cycle (see `docs/ARCHITECTURE.md` §4.9). Every open session reacts independently based on its own reconnect state. |
+| `network-changed` | *(none)* | App-wide, not session-scoped. Fired on a detected network interface change (Wi-Fi roam, VPN toggle), debounced to 1/sec. Same consumption pattern as `system-resume`. |
