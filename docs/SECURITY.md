@@ -107,3 +107,14 @@ Profile names are sanitized using `validate_profile_name`:
 - Maximum 32 characters.
 - Strict alphanumeric charset plus `-` and `_`.
 - Reserved device names on Windows (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) are rejected to prevent filesystem corruption.
+
+---
+
+## 7. SSH Agent Forwarding Trust Model
+
+SubTerm supports standard SSH agent forwarding (`-A`), opt-in per server via the **Forward SSH Agent** toggle (default off). Enabling it carries the same trust implications as OpenSSH's own `-A` flag, and users should understand them before turning it on:
+
+- **What is exposed**: while forwarding is active, any process running as your user on the **remote** server can request signing operations from your **local** agent (e.g. to authenticate onward to a third host) for as long as the session is open. The remote process never sees your private key material — only signed challenges — but it can use your identity to authenticate elsewhere for the session's duration.
+- **Who to enable it for**: only servers you trust the root/admin of. A malicious or compromised admin on a forwarding-enabled server can use your forwarded agent to authenticate as you to any other host your keys are valid for, while you're connected.
+- **What SubTerm does and doesn't do**: SubTerm implements forwarding as a pure byte proxy (`ssh_agent.rs`) between the server's forwarded channel and your local agent socket/pipe — it never parses, logs, or stores the ssh-agent protocol traffic, and never has access to your private key material any differently than a normal (non-forwarded) connection using agent-based auth would. This is also why forwarding works unmodified with any standard-agent-protocol backend (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) with no vendor-specific code.
+- **Scope**: the setting is per-server, not global — enabling it on one node does not forward the agent on any other connection.
