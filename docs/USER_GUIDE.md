@@ -55,6 +55,15 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
    - **Right-Click Action Preference**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, choose between **Open Context Menu** or **Paste Immediately (PuTTY style)**.
    - **Copy on Select**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, toggle **Copy on select** to automatically copy highlighted terminal text to your system clipboard without pressing any key.
 
+9. **Tab Strip Context Menu & Session Management**:
+   - Right-click any open session tab in the top tab strip to access the session menu:
+     - **Reconnect / Disconnect**: Cleanly drop or re-establish connection without closing the tab.
+     - **Split View With...**: Tick other open sessions to instantly tile them side-by-side or stacked.
+     - **Pin to Wall**: Pin the session's active terminal directly into your persistent multi-pane terminal Wall.
+     - **Close Tab**: Disconnect and dismiss the active tab.
+     - **Close Other Tabs**: Disconnect and close all tabs except the selected session.
+     - **Close Tabs to the Right**: Batch-dismiss all tabs situated to the right of the current tab.
+
 ### Workflow 2: Managing Remote Files with SFTP & Quick Editor
 
 *Goal*: Browse, upload, download, and edit configuration files directly on the remote server.

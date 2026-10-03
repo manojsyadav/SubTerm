@@ -82,6 +82,8 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
 - **Refined Titlebar & Top Navigation**:
   - Top bar tabs (Terminal, SFTP, Docker, Processes, Services) now feature standardized, balanced dimensions with active indicator bars for a unified look across display resolutions.
   - Added direct, distinct buttons in the top titlebar to **Lock Vault** (`Lock` icon) and **Switch Profile** without navigating into deep menus.
+- **Advanced Tab Strip Context Menu Actions**:
+  - Added **Close Other Tabs** and **Close Tabs to the Right** to the right-click session tab menu, enabling rapid tab cleanup during multi-server maintenance workflows.
 - **Accurate "Unlock" Terminology**:
   - Replaced misleading cloud-oriented "Sign In / Sign Out" terms across the application with local-first "Unlock / Lock Vault" terminology to accurately reflect local cryptographic security.
 - **Integrated Profile Management**:
