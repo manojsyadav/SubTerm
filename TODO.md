@@ -89,11 +89,10 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- [ ] 🔴 **P1 · M** — **Auto-Reconnect on Sleep / Resume & Network Shifts** — *(scope corrected: ~80% already built)*
-  - `src/components/SessionView.tsx` (~lines 703-979) already has a full reconnect state machine (`scheduleReconnect`/`cancelReconnect`/`reconnect()`), a status banner ("Reconnecting · attempt N"), and correct `user_initiated` disconnect handling (no auto-retry after a deliberate disconnect). Originally filed as if greenfield — it isn't.
-  - Actual remaining gap: no OS sleep/resume or network-interface-change detection (reconnect only starts after the passive health-watcher's 15-30s probe notices the drop), and no exponential backoff (currently a fixed 5s retry forever).
-  - Add wall-clock-vs-monotonic drift detection in `commands/connection.rs` for sleep/resume (no native OS hooks needed), the `if-watch` crate for network-interface-change detection, new `system-resume`/`network-changed` events wired into the existing frontend reconnect logic, and swap the fixed interval for capped exponential backoff.
-  - **Validation:** sleep/resume with an active session reconnects within ~1-2s instead of waiting for the passive timeout; toggling Wi-Fi/network does the same; user-initiated disconnect still never auto-reconnects.
+- [x] 🔴 **P1 · M** — **Auto-Reconnect on Sleep / Resume & Network Shifts** — ✅ Done
+  - `commands/connection.rs` now spawns two background watchers from `run()`'s setup hook: a resume detector (wall-clock-vs-monotonic drift on a 2s tokio interval — no native OS power-event API needed) and a network-interface-change watcher (`if-watch` crate, debounced to 1/sec), emitting `system-resume` / `network-changed`.
+  - `SessionView.tsx` listens for both and, if a session is mid-backoff or already gave up on a non-auth failure, retries immediately instead of waiting out the remaining delay. Fixed 5s retry interval replaced with exponential backoff (2s → 4s → 8s → 16s, capped at 30s).
+  - **Validation:** `cargo build` + all 45 backend unit tests pass; frontend typecheck clean. Live sleep/resume and network-toggle behavior on real hardware is still a manual follow-up — not simulable in a dev sandbox.
 
 - [ ] 🔴 **P1 · M** — **SFTP Multi-Item Batch Selection**
   - Checkbox selection or `Shift` / `Ctrl` multi-click selection for multiple files and folders in [`src/components/FilePanel.tsx`](file:///d:/REPO/SubTerm/src/components/FilePanel.tsx).
