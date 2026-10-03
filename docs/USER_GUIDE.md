@@ -42,6 +42,13 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 6. **Hardware Acceleration (WebGL)**:
    - GPU-accelerated rendering is enabled by default. To toggle or check status, navigate to **Settings (`Ctrl+,`) > Terminal > Display > WebGL Hardware Acceleration**.
 
+7. **Fleet Broadcast (Cluster Mode)**:
+   - When 2 or more server sessions are open, a Broadcast button (`Radio` icon) appears in the top navigation bar.
+   - Click the button to toggle fleet broadcast mode, or select specific target sessions from the dropdown menu.
+   - Armed sessions display a prominent orange banner: `Fleet Broadcast Active: Commands & keystrokes mirror concurrently`.
+   - Any keystroke typed or command executed is fanned out to all selected sessions simultaneously.
+   - Click **Disarm This Tab** or **Disable All** on the safety banner to immediately stop fan-out.
+
 ### Workflow 2: Managing Remote Files with SFTP & Quick Editor
 
 *Goal*: Browse, upload, download, and edit configuration files directly on the remote server.
@@ -87,6 +94,27 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
    - Click **Restart**, **Stop**, or **Start** for individual containers.
    - Click the **Logs** button to view real-time log output.
    - Click the **Terminal** icon to attach an interactive `docker exec -it` shell directly inside the container.
+
+### Workflow 5: Parameterized Snippets & Runbook Automation
+
+*Goal*: Create and execute reusable commands with dynamic variable prompts and default values.
+
+1. **Define Parameterized Syntax**:
+   - Use `{{variable}}` or `{{variable:defaultValue}}` placeholders in your command snippets.
+   - Example:
+     ```bash
+     docker run -d -p {{port:8080}}:80 --name {{name:web-nginx}} {{image:nginx:alpine}}
+     ```
+2. **Executing Snippets**:
+   - **From Command Palette (`Ctrl+K`)**: Select any saved command snippet.
+   - **From Quick Commands (`CmdsPanel`)**: Click the play icon on any snippet in the terminal sidebar.
+   - **From Library Tab**: Click the **Run** button directly on the command card.
+3. **Interactive Parameter Modal**:
+   - SubTerm detects variables and prompts you with a modal displaying:
+     - Input fields prefilled with default values or previously used values.
+     - Live monospace preview of the interpolated command.
+     - Fleet Broadcast indicator if running across multiple sessions.
+   - Click **Run Command** (`Enter`) to execute, or **Paste to Prompt** to insert into the terminal without executing.
 
 ---
 

@@ -36,6 +36,17 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
   - Added orientation switching, active pane count indicators, and 1-click unsplit restore.
   - Multi-session workspace splits in `DesktopApp` now support both horizontal (side-by-side) and vertical (stacked) layouts with smooth, draggable dividers between adjacent sessions.
 
+- **Multi-Tab Fleet Broadcast (Cluster Input Mode)**:
+  - Top-bar broadcast button with session counter badge when 2+ sessions are active.
+  - Interactive popover to select individual sessions or "Select All" / "Select None".
+  - Armed sessions display a high-visibility safety warning banner with 1-click disarm controls to prevent accidental execution.
+  - Live keystrokes and command snippets fan out to all targeted sessions concurrently.
+
+- **Parameterized Snippets Engine (`{{variable:default}}`)**:
+  - Reusable snippet template syntax supporting `{{variable}}` and `{{variable:defaultValue}}` placeholders.
+  - Interactive parameter prompt modal featuring live monospace command preview, pre-populated defaults, and persistent parameter memory.
+  - Direct execution integration across Command Palette (`Ctrl+K`), quick commands panel (`CmdsPanel`), and 1-click **Run** buttons on cards in the Library view.
+
 - **Prominent Linux Distro Badges in Node Cards**:
   - Server cards in the grid now automatically showcase prominent high-resolution logos for detected Linux distributions (Ubuntu, Debian, Fedora, Arch, CentOS, Alpine, etc.) alongside connection latency and OS specs.
 
