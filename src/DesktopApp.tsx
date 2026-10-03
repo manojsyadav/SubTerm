@@ -97,6 +97,8 @@ function DesktopApp() {
     showAuditCopy: localStorage.getItem('subterm-show-audit-copy') !== 'false',
     enableMonitoring: (localStorage.getItem('subterm-enable-monitoring') || localStorage.getItem('submarine-enable-monitoring')) !== 'false',
     terminalWebgl: localStorage.getItem('subterm-terminal-webgl') !== 'false',
+    rightClickAction: localStorage.getItem('subterm-right-click-action') || 'menu',
+    copyOnSelect: localStorage.getItem('subterm-copy-on-select') !== 'false',
     quickAccessServerIds: (() => {
       try {
         const raw = localStorage.getItem('subterm-quick-access-servers');
@@ -452,6 +454,8 @@ function DesktopApp() {
     localStorage.setItem('subterm-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
     localStorage.setItem('submarine-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-webgl', appSettings.terminalWebgl !== false ? 'true' : 'false');
+    localStorage.setItem('subterm-right-click-action', appSettings.rightClickAction || 'menu');
+    localStorage.setItem('subterm-copy-on-select', appSettings.copyOnSelect !== false ? 'true' : 'false');
     localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {

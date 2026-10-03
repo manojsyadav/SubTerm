@@ -174,6 +174,22 @@ const PageTerminal = ({ settings, setSettings }: any) => (
       <Row label="Auto-copy output to clipboard" desc="Copies command output automatically after completion">
         <Toggle checked={!!settings.autoCopyOutput} onChange={() => setSettings({ ...settings, autoCopyOutput: !settings.autoCopyOutput })} />
       </Row>
+      <Row label="Right-Click Action" desc="Behavior when right-clicking inside the terminal viewport">
+        <select
+          value={settings.rightClickAction || 'menu'}
+          onChange={(e) => setSettings({ ...settings, rightClickAction: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="menu">Open Context Menu</option>
+          <option value="paste">Paste Immediately (PuTTY style)</option>
+        </select>
+      </Row>
+      <Row label="Copy on select" desc="Automatically copy highlighted terminal text to system clipboard">
+        <Toggle
+          checked={settings.copyOnSelect !== false}
+          onChange={() => setSettings({ ...settings, copyOnSelect: settings.copyOnSelect === false ? true : false })}
+        />
+      </Row>
     </SectionCard>
     <SectionCard title="Command Widget">
       <Row label="Auto-dismiss timer (seconds)" desc="Time before floating output pill fades (0 = stay open)">

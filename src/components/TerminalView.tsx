@@ -13,6 +13,7 @@ import { useBroadcast } from '../ui/broadcast';
 import HistorySearchOverlay from './HistorySearchOverlay';
 import { AiCopilotModal } from './AiCopilotModal';
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
+import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
 
@@ -390,6 +391,80 @@ const TerminalView = ({
     setToast({ msg, tone });
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 1400);
+  };
+
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const handlePasteRef = useRef<(text: string) => void>(() => {});
+
+  const handleContextCopy = async () => {
+    const term = xtermRef.current;
+    if (!term) return;
+    const sel = term.getSelection();
+    if (sel) {
+      try {
+        await navigator.clipboard.writeText(sel);
+        notify('Copied');
+      } catch (err) {
+        console.error('Failed to copy', err);
+      }
+    }
+  };
+
+  const handleContextPaste = async () => {
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      notify('Clipboard read denied', 'err');
+      return;
+    }
+    if (text) {
+      handlePasteRef.current(text);
+    }
+  };
+
+  const handleContextSelectAll = () => {
+    xtermRef.current?.selectAll();
+  };
+
+  const handleContextFind = () => {
+    setShowSearch(true);
+  };
+
+  const handleContextClear = () => {
+    xtermRef.current?.clear();
+    notify('Scrollback cleared');
+  };
+
+  const handleContextReset = () => {
+    xtermRef.current?.reset();
+    notify('Terminal reset');
+  };
+
+  const handleContextExport = () => {
+    const term = xtermRef.current;
+    if (!term) return;
+    const buffer = term.buffer.active;
+    const lines: string[] = [];
+    for (let i = 0; i < buffer.length; i++) {
+      const line = buffer.getLine(i);
+      if (line) lines.push(line.translateToString(true));
+    }
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+      lines.pop();
+    }
+    const text = lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `terminal-${serverName || 'session'}-${stamp}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify('Buffer exported to .log');
   };
 
   // Command block separation and output capture (OSC 133 + buffer parsing)
@@ -913,6 +988,7 @@ const TerminalView = ({
       return lines.join('\n');
     };
     const copySelectionIfAny = async () => {
+      if (localStorage.getItem('subterm-copy-on-select') === 'false') return;
       const text = buildSelectedText();
       if (!text) return;
       const ok = await writeClipboard(text);
@@ -976,15 +1052,26 @@ const TerminalView = ({
 
       sendPastedData(text);
     };
+    handlePasteRef.current = handlePaste;
 
     const onContextMenu = async (ev: MouseEvent) => {
       ev.preventDefault();
       if (disabledRef.current) return;
-      let text = '';
-      try { text = await navigator.clipboard.readText(); }
-      catch { notify('Clipboard read denied', 'err'); return; }
-      if (!text) return;
-      handlePaste(text);
+      const rightClickAction = localStorage.getItem('subterm-right-click-action') || 'menu';
+      if (rightClickAction === 'paste') {
+        let text = '';
+        try { text = await navigator.clipboard.readText(); }
+        catch { notify('Clipboard read denied', 'err'); return; }
+        if (!text) return;
+        handlePaste(text);
+        return;
+      }
+
+      setContextMenu({
+        x: ev.clientX,
+        y: ev.clientY,
+        hasSelection: !!term.getSelection(),
+      });
     };
 
     const onPaste = (ev: ClipboardEvent) => {
@@ -1651,6 +1738,19 @@ const TerminalView = ({
             </div>
           </div>
         </div>
+      )}
+      {contextMenu && (
+        <TerminalContextMenu
+          menu={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onCopy={handleContextCopy}
+          onPaste={handleContextPaste}
+          onSelectAll={handleContextSelectAll}
+          onFind={handleContextFind}
+          onClear={handleContextClear}
+          onReset={handleContextReset}
+          onExport={handleContextExport}
+        />
       )}
     </div>
   );
