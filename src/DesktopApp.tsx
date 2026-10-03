@@ -1406,6 +1406,9 @@ function DesktopApp() {
       </div>
       {tabMenu && (() => {
         const targetId = tabMenu.sessionId;
+        const targetIndex = sessions.findIndex(s => s.id === targetId);
+        const hasOthers = sessions.length > 1;
+        const hasRight = targetIndex >= 0 && targetIndex < sessions.length - 1;
         // Build the "Split view with" picker: every OTHER open session is
         // a candidate. When the target tab is the active view, ticked
         // entries are the current mergedSessionIds. When the target is
@@ -1567,6 +1570,56 @@ function DesktopApp() {
                 setTabMenu(null);
               }}
             >Close tab</button>
+            {hasOthers && (
+              <button
+                className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-zinc-300 hover:text-white"
+                onClick={() => {
+                  const toClose = sessions.filter(s => s.id !== targetId).map(s => s.id);
+                  for (const sid of toClose) {
+                    invoke("disconnect_session", { sessionId: sid }).catch(() => {});
+                    broadcast.removeSession(sid);
+                    unpinSessionFromWall(sid);
+                  }
+                  setSessions(prev => prev.filter(sess => sess.id === targetId));
+                  setSessionStatuses(prev => {
+                    const status = prev[targetId];
+                    return status ? { [targetId]: status } : {};
+                  });
+                  setMergedSessionIds([]);
+                  setActiveView(targetId);
+                  setTabMenu(null);
+                }}
+              >Close other tabs</button>
+            )}
+            {hasRight && (
+              <button
+                className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-zinc-300 hover:text-white"
+                onClick={() => {
+                  const rightIdx = sessions.findIndex(s => s.id === targetId);
+                  if (rightIdx < 0) return;
+                  const toClose = sessions.slice(rightIdx + 1).map(s => s.id);
+                  for (const sid of toClose) {
+                    invoke("disconnect_session", { sessionId: sid }).catch(() => {});
+                    broadcast.removeSession(sid);
+                    unpinSessionFromWall(sid);
+                  }
+                  setSessions(prev => prev.filter(sess => !toClose.includes(sess.id)));
+                  setSessionStatuses(prev => {
+                    const next = { ...prev };
+                    for (const sid of toClose) delete next[sid];
+                    return next;
+                  });
+                  setMergedSessionIds(prev => {
+                    const next = prev.filter(id => !toClose.includes(id));
+                    return next.length < 2 ? [] : next;
+                  });
+                  if (toClose.includes(activeView)) {
+                    setActiveView(targetId);
+                  }
+                  setTabMenu(null);
+                }}
+              >Close tabs to the right</button>
+            )}
           </div>
         </>
         );
