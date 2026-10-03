@@ -292,6 +292,19 @@ const PageTerminal = ({ settings, setSettings }: any) => {
       <Row label="Auto-copy output to clipboard" desc="Copies command output automatically after completion">
         <Toggle checked={!!settings.autoCopyOutput} onChange={() => setSettings({ ...settings, autoCopyOutput: !settings.autoCopyOutput })} />
       </Row>
+      <Row label="SSH Keep-Alive Interval" desc="Sends periodic ping packets through the SSH transport to prevent NAT dropouts and keep idle connections alive">
+        <select
+          value={settings.sshKeepaliveSec || 20}
+          onChange={(e) => setSettings({ ...settings, sshKeepaliveSec: parseInt(e.target.value, 10) || 20 })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value={10}>10 seconds (High frequency / aggressive NATs)</option>
+          <option value={20}>20 seconds (Standard / Recommended)</option>
+          <option value={30}>30 seconds (Default)</option>
+          <option value={60}>60 seconds (Relaxed)</option>
+          <option value={0}>Disabled (Mute)</option>
+        </select>
+      </Row>
       <Row label="Right-Click Action" desc="Behavior when right-clicking inside the terminal viewport">
         <select
           value={settings.rightClickAction || 'menu'}

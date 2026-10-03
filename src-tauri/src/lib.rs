@@ -4170,18 +4170,27 @@ fn apply_tcp_keepalive(stream: &tokio::net::TcpStream) {
     let _ = SockRef::from(stream).set_tcp_keepalive(&ka);
 }
 
+static SSH_KEEPALIVE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(20);
+
+#[tauri::command]
+pub fn set_ssh_keepalive_interval(secs: u64) -> Result<(), String> {
+    SSH_KEEPALIVE_SECS.store(secs, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
 /// The russh client config shared by the primary connection and any ProxyJump
 /// hop, so both negotiate an identical algorithm set. Extracted verbatim from
 /// the inline block `initiate_connection` used to carry.
 fn build_ssh_client_config() -> russh::client::Config {
     use tokio::time::Duration;
     let mut config = russh::client::Config::default();
-    // SSH keepalive every 20s. The shorter interval matters because most
+    // Dynamic SSH keepalive interval. The shorter interval matters because most
     // consumer routers drop idle NAT mappings around the 2-minute mark, and
     // many corporate firewalls are stricter still. russh 0.40 has no
     // `keepalive_max` knob, so the watcher loop relies on `is_closed()` to
     // surface drops within a couple of seconds.
-    config.keepalive_interval = Some(Duration::from_secs(20));
+    let ka_secs = SSH_KEEPALIVE_SECS.load(std::sync::atomic::Ordering::Relaxed);
+    config.keepalive_interval = if ka_secs == 0 { None } else { Some(Duration::from_secs(ka_secs)) };
     // Bigger receive window + max-allowed packet size: lets SFTP/tunnel
     // streams keep the BDP full on high-latency links.
     config.window_size = 8 * 1024 * 1024;
@@ -7326,6 +7335,7 @@ pub fn run() {
             commands::sftp::sftp_read_file_text, commands::sftp::sftp_write_file_text, commands::sftp::local_read_file_text, commands::sftp::local_write_file_text, commands::sftp::sftp_exec_command,
             commands::sftp::local_open_file, commands::sftp::local_open_in_explorer, commands::sftp::sftp_prepare_drag,
             commands::sftp::local_copy_entry,
+            set_ssh_keepalive_interval,
             commands::network::send_wake_on_lan, commands::network::perform_port_knock,
             monitor_list, monitor_add, monitor_remove, monitor_set_metrics, monitor_set_custom_metrics,
             monitor_resume, monitor_pause, monitor_resume_all, monitor_pause_all,
