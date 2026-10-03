@@ -98,9 +98,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - Checkbox selection or `Shift` / `Ctrl` multi-click selection for multiple files and folders in [`src/components/FilePanel.tsx`](file:///d:/REPO/SubTerm/src/components/FilePanel.tsx).
   - Batch actions toolbar: batch download to local archive/directory, batch delete with confirmation modal, and batch cut/move.
 
-- [ ] 🔴 **P1 · L** — **SSH Agent Forwarding & 1Password / KeePassXC / Vaultwarden Integration**
-  - Support SSH Agent Forwarding (`-A` flag) using native `SSH_AUTH_SOCK` socket proxying on macOS/Linux.
-  - Named pipe integration on Windows (`\\.\pipe\openssh-ssh-agent`) for seamless integration with 1Password, KeePassXC, Vaultwarden, and Pageant.
+- [x] 🔴 **P1 · M** — **SSH Agent Forwarding (`-A`)** — ✅ Core deliverable done
+  - New `ssh_agent.rs` connects to the local agent (`$SSH_AUTH_SOCK` on Unix, `\\.\pipe\openssh-ssh-agent` on Windows); `ssh_manager.rs`'s `ClientHandler` bridges the server's `auth-agent@openssh.com` channel to it via a new `agent_forward_channels` map + `data()`/`server_channel_open_agent_forward`. New `servers.forward_agent` column + AddNodePanel toggle. Works with any standard-agent-protocol backend (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) via dumb byte proxying — no per-vendor code needed.
+  - **Still open (fast-follow, not blocking):** using the local agent to *authenticate to the first hop* (so SubTerm never loads a raw private key) — pending confirming `russh` 0.40.2's client auth API can accept an externally-signed challenge rather than only an in-memory `KeyPair`. This is what would make "1Password/KeePassXC/Vaultwarden integration" complete rather than just forwarding.
+  - **Validation:** `cargo build` + all 45 unit tests pass. Live forwarding (`ssh-add`, connect, `ssh-add -l` on the remote, hop to a third host) still needs a manual pass with a real agent — not simulable in a dev sandbox.
 
 - [ ] 🟡 **P2 · M** — **Terminal Triggers & Alert Keywords**
   - Configurable regex / keyword matching on live terminal output streams (e.g., highlighting or notification on `ERROR`, `FATAL`, `FAIL`, `Exception`).
