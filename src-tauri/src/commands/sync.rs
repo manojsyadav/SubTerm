@@ -10,10 +10,8 @@ use crate::cloud;
 use crate::hlc;
 use crate::identity;
 use crate::vault::{decrypt_with_key, derive_key, encrypt_with_key, get_or_create_dek, NONCE_LEN, SALT_LEN};
-use crate::{
-    profile_path, profiles_dir, validate_profile_name, save_vault_async, setup_master_db,
-    setup_master_db_inner, DbState,
-};
+use crate::commands::profile::{save_vault_async, setup_master_db, setup_master_db_inner};
+use crate::{profile_path, profiles_dir, validate_profile_name, DbState};
 use rand::Rng;
 use rusqlite::Connection;
 use std::fs;

@@ -2,6 +2,7 @@ pub mod diagnostics;
 pub mod mirror;
 pub mod monitor_settings;
 pub mod network;
+pub mod profile;
 pub mod sync;
 pub mod servers;
 pub mod sftp;
