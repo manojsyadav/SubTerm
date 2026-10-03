@@ -1459,20 +1459,50 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
             )}
           </button>
 
-          {/* 1-Click direct split button (or flip orientation when already split) */}
-          <button
-            onClick={() => {
-              if (splitTerminals.length >= 2) {
-                setSplitOrientation(o => o === "h" ? "v" : "h");
-              } else {
-                splitWithNewPane("h");
-              }
-            }}
-            title={splitTerminals.length >= 2 ? `Flip split orientation to ${splitOrientation === 'h' ? 'vertical' : 'horizontal'}` : "Split terminal (2-column)"}
-            className="h-10 w-10 sm:h-8 sm:w-8 ml-1 shrink-0 rounded-lg flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-white transition-all border border-white/5"
-          >
-            {splitOrientation === "h" ? <Columns size={13} /> : <Rows size={13} />}
-          </button>
+          {/* Dedicated split controls */}
+          {splitTerminals.length >= 2 ? (
+            <div className="flex items-center gap-1 ml-1 shrink-0 bg-white/[0.04] p-0.5 rounded-lg border border-white/5">
+              <button
+                onClick={() => setSplitOrientation(o => o === "h" ? "v" : "h")}
+                title={`Orientation: ${splitOrientation === 'h' ? 'Horizontal (Columns)' : 'Vertical (Rows)'} — Click to switch`}
+                className="h-7 px-2 rounded-md flex items-center gap-1 text-[11px] text-zinc-300 hover:bg-white/10 hover:text-white transition-all font-medium"
+              >
+                {splitOrientation === "h" ? <Columns size={12} className="text-primary" /> : <Rows size={12} className="text-primary" />}
+                <span className="text-[10px] uppercase font-bold tracking-wider">{splitOrientation === "h" ? "Columns" : "Rows"}</span>
+              </button>
+              <button
+                onClick={() => splitWithNewPane(splitOrientation)}
+                title="Add new pane to this split"
+                className="h-7 w-7 rounded-md flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-white transition-all"
+              >
+                <Plus size={12} />
+              </button>
+              <button
+                onClick={() => setSplitTerminals([])}
+                title="Unsplit: return to single terminal view"
+                className="h-7 px-1.5 rounded-md flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-red-400 transition-all text-[10px] font-semibold"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-0.5 ml-1 shrink-0">
+              <button
+                onClick={() => splitWithNewPane("h")}
+                title="Split Terminal Right (Columns)"
+                className="h-10 w-10 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-white transition-all border border-white/5"
+              >
+                <Columns size={13} />
+              </button>
+              <button
+                onClick={() => splitWithNewPane("v")}
+                title="Split Terminal Down (Rows)"
+                className="h-10 w-10 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-white transition-all border border-white/5"
+              >
+                <Rows size={13} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tool rail: icon + text label. The label collapses to icon-only on
@@ -1870,12 +1900,18 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                     style={{ flexGrow: grow, flexBasis: 0 }}
                     onMouseDown={() => setActiveTab(t.id)}
                     onTouchStart={() => setActiveTab(t.id)}
-                    className={`relative min-w-0 min-h-0 border ${
+                    className={`group/pane relative min-w-0 min-h-0 border ${
                       isFocused
                         ? "border-primary/40 shadow-[inset_0_0_0_1px_rgba(var(--primary),0.15)]"
                         : "border-white/[0.03]"
                     }`}
                   >
+                    {/* Small pane indicator chip */}
+                    <div className="absolute top-1.5 left-2 z-30 pointer-events-none opacity-40 group-hover/pane:opacity-90 transition-opacity flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/60 border border-white/10 text-[10px] font-mono text-zinc-300">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isFocused ? 'bg-primary' : 'bg-zinc-500'}`} />
+                      <span>{t.title ? `Shell #${t.title}` : `Pane #${slotIdx + 1}`}</span>
+                    </div>
+
                     <TerminalView
                       sessionId={session.id}
                       terminalId={t.id}

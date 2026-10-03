@@ -36,7 +36,16 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, string>>({});
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
   const [mergedSessionIds, setMergedSessionIds] = useState<string[]>([]);
+  const [sessionSplitOrientation, setSessionSplitOrientation] = useState<"h" | "v">("h");
+  const [sessionSplitRatios, setSessionSplitRatios] = useState<number[]>([]);
   const [mobileSessionPickerOpen, setMobileSessionPickerOpen] = useState(false);
+
+  useEffect(() => {
+    setSessionSplitRatios(prev => {
+      if (prev.length === mergedSessionIds.length) return prev;
+      return mergedSessionIds.map(() => 1);
+    });
+  }, [mergedSessionIds]);
 
   useEffect(() => {
     const onRelativeTab = (e: Event) => {
@@ -220,6 +229,10 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     setTabMenu,
     mergedSessionIds,
     setMergedSessionIds,
+    sessionSplitOrientation,
+    setSessionSplitOrientation,
+    sessionSplitRatios,
+    setSessionSplitRatios,
     mobileSessionPickerOpen,
     setMobileSessionPickerOpen,
     handleSessionStatus,
