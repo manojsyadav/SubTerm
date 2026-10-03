@@ -29,6 +29,7 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 3. **Optional Configurations**:
    - **Jump Host**: If behind a bastion, select another saved server as your `ProxyJump`.
    - **Production Flag**: Check the `Production Server` box if the server hosts live customer traffic (enables safe mode command interception).
+   - **Forward SSH Agent**: Toggle on to let this server use your local SSH agent (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) for further hops — e.g. `ssh`-ing to a third host or a `git` fetch over SSH — without SubTerm ever handling those keys itself. Requires a running local agent; only enable it for servers whose admins you trust (see `docs/SECURITY.md` §7 for the trust model).
 4. **Connect**:
    - Click **Save & Connect**.
    - Verify the host key fingerprint on the first connection prompt.
@@ -218,6 +219,9 @@ The pure-Rust default build intentionally disables legacy RSA host keys to reduc
 
 ### Q: How do I open a native local terminal on my computer?
 Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar. On Windows, this launches PowerShell or Command Prompt via ConPTY. On Linux/macOS, it launches your default `$SHELL`.
+
+### Q: What happens if my laptop sleeps or I switch networks mid-session?
+SubTerm detects both and retries automatically — you don't need to manually reconnect. A sleep/resume cycle or a network change (Wi-Fi roam, VPN toggle, cable unplug) triggers an immediate reconnect attempt instead of waiting for the passive connection-health check to notice. If the server is still unreachable, retries continue with increasing backoff (2s, 4s, 8s, up to 30s) until it comes back, shown as a "Reconnecting · attempt N" banner. A connection you disconnected yourself (right-click → Disconnect) never auto-reconnects — click **Reconnect** on the banner when you're ready.
 
 ### Q: Why are some settings categories showing a lock screen?
 Sensitive settings categories (Profiles, Cloud Sync, Quick Commands, Quick Access Servers, Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
