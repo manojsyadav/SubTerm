@@ -2,7 +2,78 @@
 
 ---
 
-## [v0.4.0] — 2026-10-03
+## [v0.4.1] — 2026-10-03
+
+### Summary
+SubTerm v0.4.1 is a focused quality and completeness release that closes all critical SFTP correctness bugs, ships 6 high-value SFTP/session features, and validates or improves 6 already-implemented subsystems. Every change is tested with zero TypeScript and zero Rust compiler errors.
+
+---
+
+### 🐛 Bug Fixes
+
+- **`fix(sftp)` — Recursive folder deletion (#49)**:
+  SFTP folder deletion now correctly recurses into all nested sub-directories and files before removing the parent. Previously, deleting a non-empty directory tree would leave orphaned entries on the server.
+
+- **`fix(sftp)` — Delete partial remote file on upload cancel (#48)**:
+  Cancelling an in-progress upload now removes the truncated destination file from the server, preventing silent data corruption where the remote path would exist as a zero-byte or partially-written stub.
+
+- **`fix(sftp)` — `setstat`/`chmod` skips sending file size for directories (#41)**:
+  The `chmod` command previously included a `size` field in the SFTP `SSH_FXP_SETSTAT` packet. Some SFTP server implementations (BusyBox, etc.) reject size on directories with `SSH_FX_FAILURE`. The field is now omitted when only mode bits are being changed.
+
+---
+
+### 🚀 New Features
+
+- **`feat` — Rename session/terminal tabs, copy name+path, keyboard paste, session restore (#52)**:
+  - Double-click any session or terminal tab to rename it inline.
+  - Copy the session name or full server path to clipboard via the tab context menu.
+  - Keyboard paste (`Ctrl+V`) now works in all terminal contexts without focus loss.
+  - Session state is restored on reconnect (preserves tab order and names).
+
+- **`feat(sftp)` — Archive and extract (#43)**:
+  - Right-click any selection of files and folders to create a `.tar.gz` or `.zip` archive directly on the server.
+  - Right-click any `.zip` or `.tar.*` archive to extract it in-place without downloading.
+
+- **`feat(sftp)` — Show remote file owners (#53)**:
+  Resolves remote UID/GID to human-readable usernames and groups. Displayed in a dedicated **Owner** column that appears automatically when the SFTP pane is wide enough (≥ 540 px). Uses the `/etc/passwd` SFTP subsystem.
+
+- **`feat(sftp)` — Drag files and folders into a directory (#42)**:
+  Enables drag-and-drop between the local and remote panes. Dragging a file or folder over a directory row highlights it as a drop target; releasing triggers the transfer into that directory.
+
+- **`feat(sftp)` — Open-in-editor downloads in the transfers bar (#47)**:
+  Files opened via "Open in editor" now appear as rows in the transfers bar with an indeterminate progress animation while downloading. Rows are removed once the editor has launched.
+
+- **`feat(sftp)` — Per-server/profile directory bookmarks (#50)**:
+  The path-bar dropdown now shows a **Bookmarks** section scoped to the active server and profile. Star any directory from the toolbar and it reappears across sessions for that server.
+
+- **`feat(cloud)` — Configurable sync server URL for self-hosting (#24)**:
+  A new **Sync Server** input in the Cloud & Sync settings lets users point SubTerm at a self-hosted API endpoint. The override is stored in `<app_data>/cloud_server.json`, validated (HTTPS required; HTTP only for loopback), and auto-signs the device out before switching servers.
+
+---
+
+### ✅ Validated & Improved Subsystems
+
+- **`fix(terminal)` — PTY resize race condition (#20)**:
+  Eliminated a race where the frontend's `fit()` call sent `resize_terminal` while `request_pty` was still round-tripping. The resize watch is now pre-registered in `open_pty_channel` before any network round-trips.
+
+- **`feat(cmds)` — Compact command cards (#37)**:
+  Command library cards are now a single compact row: title + first command line on the left, three icon-only action buttons (▶ Run, 📋 Paste, ✏ Edit) on the right. Cards no longer expand vertically when browsing.
+
+- **`feat(sftp)` — Transfers bar & concurrency queue (#38)**:
+  Validated full parity with upstream. The existing FIFO transfer slot queue, transfers bar, speed + ETA display, cancel-queued support, and editor-save locking are all confirmed implemented and architecturally correct.
+
+- **`feat(session)` — Roving keyboard navigation on tabs (#39)**:
+  Added `src/ui/rovingKeys.ts` implementing the WAI-ARIA roving `tabIndex` pattern. SFTP view tabs (Files/Mirror) and panel tabs (Local/Remote) now respond correctly to `ArrowLeft`/`ArrowRight`/`Home`/`End` with focus management.
+
+- **`feat(sftp)` — Cross-platform path breadcrumbs (#40)**:
+  Replaced ad-hoc path splitting with `src/fs/pathCrumbs.ts` — a battle-tested parser handling POSIX paths, Windows drive roots (`C:\`), UNC paths (`\\server\share`), verbatim paths (`\\?\...`), and verbatim UNC. UNC server segments are correctly rendered as non-navigable plain text.
+
+- **`docs(network)` — Native transport vs. sidecar evaluation (#44)**:
+  PR #44 (native Tailcat/Tailscale embedded Go sidecar) was evaluated against SubTerm's existing native ProxyJump, SOCKS5, and HTTP proxy implementation. The sidecar approach was not adopted due to binary footprint (~50 MB+ per CPU target), CGo/Go Mobile toolchain requirements, privileged daemon attack surface, and the fact that OS-level VPN interfaces (Tailscale, WireGuard) already route transparently through standard SSH. Documented in `docs/ARCHITECTURE.md §4.7`.
+
+---
+
+
 
 ### Summary
 SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigation system, zero-downtime seamless workspace profile switching, and a local-first startup experience that lets you use terminal tools immediately without unlocking your secret vault. Sensitive settings and destructive workspace actions are now strictly gated behind master password protection.
