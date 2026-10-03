@@ -147,7 +147,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const [nameFilter, setNameFilter] = useState("");
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
-  const [modal, setModal] = useState<{ type: "rename" | "mkdir" | "properties" | "move" | "move-bulk"; entry?: FileEntry; v1?: string; v2?: string } | null>(null);
+  const [modal, setModal] = useState<{ type: "rename" | "mkdir" | "properties" | "move" | "move-bulk" | "duplicate"; entry?: FileEntry; v1?: string; v2?: string } | null>(null);
   const [notification, setNotification] = useState<{ msg: string; type: "info" | "success" | "error" } | null>(null);
 
   const [isEditingPath, setIsEditingPath] = useState(false);
@@ -694,6 +694,27 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       } else if (type === "mkdir" && v1) {
         await provider.mkdir(provider.joinPath(currentPath, v1));
         notify(`Created ${v1}`, "success");
+      } else if (type === "duplicate" && entry && v1) {
+        const destPath = provider.joinPath(currentPath, v1);
+        if (provider.id === "remote" && sessionId) {
+          const escapedSrc = entry.path.replace(/"/g, '\\"');
+          const escapedDest = destPath.replace(/"/g, '\\"');
+          const res = await invoke<string>("sftp_exec_command", {
+            sessionId,
+            command: `cp -r "${escapedSrc}" "${escapedDest}" 2>&1`,
+          });
+          if (res && res.trim().length > 0 && /error|cannot|failed|denied/i.test(res)) {
+            throw new Error(res.trim());
+          }
+          notify(`Duplicated ${entry.name} → ${v1}`, "success");
+        } else {
+          await invoke("local_copy_entry", {
+            src: entry.path,
+            dest: destPath,
+            isDir: entry.isDir,
+          });
+          notify(`Duplicated ${entry.name} → ${v1}`, "success");
+        }
       } else if (type === "properties" && entry && v1 && provider.chmod) {
         const mode = parseInt(v1, 8);
         if (isNaN(mode)) throw new Error("Invalid octal mode");
@@ -950,6 +971,30 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         return;
       }
 
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        if (selected.size === 1) {
+          const selectedPath = Array.from(selected)[0];
+          const entry = sortedEntries.find((item) => item.path === selectedPath);
+          if (entry) {
+            e.preventDefault();
+            const name = entry.name;
+            const extIndex = name.lastIndexOf(".");
+            let defaultCopyName: string;
+            if (!entry.isDir && extIndex > 0) {
+              defaultCopyName = `${name.slice(0, extIndex)}.copy${name.slice(extIndex)}`;
+            } else {
+              defaultCopyName = `${name}.copy`;
+            }
+            setModal({
+              type: "duplicate",
+              entry,
+              v1: defaultCopyName,
+            });
+            return;
+          }
+        }
+      }
+
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "a") return;
       e.preventDefault();
       toggleSelectAll();
@@ -957,7 +1002,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedEntries.length, allSelected, showHiddenFiles]);
+  }, [sortedEntries.length, allSelected, showHiddenFiles, selected]);
 
   const toggleSort = (col: SortColumn) =>
     setSort((p) => ({ column: col, asc: p.column === col ? !p.asc : true }));
@@ -1686,6 +1731,29 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               <Edit3 size={11} /><span>Rename</span>
             </button>
           )}
+          {!multi && (
+            <button
+              onClick={() => {
+                setContextMenu(null);
+                const name = contextMenu.entry.name;
+                const extIndex = name.lastIndexOf(".");
+                let defaultCopyName: string;
+                if (!contextMenu.entry.isDir && extIndex > 0) {
+                  defaultCopyName = `${name.slice(0, extIndex)}.copy${name.slice(extIndex)}`;
+                } else {
+                  defaultCopyName = `${name}.copy`;
+                }
+                setModal({
+                  type: "duplicate",
+                  entry: contextMenu.entry,
+                  v1: defaultCopyName,
+                });
+              }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white"
+            >
+              <Copy size={11} className="text-sky-300" /><span>Duplicate / Clone…</span>
+            </button>
+          )}
           <button onClick={() => {
               setContextMenu(null);
               // Both single and bulk move ask for a destination *directory*
@@ -1726,7 +1794,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 {modal.type === "rename" ? "Rename" :
                  modal.type === "mkdir" ? "New Directory" :
                  modal.type === "move" ? "Move to…" :
-                 modal.type === "move-bulk" ? `Move ${selected.size} items to…` : "Properties"}
+                 modal.type === "move-bulk" ? `Move ${selected.size} items to…` :
+                 modal.type === "duplicate" ? "Duplicate / Clone" : "Properties"}
               </span>
               <button onClick={() => setModal(null)} className="text-zinc-500 hover:text-white"><X size={12} /></button>
             </div>
@@ -1813,6 +1882,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                   <label className="text-[10px] text-zinc-400 block mb-1">
                     {modal.type === "move" || modal.type === "move-bulk"
                       ? "Destination directory"
+                      : modal.type === "duplicate"
+                      ? `Duplicate "${modal.entry?.name}" as:`
                       : "Name"}
                   </label>
                   <input type="text" autoFocus value={modal.v1 || ""}
@@ -1823,7 +1894,9 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               )}
               <div className="flex gap-2 justify-end pt-2">
                 <button onClick={() => setModal(null)} className="px-3 h-7 rounded border border-white/5 text-zinc-400 hover:text-white">Cancel</button>
-                <button onClick={submitModal} className="px-3 h-7 rounded bg-indigo-500 text-white font-bold hover:bg-indigo-600">Apply</button>
+                <button onClick={submitModal} className="px-3 h-7 rounded bg-indigo-500 text-white font-bold hover:bg-indigo-600">
+                  {modal.type === "duplicate" ? "Duplicate" : "Apply"}
+                </button>
               </div>
             </div>
           </div>

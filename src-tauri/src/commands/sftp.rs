@@ -2525,6 +2525,39 @@ pub async fn local_rename(from: String, to: String) -> Result<(), String> {
         .map_err(|e| format!("rename {:?} -> {:?}: {}", safe_from, safe_to, e))
 }
 
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn local_copy_entry(src: String, dest: String, is_dir: bool) -> Result<(), String> {
+    let safe_src = guard_local_path(&src, false)?;
+    let safe_dest = guard_local_path(&dest, true)?;
+    if is_dir {
+        copy_dir_all(&safe_src, &safe_dest)
+            .map_err(|e| format!("copy dir {:?} -> {:?}: {}", safe_src, safe_dest, e))
+    } else {
+        if let Some(parent) = safe_dest.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+        }
+        std::fs::copy(&safe_src, &safe_dest)
+            .map(|_| ())
+            .map_err(|e| format!("copy file {:?} -> {:?}: {}", safe_src, safe_dest, e))
+    }
+}
+
 #[tauri::command]
 pub async fn select_local_folder() -> Result<Option<String>, String> {
     #[cfg(target_os = "android")]

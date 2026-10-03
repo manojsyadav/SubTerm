@@ -7325,6 +7325,7 @@ pub fn run() {
             commands::sftp::sftp_download_file, commands::sftp::sftp_download_dir, commands::sftp::sftp_upload_file, commands::sftp::sftp_upload_dir, commands::sftp::sftp_cancel_transfer, commands::sftp::sftp_open_remote_file,
             commands::sftp::sftp_read_file_text, commands::sftp::sftp_write_file_text, commands::sftp::local_read_file_text, commands::sftp::local_write_file_text, commands::sftp::sftp_exec_command,
             commands::sftp::local_open_file, commands::sftp::local_open_in_explorer, commands::sftp::sftp_prepare_drag,
+            commands::sftp::local_copy_entry,
             commands::network::send_wake_on_lan, commands::network::perform_port_knock,
             monitor_list, monitor_add, monitor_remove, monitor_set_metrics, monitor_set_custom_metrics,
             monitor_resume, monitor_pause, monitor_resume_all, monitor_pause_all,
