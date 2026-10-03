@@ -6,6 +6,7 @@ import { File as FileIcon, Folder, FolderUp, Rows, LayoutPanelTop } from "lucide
 import FilePanel, { ActiveDrag, FilePanelHandle } from "./FilePanel";
 import MirrorsPanel from "./MirrorsPanel";
 import TransfersBar, { Transfer } from "./TransfersBar";
+import { onRovingKeyDown } from "../ui/rovingKeys";
 import { createLocalProvider } from "../fs/localProvider";
 import { createRemoteProvider } from "../fs/remoteProvider";
 import { transferFile } from "../fs/transfer";
@@ -324,8 +325,11 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           mounted-but-invisible pattern the parent SessionView used before)
           so the live worker's counters and rolling log survive a switch back
           to Files. */}
-      <div className="shrink-0 grid grid-cols-2 border-b border-white/5 bg-black/20">
+      <div role="tablist" aria-label="SFTP views" onKeyDown={(e) => onRovingKeyDown(e)} className="shrink-0 grid grid-cols-2 border-b border-white/5 bg-black/20">
         <button
+          role="tab"
+          aria-selected={view === "files"}
+          tabIndex={view === "files" ? 0 : -1}
           onClick={() => setView("files")}
           className={`h-9 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
             view === "files"
@@ -336,6 +340,9 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           <Folder size={12} /> Files
         </button>
         <button
+          role="tab"
+          aria-selected={view === "mirror"}
+          tabIndex={view === "mirror" ? 0 : -1}
           onClick={() => setView("mirror")}
           disabled={!serverId}
           title={!serverId ? "Mirror needs a saved server" : undefined}
@@ -361,8 +368,11 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             user can predict what clicking will do. */}
         <div className="shrink-0 h-10 sm:h-8 flex items-stretch border-b border-white/5 bg-black/20">
           {layout === "tabs" ? (
-            <div className="flex-1 grid grid-cols-2">
+            <div role="tablist" aria-label="Active panel" onKeyDown={(e) => onRovingKeyDown(e)} className="flex-1 grid grid-cols-2">
               <button
+                role="tab"
+                aria-selected={activeSide === "local"}
+                tabIndex={activeSide === "local" ? 0 : -1}
                 onClick={() => setActiveSidePersisted("local")}
                 className={`h-full flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-all ${
                   activeSide === "local"
@@ -373,6 +383,9 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
                 <Folder size={11} /> Local
               </button>
               <button
+                role="tab"
+                aria-selected={activeSide === "remote"}
+                tabIndex={activeSide === "remote" ? 0 : -1}
                 onClick={() => setActiveSidePersisted("remote")}
                 className={`h-full flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-all ${
                   activeSide === "remote"
