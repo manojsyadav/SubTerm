@@ -205,6 +205,18 @@ const PageTerminal = ({ settings, setSettings }: any) => {
             }}
           />
         </Row>
+        <Row label="Terminal Bell" desc="Notification style when an ASCII bell (\a or BEL) is emitted by the shell">
+          <select
+            value={settings.terminalBell || 'visual'}
+            onChange={(e) => setSettings({ ...settings, terminalBell: e.target.value })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            <option value="visual">Visual Flash (Screen Glow)</option>
+            <option value="audio">Audible Chime (Web Audio)</option>
+            <option value="both">Both (Visual & Audible)</option>
+            <option value="none">Disabled (Mute)</option>
+          </select>
+        </Row>
       </SectionCard>
     <SectionCard title="Session Behaviour">
       <Row label="Auto-close tab on exit" desc="Close the session tab when the shell process exits">

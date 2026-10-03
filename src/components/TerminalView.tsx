@@ -5,7 +5,7 @@ import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
 import { WebglAddon } from 'xterm-addon-webgl';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles } from 'lucide-react';
+import { AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
 import 'xterm/css/xterm.css';
 import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
@@ -15,6 +15,7 @@ import { AiCopilotModal } from './AiCopilotModal';
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { getTerminalTheme } from '../terminal/themes';
+import { playTerminalBellChime } from '../terminal/bell';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
 
@@ -149,6 +150,13 @@ const TerminalView = ({
   // isn't burdened with a hidden overlay when the user isn't searching.
   const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
+  const [searchRegex, setSearchRegex] = useState(false);
+  const [searchResults, setSearchResults] = useState<{ resultIndex: number; resultCount: number } | null>(null);
+
+  const [bellActive, setBellActive] = useState(false);
+  const bellTimerRef = useRef<number | null>(null);
 
   // Command-history overlay (Ctrl+R / Cmd+R). Same document-level keydown
   // gate as search: only pop it when the user is focused inside this
@@ -364,24 +372,48 @@ const TerminalView = ({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  const getSearchOptions = (custom?: Partial<ISearchOptions>): ISearchOptions => ({
+    ...SEARCH_OPTIONS,
+    caseSensitive: searchCaseSensitive,
+    wholeWord: searchWholeWord,
+    regex: searchRegex,
+    ...custom,
+  });
+
   // Close + clear search decorations. Refocuses xterm so the user's next
   // keystroke goes to the shell, not to nowhere.
   const closeSearch = () => {
     const addon = searchAddonRef.current;
-    // clearDecorations arrived in xterm-addon-search 0.13; guard for older
-    // typings even though our lockfile pins 0.13.0.
     addon?.clearDecorations?.();
     setShowSearch(false);
+    setSearchResults(null);
     // Return focus to xterm so keystrokes resume typing at the prompt.
     xtermRef.current?.focus();
   };
 
-  const runFind = (direction: 'next' | 'prev') => {
+  const runFind = (direction: 'next' | 'prev', overrideQuery?: string, overrideOptions?: Partial<ISearchOptions>) => {
     const addon = searchAddonRef.current;
-    if (!addon || !query) return;
-    if (direction === 'next') addon.findNext(query, SEARCH_OPTIONS);
-    else addon.findPrevious(query, SEARCH_OPTIONS);
+    const targetQuery = overrideQuery !== undefined ? overrideQuery : query;
+    if (!addon || !targetQuery) {
+      setSearchResults(null);
+      return;
+    }
+    const opts = getSearchOptions(overrideOptions);
+    if (direction === 'next') addon.findNext(targetQuery, opts);
+    else addon.findPrevious(targetQuery, opts);
   };
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const addon = searchAddonRef.current;
+    if (!addon) return;
+    if (!query) {
+      addon.clearDecorations?.();
+      setSearchResults(null);
+      return;
+    }
+    addon.findNext(query, getSearchOptions({ incremental: true }));
+  }, [query, searchCaseSensitive, searchWholeWord, searchRegex, showSearch]);
 
   // Tiny inline toast for clipboard feedback (copy / paste / errors). Pattern
   // matches the per-component notify() used in SftpWorkspace / FilePanel —
@@ -531,6 +563,21 @@ const TerminalView = ({
     const searchAddon = new SearchAddon();
     searchAddonRef.current = searchAddon;
     term.loadAddon(searchAddon);
+    searchAddon.onDidChangeResults((e) => {
+      setSearchResults(e);
+    });
+
+    const onBellDisposable = term.onBell(() => {
+      const mode = localStorage.getItem('subterm-terminal-bell') || 'visual';
+      if (mode === 'audio' || mode === 'both') {
+        playTerminalBellChime();
+      }
+      if (mode === 'visual' || mode === 'both') {
+        setBellActive(true);
+        if (bellTimerRef.current) window.clearTimeout(bellTimerRef.current);
+        bellTimerRef.current = window.setTimeout(() => setBellActive(false), 250);
+      }
+    });
 
     // OSC 133 Shell Integration handler (FinalTerm / iTerm / VS Code spec)
     try {
@@ -1374,6 +1421,8 @@ const TerminalView = ({
       resizeObserver.disconnect();
       onDataDisposable.dispose();
       onResizeDisposable.dispose();
+      onBellDisposable.dispose();
+      if (bellTimerRef.current) window.clearTimeout(bellTimerRef.current);
       if (container) {
         container.removeEventListener('mousedown', onMouseDown);
         container.removeEventListener('contextmenu', onContextMenu);
@@ -1420,7 +1469,9 @@ const TerminalView = ({
           xtermRef.current?.focus();
         }
       }}
-      className="h-full w-full bg-[#09090b] p-2 pr-2 pb-0 relative flex flex-col"
+      className={`h-full w-full bg-[#09090b] p-2 pr-2 pb-0 relative flex flex-col transition-all duration-150 ${
+        bellActive ? "ring-2 ring-amber-400 shadow-[inset_0_0_24px_rgba(251,191,36,0.25)]" : ""
+      }`}
     >
       <div
         ref={terminalRef}
@@ -1431,16 +1482,13 @@ const TerminalView = ({
           top-2 right-2 keeps it clear of the disconnected badge (which
           centers) and the clipboard toast (bottom-right). */}
       {showSearch && (
-        <div className="absolute top-2 right-2 z-20 flex items-center gap-1 rounded-md bg-zinc-800 border border-white/10 px-1.5 py-1 shadow-lg">
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 rounded-lg bg-[#141419]/95 backdrop-blur-md border border-white/10 px-2 py-1 shadow-2xl font-sans select-none animate-in fade-in duration-100">
           <input
             ref={searchInputRef}
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              // Stop keys from leaking to the document listener (Ctrl+F
-              // reopen loop) and to xterm's textarea (which would type
-              // into the shell).
               if (e.key === 'Escape') {
                 e.preventDefault();
                 setQuery('');
@@ -1449,40 +1497,93 @@ const TerminalView = ({
                 e.preventDefault();
                 runFind(e.shiftKey ? 'prev' : 'next');
               } else if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
-                // Swallow so the outer document handler doesn't re-fire
-                // (which would just refocus us — harmless but noisy).
                 e.preventDefault();
                 (e.currentTarget as HTMLInputElement).select();
               }
               e.stopPropagation();
             }}
-            placeholder="Find"
-            className="bg-transparent outline-none text-[12px] text-zinc-100 placeholder:text-zinc-500 w-40 px-1"
+            placeholder="Find in terminal…"
+            className="bg-transparent outline-none text-[11px] text-zinc-100 placeholder:text-zinc-500 w-36 px-1 font-mono"
           />
-          <button
-            type="button"
-            onClick={() => runFind('prev')}
-            title="Previous match (Shift+Enter)"
-            className="px-1.5 py-0.5 text-[11px] text-zinc-300 hover:text-white hover:bg-white/5 rounded"
-          >
-            {'↑'}
-          </button>
-          <button
-            type="button"
-            onClick={() => runFind('next')}
-            title="Next match (Enter)"
-            className="px-1.5 py-0.5 text-[11px] text-zinc-300 hover:text-white hover:bg-white/5 rounded"
-          >
-            {'↓'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setQuery(''); closeSearch(); }}
-            title="Close (Esc)"
-            className="px-1.5 py-0.5 text-[11px] text-zinc-400 hover:text-white hover:bg-white/5 rounded"
-          >
-            {'✕'}
-          </button>
+
+          {/* Results counter badge */}
+          {query.trim() && (
+            <span className="text-[10px] font-mono text-zinc-400 px-1 whitespace-nowrap">
+              {searchResults
+                ? searchResults.resultCount === 0
+                  ? "No matches"
+                  : `${searchResults.resultIndex + 1} of ${searchResults.resultCount}`
+                : "No matches"}
+            </span>
+          )}
+
+          {/* Search options toggles */}
+          <div className="flex items-center gap-0.5 border-l border-white/10 pl-1">
+            <button
+              type="button"
+              onClick={() => setSearchCaseSensitive((v) => !v)}
+              title="Match Case (Alt+C)"
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                searchCaseSensitive
+                  ? "bg-primary/20 text-primary font-bold"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+              }`}
+            >
+              Aa
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchWholeWord((v) => !v)}
+              title="Match Whole Word (Alt+W)"
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                searchWholeWord
+                  ? "bg-primary/20 text-primary font-bold"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+              }`}
+            >
+              \b
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchRegex((v) => !v)}
+              title="Use Regular Expression (Alt+R)"
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                searchRegex
+                  ? "bg-primary/20 text-primary font-bold"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+              }`}
+            >
+              .*
+            </button>
+          </div>
+
+          {/* Nav arrows & close */}
+          <div className="flex items-center gap-0.5 border-l border-white/10 pl-1">
+            <button
+              type="button"
+              onClick={() => runFind('prev')}
+              title="Previous match (Shift+Enter)"
+              className="p-1 text-[11px] text-zinc-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+            >
+              <ChevronUp size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={() => runFind('next')}
+              title="Next match (Enter)"
+              className="p-1 text-[11px] text-zinc-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+            >
+              <ChevronDown size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setQuery(''); closeSearch(); }}
+              title="Close (Esc)"
+              className="p-1 text-[11px] text-zinc-400 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
         </div>
       )}
 
