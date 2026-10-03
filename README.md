@@ -22,6 +22,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - [**Performance & Competitive Benchmarks**](docs/PERFORMANCE.md): WebGL hardware acceleration throughput, memory footprint, and competitive matrix against Termius, Warp, Ghostty, PuTTY, WinSCP, and MobaXterm.
 - [**User Guide & Workflows**](docs/USER_GUIDE.md): Step-by-step guides for server connectivity, SFTP editing, port forwarding, and settings.
 - [**Release Notes**](docs/RELEASE_NOTES.md): Customer-ready changelog and feature announcements for version releases.
+- [**Roadmap & Backlog**](TODO.md): Active development tasks, pending architectural optimizations, and strategic feature milestones.
 
 ---
 
