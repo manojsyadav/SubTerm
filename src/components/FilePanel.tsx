@@ -115,6 +115,14 @@ export interface FilePanelProps {
    * download lands there directly instead of popping a folder picker.
    */
   getOppositeDir?: () => string | undefined;
+  /** Optional server ID for scoping bookmarks and settings per server. */
+  serverId?: number | string;
+  /** Optional active profile for scoping bookmarks per profile. */
+  profile?: string;
+  /** Focused PTY terminal ID. */
+  terminalId?: string;
+  /** Compact layout: reveal terminal. */
+  onRevealTerminal?: () => void;
 }
 
 export interface FilePanelHandle {
@@ -132,6 +140,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   initialPath,
   onPathChange,
   getOppositeDir,
+  serverId,
+  profile,
+  terminalId,
+  onRevealTerminal,
 }, ref) => {
   const [currentPath, setCurrentPath] = useState("");
   // Last five distinct directories visited in this panel, MRU first. Lives
@@ -246,7 +258,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   useEffect(() => {
     const check = () => {
-      const bms = loadSftpBookmarks();
+      const bms = loadSftpBookmarks(sessionId, serverId, profile);
       const norm = currentPath.replace(/\/+$/, "") || "/";
       setIsCurrentBookmarked(
         bms.some((b) => b.isRemote === (provider.id === "remote") && (b.path.replace(/\/+$/, "") || "/") === norm)
@@ -255,7 +267,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     check();
     window.addEventListener("subterm-bookmarks-updated", check);
     return () => window.removeEventListener("subterm-bookmarks-updated", check);
-  }, [currentPath, provider.id]);
+  }, [currentPath, provider.id, sessionId, serverId, profile]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -1467,6 +1479,9 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               currentPath={currentPath}
               isRemote={isRemote}
               onNavigate={(targetPath) => fetch(targetPath)}
+              sessionId={sessionId}
+              serverId={serverId}
+              profile={profile}
             />
           </div>
           {isRemote && (

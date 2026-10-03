@@ -20,19 +20,29 @@ export interface SftpBookmark {
 
 const STORAGE_KEY = "subterm-sftp-bookmarks";
 
-export function loadSftpBookmarks(): SftpBookmark[] {
+export function getStorageKey(sessionId?: string, serverId?: number | string, profile?: string): string {
+  const prof = profile || "default";
+  const sid = serverId ? `srv-${serverId}` : sessionId ? `sess-${sessionId}` : "global";
+  return `subterm-sftp-bookmarks:${prof}:${sid}`;
+}
+
+export function loadSftpBookmarks(sessionId?: string, serverId?: number | string, profile?: string): SftpBookmark[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(sessionId, serverId, profile);
+    const raw = localStorage.getItem(key);
     if (raw) return JSON.parse(raw);
+    const legacy = localStorage.getItem(STORAGE_KEY);
+    if (legacy) return JSON.parse(legacy);
   } catch (err) {
     console.error("Failed to load SFTP bookmarks", err);
   }
   return [];
 }
 
-export function saveSftpBookmarks(bookmarks: SftpBookmark[]): void {
+export function saveSftpBookmarks(bookmarks: SftpBookmark[], sessionId?: string, serverId?: number | string, profile?: string): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
+    const key = getStorageKey(sessionId, serverId, profile);
+    localStorage.setItem(key, JSON.stringify(bookmarks));
     window.dispatchEvent(new CustomEvent("subterm-bookmarks-updated"));
   } catch (err) {
     console.error("Failed to save SFTP bookmarks", err);
@@ -45,6 +55,9 @@ interface SftpBookmarksPopoverProps {
   currentPath: string;
   isRemote: boolean;
   onNavigate: (path: string) => void;
+  sessionId?: string;
+  serverId?: number | string;
+  profile?: string;
 }
 
 export function SftpBookmarksPopover({
@@ -53,8 +66,11 @@ export function SftpBookmarksPopover({
   currentPath,
   isRemote,
   onNavigate,
+  sessionId,
+  serverId,
+  profile,
 }: SftpBookmarksPopoverProps) {
-  const [bookmarks, setBookmarks] = useState<SftpBookmark[]>(loadSftpBookmarks);
+  const [bookmarks, setBookmarks] = useState<SftpBookmark[]>(() => loadSftpBookmarks(sessionId, serverId, profile));
   const [search, setSearch] = useState("");
   const [customName, setCustomName] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
@@ -62,10 +78,10 @@ export function SftpBookmarksPopover({
 
   // Sync with storage changes
   useEffect(() => {
-    const handleUpdate = () => setBookmarks(loadSftpBookmarks());
+    const handleUpdate = () => setBookmarks(loadSftpBookmarks(sessionId, serverId, profile));
     window.addEventListener("subterm-bookmarks-updated", handleUpdate);
     return () => window.removeEventListener("subterm-bookmarks-updated", handleUpdate);
-  }, []);
+  }, [sessionId, serverId, profile]);
 
   // Close on outside click or Escape
   useEffect(() => {
@@ -115,7 +131,7 @@ export function SftpBookmarksPopover({
       const next = bookmarks.filter(
         (b) => !(b.isRemote === isRemote && (b.path.replace(/\/+$/, "") || "/") === currentNormalized)
       );
-      saveSftpBookmarks(next);
+      saveSftpBookmarks(next, sessionId, serverId, profile);
       setBookmarks(next);
     } else {
       const defaultName = currentPath.split(/[\\/]/).filter(Boolean).pop() || "Root";
@@ -126,7 +142,7 @@ export function SftpBookmarksPopover({
         isRemote,
       };
       const next = [...bookmarks, newBookmark];
-      saveSftpBookmarks(next);
+      saveSftpBookmarks(next, sessionId, serverId, profile);
       setBookmarks(next);
       setShowAddForm(false);
       setCustomName("");
@@ -136,7 +152,7 @@ export function SftpBookmarksPopover({
   const handleDeleteBookmark = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const next = bookmarks.filter((b) => b.id !== id);
-    saveSftpBookmarks(next);
+    saveSftpBookmarks(next, sessionId, serverId, profile);
     setBookmarks(next);
   };
 

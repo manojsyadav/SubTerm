@@ -60,7 +60,7 @@ const SepToggle = ({ on, onToggle, status, title, onReconnect }: {
   </span>
 );
 
-const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: any) => {
+const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: any) => {
   const broadcast = useBroadcast();
   const isProd = Boolean((session as any)?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>(() => session?.isLocal ? 'connected' : 'connecting');
@@ -2195,6 +2195,9 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                   mirrorsConfig={(() => {
                     try { return JSON.parse(session.mirrors || "[]"); } catch { return []; }
                   })()}
+                  terminalId={activeTab}
+                  onRevealTerminal={() => setActiveTool(null)}
+                  profile={profile}
                 />
               </div>
             </div>

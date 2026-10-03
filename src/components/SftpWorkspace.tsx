@@ -32,7 +32,16 @@ interface SftpWorkspaceProps {
   // one fewer item to fit on phones.
   serverId?: number;
   mirrorsConfig?: any[];
+  /** Focused PTY. Passed through while SFTP hides the terminal on a narrow window. */
+  terminalId?: string;
+  /** Compact layout: close the SFTP pane so the terminal that just received `cd` is visible. */
+  onRevealTerminal?: () => void;
+  /** Unlocked profile. Server ids restart in every profile's DB, so per-server storage keys need it. */
+  profile?: string;
 }
+
+// Profile names hold only [A-Za-z0-9_-], so ":" keeps the parts apart.
+export const bookmarksKeyPrefix = (profile = "default") => `submarine-sftp-bookmarks:${profile}:`;
 
 type SftpView = "files" | "mirror";
 type FilesLayout = "tabs" | "split";
@@ -77,7 +86,7 @@ const DragGhost = forwardRef<DragGhostHandle>((_props, ref) => {
 });
 DragGhost.displayName = "DragGhost";
 
-const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [] }: SftpWorkspaceProps) => {
+const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [], terminalId, onRevealTerminal, profile }: SftpWorkspaceProps) => {
   // Active sub-tab. Files is the default (the common workflow); Mirror is
   // for the per-server one-way replication setup.
   const [view, setView] = useState<SftpView>("files");
@@ -408,6 +417,8 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             // Without this the Upload button silently no-ops on the first
             // guard (`if (!sessionId) return`).
             sessionId={sessionId}
+            serverId={serverId}
+            profile={profile}
             disabled={disabled}
             onDragMove={handleDragMove}
             initialPath={savedDirsRef.current.local}
@@ -424,11 +435,15 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             ref={remoteRef}
             provider={remoteProvider}
             sessionId={sessionId}
+            serverId={serverId}
+            profile={profile}
             disabled={disabled}
             onDragMove={handleDragMove}
             initialPath={savedDirsRef.current.remote}
             onPathChange={(p) => saveDir("remote", p)}
             getOppositeDir={() => localRef.current?.currentDir()}
+            terminalId={terminalId}
+            onRevealTerminal={onRevealTerminal}
           />
         </div>
       </div>
