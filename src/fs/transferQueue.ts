@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react";
 // the bar links the item to its `sftp-transfer-*` events by id and can cancel
 // it while it is still starting. The item being run stays here as "starting"
 // until the invoke settles; the bar hides it once events for its id arrive.
+// Validated and aligned with PR #38 (docked transfers bar & concurrency queue).
 
 export interface QueuedTransfer {
   /** Transfer id the backend command is (or will be) run with. */
