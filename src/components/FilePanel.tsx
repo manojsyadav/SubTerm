@@ -1730,15 +1730,35 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             </button>
           )}
 
-          {/* Copy full path */}
-          {!multi && (
+          {/* Copy name / path */}
+          {!multi ? (
+            <>
+              <button onClick={async () => {
+                  setContextMenu(null);
+                  await navigator.clipboard.writeText(contextMenu.entry.name);
+                  notify(`Copied name: ${contextMenu.entry.name}`, "info");
+                }}
+                className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+                <Copy size={11} className="text-zinc-400" /><span>Copy Name</span>
+              </button>
+              <button onClick={async () => {
+                  setContextMenu(null);
+                  await navigator.clipboard.writeText(contextMenu.entry.path);
+                  notify(`Copied path: ${contextMenu.entry.path}`, "info");
+                }}
+                className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+                <Copy size={11} className="text-zinc-400" /><span>Copy Path</span>
+              </button>
+            </>
+          ) : (
             <button onClick={async () => {
                 setContextMenu(null);
-                await navigator.clipboard.writeText(contextMenu.entry.path);
-                notify(`Copied path: ${contextMenu.entry.path}`, "info");
+                const allPaths = acting.map(e => e.path).join("\n");
+                await navigator.clipboard.writeText(allPaths);
+                notify(`Copied ${acting.length} paths`, "info");
               }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
-              <Copy size={11} className="text-zinc-400" /><span>Copy Path</span>
+              <Copy size={11} className="text-zinc-400" /><span>{`Copy ${acting.length} Paths`}</span>
             </button>
           )}
 

@@ -18,6 +18,7 @@ import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/audi
 import { useTextPrompt } from "../ui/confirm";
 import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
 import DistroLogo from "./DistroLogo";
+import { RenameInput } from "../ui/renameInput";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -432,6 +433,8 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
   };
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
+  const [termMenu, setTermMenu] = useState<{ x: number; y: number; termId: string } | null>(null);
+  const [termRename, setTermRename] = useState<{ termId: string; value: string } | null>(null);
   const terminalsRef = useRef(terminals);
   terminalsRef.current = terminals;
 
@@ -1388,6 +1391,18 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                 }
                 setActiveTab(t.id);
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setTermMenu({ x: rect.left, y: rect.bottom + 4, termId: t.id });
+                setTermRename({ termId: t.id, value: t.title });
+              }}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setTermMenu({ x: rect.left, y: rect.bottom + 4, termId: t.id });
+                setTermRename({ termId: t.id, value: t.title });
+              }}
               title={t.container ? `Container: ${t.container.name}` : undefined}
               className={`h-8 px-3 sm:px-4 ${terminals.length > 1 ? 'pr-8' : ''} rounded-lg flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all ${
                 isFocusedHalf
@@ -1769,6 +1784,41 @@ const SessionViewImpl = ({ session, onClose, addLog, onStatusChange, chromeless 
                 That way the picker is anchored to the tab it operates
                 on and users don't have to know two entry points for the
                 same feature. */}
+          </div>
+        </>,
+        document.body
+      )}
+
+      {termMenu && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => { setTermMenu(null); setTermRename(null); }}
+            onContextMenu={(e) => { e.preventDefault(); setTermMenu(null); setTermRename(null); }}
+          />
+          <div
+            style={{ left: Math.min(termMenu.x, window.innerWidth - 200), top: Math.min(termMenu.y, window.innerHeight - 100) }}
+            className="fixed z-[9999] w-[180px] bg-[#15151a] border border-white/10 rounded-lg shadow-2xl p-1.5 text-[11.5px]"
+          >
+            <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Rename Tab
+            </div>
+            <RenameInput
+              initialValue={termRename?.value ?? ""}
+              placeholder="Tab title…"
+              onCommit={(newTitle) => {
+                const trimmed = newTitle.trim();
+                if (trimmed) {
+                  setTerminals(prev => prev.map(item => item.id === termMenu.termId ? { ...item, title: trimmed } : item));
+                }
+                setTermMenu(null);
+                setTermRename(null);
+              }}
+              onCancel={() => {
+                setTermMenu(null);
+                setTermRename(null);
+              }}
+            />
           </div>
         </>,
         document.body

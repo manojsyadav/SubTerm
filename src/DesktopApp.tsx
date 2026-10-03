@@ -17,6 +17,7 @@ import logoUrl from "./assets/logo.png";
 import PasswordField from "./components/PasswordField";
 import QuickConnectModal, { QuickAuth } from "./components/QuickConnectModal";
 import { useConfirm, useTextPrompt } from "./ui/confirm";
+import { RenameInput } from "./ui/renameInput";
 import { useIsNarrow } from "./hooks/useViewport";
 import { Sidebar } from "./components/Sidebar";
 import { NodeGrid } from "./components/NodeGrid";
@@ -153,6 +154,8 @@ function DesktopApp() {
     getCloseHandler, closeSession,
     openServer, openMultipleServers, openQuickConnect, openLocalTerminal,
   } = sessionManager;
+
+  const [tabNames, setTabNames] = useState<Record<string, string>>({});
 
   const vault = useProfileVault({
     settings: {
@@ -1121,6 +1124,10 @@ function DesktopApp() {
                 e.preventDefault();
                 setTabMenu({ x: e.clientX, y: e.clientY, sessionId: s.id });
               }}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                setTabMenu({ x: e.clientX, y: e.clientY, sessionId: s.id });
+              }}
               // No max-width / no truncate: the user explicitly wants full
               // node names visible even when many sessions are open. The tab
               // row itself is horizontally scrollable (overflow-x-auto +
@@ -1129,7 +1136,7 @@ function DesktopApp() {
               // `whitespace-nowrap` keeps long names on a single line; without
               // it a tab with a 30-char hostname would wrap into a two-line
               // pill and break the row's height.
-              title={isMergedTab ? `${s.serverName} · split beside current view (Ctrl-click to unpair)` : s.serverName}
+              title={isMergedTab ? `${tabNames[s.id] ?? s.serverName} · split beside current view (Ctrl-click to unpair)` : (tabNames[s.id] ?? s.serverName)}
               className={`group no-drag flex items-center w-[130px] h-7 px-2 rounded-md cursor-pointer transition-all shrink-0 mr-1 overflow-hidden ${
                 activeView === s.id
                   ? 'bg-primary/15 text-primary border border-primary/40 shadow-inner shadow-primary/10'
@@ -1156,7 +1163,7 @@ function DesktopApp() {
               <span className="shrink-0 mr-1 opacity-80" style={s.color ? { color: s.color } : {}}>
                 {renderServerIcon(s.icon || "server", 11)}
               </span>
-              <span className="text-[11px] font-semibold truncate flex-1 min-w-0 text-left tracking-tight">{s.serverName}</span>
+              <span className="text-[11px] font-semibold truncate flex-1 min-w-0 text-left tracking-tight">{tabNames[s.id] ?? s.serverName}</span>
               {s.isProduction && (
                 <span className="ml-1 px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
                   PROD
@@ -1440,6 +1447,29 @@ function DesktopApp() {
             className="fixed z-[70] bg-[#15151a] border border-white/10 rounded-md shadow-2xl py-1 min-w-[240px] text-[11px] no-drag"
             style={{ left: Math.min(tabMenu.x, window.innerWidth - 260), top: Math.min(tabMenu.y, window.innerHeight - 380) }}
           >
+            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Rename tab
+            </div>
+            <RenameInput
+              initialValue={tabNames[targetId] ?? (sessions.find(s => s.id === targetId)?.serverName ?? "")}
+              placeholder="Custom tab name…"
+              onCommit={(newVal) => {
+                const trimmed = newVal.trim();
+                const defaultName = sessions.find(s => s.id === targetId)?.serverName;
+                setTabNames(prev => {
+                  if (trimmed && trimmed !== defaultName) {
+                    return { ...prev, [targetId]: trimmed };
+                  } else {
+                    const { [targetId]: _, ...rest } = prev;
+                    return rest;
+                  }
+                });
+                setTabMenu(null);
+              }}
+              onCancel={() => setTabMenu(null)}
+            />
+            <div className="h-px bg-white/10 my-1" />
+
             <button
               className="w-full text-left px-3 py-1.5 hover:bg-primary/15 hover:text-primary text-zinc-200 flex items-center gap-2"
               onClick={() => {
