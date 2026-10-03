@@ -40,7 +40,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
 - **Hardware-Accelerated Terminal**: WebGL GPU rasterization with automatic canvas fallback for 60–120+ FPS throughput and reduced CPU overhead.
 - **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
-- **VS Code-Style Settings Panel**: 10 focused category pages with a vertical left-sidebar navigator and vault-gated security screens.
+- **VS Code-Style Settings Panel**: 11 focused category pages with a vertical left-sidebar navigator and vault-gated security screens.
 
 ---
 
@@ -56,6 +56,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 | Cloud & Sync | **Yes** | Cloud API endpoint, auth, push/pull sync operations |
 | Profile | **Yes** | Create, rename, delete workspaces; change master password |
 | Quick Commands | **Yes** | OS/environment quick commands (may contain secrets) |
+| Known Hosts | **Yes** | Trusted SSH host keys and fingerprints, fingerprint revocation |
 | Maintenance | **Yes** | Reset preferences to factory defaults, cache purge |
 | Activity Log | **Yes** | Session diagnostics timeline and connection logs |
 

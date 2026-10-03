@@ -86,6 +86,33 @@ This document provides a technical reference for all Tauri IPC commands register
   ```
 - **Return Type**: `Result<(), String>`
 
+### `get_known_hosts`
+- **Description**: Retrieves all trusted host keys, key algorithms, and fingerprints stored in the active profile's `known_hosts` database.
+- **Input Arguments**: None.
+- **Return Type**: `Result<Vec<KnownHostRecord>, String>`
+  ```typescript
+  interface KnownHostRecord {
+    id: number;
+    host: string;
+    port: number;
+    fingerprint: string;
+    key_type: string;
+  }
+  ```
+
+### `delete_known_host`
+- **Description**: Deletes a specific trusted host key entry by ID and persists the updated vault.
+- **Input Arguments**:
+  ```typescript
+  { id: number }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `clear_all_known_hosts`
+- **Description**: Clears all trusted host fingerprints from the active profile's `known_hosts` table and persists the vault.
+- **Input Arguments**: None.
+- **Return Type**: `Result<(), String>`
+
 ---
 
 ## 2. Server & Infrastructure Node Management

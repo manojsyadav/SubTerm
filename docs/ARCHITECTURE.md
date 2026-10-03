@@ -175,7 +175,7 @@ SubTerm supports arbitrary horizontal and vertical session multiplexing:
 
 ## 5. Settings Panel Architecture
 
-The Settings interface (`src/components/SettingsPanel.tsx`) uses a 10-category vertical sidebar model:
+The Settings interface (`src/components/SettingsPanel.tsx`) uses an 11-category vertical sidebar model:
 
 | Category ID | Display Name | Protection Level | Primary Operations |
 |---|---|---|---|
@@ -187,6 +187,7 @@ The Settings interface (`src/components/SettingsPanel.tsx`) uses a 10-category v
 | `cloud` | Cloud & Sync | **Vault Locked** | Cloud API endpoint, auth, push/pull sync |
 | `profile` | Profiles & Vault | **Vault Locked** | Create/delete/rename profiles, master password |
 | `commands` | Quick Commands | **Vault Locked** | Manage executable scripts & sensitive snippets |
+| `security` | Known Hosts | **Vault Locked** | Trusted SSH host keys and fingerprints, revocation |
 | `maintenance` | Maintenance | **Vault Locked** | Factory reset preferences, storage cleanup |
 | `activity` | Activity Log | **Vault Locked** | Session audits, connection diagnostic timeline |
 

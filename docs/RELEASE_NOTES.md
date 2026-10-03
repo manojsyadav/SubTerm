@@ -11,9 +11,16 @@ SubTerm v0.4.0 introduces an entirely redesigned VS Code-style Settings navigati
 
 ### 🚀 New Features
 
-- **VS Code-Style 10-Category Settings Hub**:
-  - The monolithic, single-page settings panel has been replaced by a clean, 10-category left sidebar navigator with dedicated pages for *Appearance*, *Terminal*, *Monitoring*, *Keyboard Shortcuts*, *Quick Access Servers*, *Cloud & Sync*, *Profile & Workspaces*, *Quick Commands*, *Maintenance*, and *Activity Log*.
+- **VS Code-Style 11-Category Settings Hub**:
+  - The monolithic, single-page settings panel has been replaced by a clean, 11-category left sidebar navigator with dedicated pages for *Appearance*, *Terminal*, *Monitoring*, *Keyboard Shortcuts*, *Quick Access Servers*, *Cloud & Sync*, *Profile & Workspaces*, *Quick Commands*, *Known Hosts*, *Maintenance*, and *Activity Log*.
   - Access it anytime via `Ctrl+,` or the gear icon in the title bar.
+
+- **SSH Known Hosts & Fingerprint Manager**:
+  - Added a dedicated **Known Hosts** settings page allowing users to inspect all trusted SSH public key fingerprints across their servers.
+  - Search by hostname, IP address, port, or key algorithm (`ssh-ed25519`, `rsa`, `ecdsa`).
+  - 1-click SHA256 fingerprint copying to clipboard with confirmation toast.
+  - 1-click **Revoke** action to easily clear stale or rotated host keys when a remote VPS is rebuilt or re-installed.
+  - Protected behind master password vault lock.
 
 - **Local-First Launch (Instant Shell Access)**:
   - You no longer have to enter your master password just to use SubTerm. Launch the application to immediately open a local terminal (PowerShell, CMD, or Bash) without being blocked by an unlock screen.

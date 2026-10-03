@@ -120,7 +120,7 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 
 ## 3. Configuration & Customization
 
-SubTerm includes a 10-category **Settings Panel** (accessible via the gear icon or `Ctrl+,`):
+SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon or `Ctrl+,`):
 
 - **Appearance**: Select your preferred accent color and dark/light UI theme.
 - **Terminal**: Adjust font family, font size, line height, cursor styles, and terminal scrollback buffer size.
@@ -128,6 +128,7 @@ SubTerm includes a 10-category **Settings Panel** (accessible via the gear icon 
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization.
 - **Profiles & Workspaces**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
+- **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
 
 ---
 
@@ -135,6 +136,9 @@ SubTerm includes a 10-category **Settings Panel** (accessible via the gear icon 
 
 ### Q: Why does an unknown server show a "Host Key Verification" prompt?
 On the first connection to any server, SubTerm displays the server's public key fingerprint (SHA256). Verify that this fingerprint matches your server's fingerprint to protect against Man-in-the-Middle (MITM) attacks before clicking **Trust & Connect**.
+
+### Q: How do I remove a revoked or changed SSH host key?
+If a remote server's OS was re-installed or its SSH host key was rotated, navigate to **Settings (`Ctrl+,`) > Known Hosts**, find the entry for that host/port, and click **Revoke**. When you reconnect to the server, SubTerm will display a fresh fingerprint prompt to trust the new key.
 
 ### Q: "No common key algorithm" or connection fails on older Linux servers?
 If you are connecting to older servers that only support legacy RSA host keys (`ssh-rsa`), ensure your SubTerm build was compiled with the `full-ssh-algos` feature:
@@ -147,4 +151,4 @@ The pure-Rust default build intentionally disables legacy RSA host keys to reduc
 Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar. On Windows, this launches PowerShell or Command Prompt via ConPTY. On Linux/macOS, it launches your default `$SHELL`.
 
 ### Q: Why are some settings categories showing a lock screen?
-Sensitive settings categories (Profiles, Cloud Sync, Quick Commands, Quick Access Servers, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
+Sensitive settings categories (Profiles, Cloud Sync, Quick Commands, Quick Access Servers, Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
