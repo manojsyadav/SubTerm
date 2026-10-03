@@ -24,6 +24,7 @@ import AddNodePanel from "./components/AddNodePanel";
 import { renderServerIcon } from "./components/ServerIcon";
 import TerminalView from "./components/TerminalView";
 import SettingsPanel from "./components/SettingsPanel";
+import { NetworkToolsModal } from "./components/NetworkToolsModal";
 import { SessionView } from "./components/SessionView";
 import MonitoringPanel from "./components/MonitoringPanel";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
@@ -373,6 +374,7 @@ function DesktopApp() {
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isImportModalRequested, setIsImportModalRequested] = useState(false);
+  const [isNetworkToolsOpen, setIsNetworkToolsOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
@@ -1699,6 +1701,7 @@ function DesktopApp() {
                   setIsImportModalRequested(true);
                   setIsPanelOpen(true);
                 }}
+                onOpenNetworkTools={() => setIsNetworkToolsOpen(true)}
                 onQuickConnect={() => setIsQuickConnectOpen(true)}
                 onOpenLocalTerminal={openLocalTerminal}
                 onRemoveServer={removeServer}
@@ -2729,6 +2732,12 @@ function DesktopApp() {
         isOpen={isQuickConnectOpen}
         onClose={() => setIsQuickConnectOpen(false)}
         onConnect={openQuickConnect}
+      />
+
+      <NetworkToolsModal
+        isOpen={isNetworkToolsOpen}
+        onClose={() => setIsNetworkToolsOpen(false)}
+        servers={servers}
       />
 
       <WorkspaceSwitcherModal

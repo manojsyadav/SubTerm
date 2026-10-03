@@ -1,11 +1,11 @@
-import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert, Download } from "lucide-react";
+import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert, Download, Activity } from "lucide-react";
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "../ui/confirm";
 import { renderServerIcon } from "./ServerIcon";
 import DistroLogo from "./DistroLogo";
 
-export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
+export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onOpenNetworkTools, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
   const [search, setSearch] = useState("");
   // Native window.confirm() is a silent no-op inside Tauri's Android WebView
   // (same shim gap useTextPrompt was added for), so the delete buttons here
@@ -607,6 +607,15 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                     title="Import hosts from OpenSSH ~/.ssh/config, PuTTY, or MobaXterm"
                   >
                     <Download size={13} /> Import SSH Config
+                  </button>
+                )}
+                {onOpenNetworkTools && (
+                  <button
+                    onClick={onOpenNetworkTools}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-300 text-[11px] font-bold uppercase tracking-wider hover:bg-teal-500/20 hover:text-teal-200 transition-colors"
+                    title="Network diagnostics: TCP port probe, latency ping, service audit"
+                  >
+                    <Activity size={13} /> Network Tools
                   </button>
                 )}
                 {displayedServers.length >= 2 && onOpenMultipleServers && (

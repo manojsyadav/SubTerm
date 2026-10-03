@@ -53,3 +53,99 @@ pub async fn perform_port_knock(
 
     Ok(())
 }
+
+#[derive(serde::Serialize, Clone, Debug)]
+pub struct PortProbeResult {
+    pub host: String,
+    pub port: u16,
+    pub open: bool,
+    pub latency_ms: u64,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn probe_tcp_port(
+    host: String,
+    port: u16,
+    timeout_ms: Option<u64>,
+) -> Result<PortProbeResult, String> {
+    let t_ms = timeout_ms.unwrap_or(2000);
+    let start = std::time::Instant::now();
+    let addr_str = format!("{}:{}", host, port);
+
+    let mut addrs = match tokio::net::lookup_host(&addr_str).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Ok(PortProbeResult {
+                host,
+                port,
+                open: false,
+                latency_ms: start.elapsed().as_millis() as u64,
+                error: Some(format!("DNS lookup failed: {}", e)),
+            })
+        }
+    };
+
+    let target = match addrs.next() {
+        Some(t) => t,
+        None => {
+            return Ok(PortProbeResult {
+                host,
+                port,
+                open: false,
+                latency_ms: start.elapsed().as_millis() as u64,
+                error: Some("No socket address found".to_string()),
+            })
+        }
+    };
+
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(t_ms),
+        tokio::net::TcpStream::connect(&target),
+    )
+    .await
+    {
+        Ok(Ok(_stream)) => {
+            let elapsed = start.elapsed().as_millis() as u64;
+            Ok(PortProbeResult {
+                host,
+                port,
+                open: true,
+                latency_ms: elapsed,
+                error: None,
+            })
+        }
+        Ok(Err(e)) => {
+            let elapsed = start.elapsed().as_millis() as u64;
+            Ok(PortProbeResult {
+                host,
+                port,
+                open: false,
+                latency_ms: elapsed,
+                error: Some(e.to_string()),
+            })
+        }
+        Err(_) => Ok(PortProbeResult {
+            host,
+            port,
+            open: false,
+            latency_ms: t_ms,
+            error: Some(format!("Connection timed out after {}ms", t_ms)),
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn batch_probe_ports(
+    host: String,
+    ports: Vec<u16>,
+    timeout_ms: Option<u64>,
+) -> Result<Vec<PortProbeResult>, String> {
+    let mut results = Vec::new();
+    for port in ports {
+        let res = probe_tcp_port(host.clone(), port, timeout_ms).await?;
+        results.push(res);
+    }
+    Ok(results)
+}
+

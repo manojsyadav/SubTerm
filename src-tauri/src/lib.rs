@@ -7337,6 +7337,7 @@ pub fn run() {
             commands::sftp::local_copy_entry,
             set_ssh_keepalive_interval,
             commands::network::send_wake_on_lan, commands::network::perform_port_knock,
+            commands::network::probe_tcp_port, commands::network::batch_probe_ports,
             monitor_list, monitor_add, monitor_remove, monitor_set_metrics, monitor_set_custom_metrics,
             monitor_resume, monitor_pause, monitor_resume_all, monitor_pause_all,
             monitor_get_settings, monitor_set_settings,
