@@ -1,3 +1,4 @@
+pub mod connection;
 pub mod diagnostics;
 pub mod mirror;
 pub mod monitor_settings;
