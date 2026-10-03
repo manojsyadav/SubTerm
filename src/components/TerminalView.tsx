@@ -548,11 +548,17 @@ const TerminalView = ({
     const cursorBlink = localStorage.getItem('subterm-terminal-cursor-blink') !== 'false';
     const cursorStyle = (localStorage.getItem('subterm-terminal-cursor-style') || 'block') as 'block' | 'underline' | 'bar';
 
+    const fontFamily = localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace';
+    const lineHeight = parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15');
+    const scrollback = parseInt(localStorage.getItem('subterm-terminal-scrollback') || '5000', 10);
+
     const term = new Terminal({
       cursorBlink,
       cursorStyle,
       fontSize: parseInt(localStorage.getItem('subterm-terminal-font-size') || localStorage.getItem('submarine-terminal-font-size') || '14'),
-      fontFamily: 'Consolas, "Courier New", monospace',
+      fontFamily,
+      lineHeight,
+      scrollback,
       theme: getTerminalTheme(themeId),
       allowProposedApi: true
     });
@@ -1359,10 +1365,25 @@ const TerminalView = ({
     
     // Handle Settings Change
     const handleSettingsChange = () => {
+      let needsFit = false;
       const newSize = parseInt(localStorage.getItem('subterm-terminal-font-size') || localStorage.getItem('submarine-terminal-font-size') || '14');
       if (term.options.fontSize !== newSize) {
         term.options.fontSize = newSize;
-        fitAddon.fit();
+        needsFit = true;
+      }
+      const newFontFamily = localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace';
+      if (term.options.fontFamily !== newFontFamily) {
+        term.options.fontFamily = newFontFamily;
+        needsFit = true;
+      }
+      const newLineHeight = parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15');
+      if (term.options.lineHeight !== newLineHeight) {
+        term.options.lineHeight = newLineHeight;
+        needsFit = true;
+      }
+      const newScrollback = parseInt(localStorage.getItem('subterm-terminal-scrollback') || '5000', 10);
+      if (term.options.scrollback !== newScrollback) {
+        term.options.scrollback = newScrollback;
       }
       const newThemeId = localStorage.getItem('subterm-terminal-theme') || 'subterm-dark';
       term.options.theme = getTerminalTheme(newThemeId);
@@ -1370,6 +1391,9 @@ const TerminalView = ({
       term.options.cursorStyle = newCursorStyle;
       const newCursorBlink = localStorage.getItem('subterm-terminal-cursor-blink') !== 'false';
       term.options.cursorBlink = newCursorBlink;
+      if (needsFit) {
+        fitAddon.fit();
+      }
     };
     window.addEventListener('subterm-settings-changed', handleSettingsChange);
     window.addEventListener('submarine-settings-changed', handleSettingsChange);

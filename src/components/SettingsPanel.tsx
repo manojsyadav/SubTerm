@@ -10,7 +10,7 @@ import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
-import { TERMINAL_THEMES } from "../terminal/themes";
+import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS } from "../terminal/themes";
 
 type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
 
@@ -148,6 +148,9 @@ const PageAppearance = ({ settings, setSettings }: any) => (
 const PageTerminal = ({ settings, setSettings }: any) => {
   const currentThemeId = settings.terminalTheme || 'subterm-dark';
   const currentTheme = TERMINAL_THEMES.find((t) => t.id === currentThemeId) || TERMINAL_THEMES[0];
+  const currentFont = settings.terminalFontFamily || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace';
+  const matchingPreset = FONT_FAMILY_PRESETS.find((p) => p.value && p.value === currentFont);
+  const selectedPresetId = matchingPreset ? matchingPreset.id : "custom";
 
   return (
     <div className="space-y-6">
@@ -172,11 +175,72 @@ const PageTerminal = ({ settings, setSettings }: any) => {
             </select>
           </div>
         </Row>
+        <Row label="Font Family" desc="Typography typeface preset or custom font stack">
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+            <select
+              value={selectedPresetId}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val !== "custom") {
+                  const preset = FONT_FAMILY_PRESETS.find((p) => p.id === val);
+                  if (preset) {
+                    setSettings({ ...settings, terminalFontFamily: preset.value });
+                  }
+                }
+              }}
+              className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+            >
+              {FONT_FAMILY_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+            {selectedPresetId === "custom" && (
+              <input
+                type="text"
+                placeholder='e.g. "Operator Mono", monospace'
+                value={currentFont}
+                onChange={(e) => setSettings({ ...settings, terminalFontFamily: e.target.value })}
+                className="w-48 bg-black/60 border border-white/10 text-white rounded-lg px-2 py-1 text-xs outline-none focus:border-primary/50 font-mono"
+              />
+            )}
+          </div>
+        </Row>
         <Row label="Font Size (px)" desc="Terminal character size in pixels">
           <div className="flex items-center gap-3">
             <input type="range" min="8" max="24" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-32 accent-primary" />
             <input type="number" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
           </div>
+        </Row>
+        <Row label="Line Height" desc="Vertical line spacing ratio for terminal characters">
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min="1.0"
+              max="1.6"
+              step="0.05"
+              value={settings.terminalLineHeight || 1.15}
+              onChange={(e) => setSettings({ ...settings, terminalLineHeight: parseFloat(e.target.value) || 1.15 })}
+              className="w-32 accent-primary"
+            />
+            <span className="w-12 text-center text-xs font-mono font-semibold text-zinc-300 bg-black/40 border border-white/10 rounded px-1.5 py-1">
+              {(settings.terminalLineHeight || 1.15).toFixed(2)}x
+            </span>
+          </div>
+        </Row>
+        <Row label="Scrollback Buffer" desc="Historical terminal lines retained in memory per session">
+          <select
+            value={settings.terminalScrollback || 5000}
+            onChange={(e) => setSettings({ ...settings, terminalScrollback: parseInt(e.target.value, 10) || 5000 })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            {SCROLLBACK_PRESETS.map((preset) => (
+              <option key={preset.value} value={preset.value}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
         </Row>
         <Row label="Cursor Style" desc="Visual shape of the terminal cursor">
           <select

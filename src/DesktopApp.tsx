@@ -103,6 +103,9 @@ function DesktopApp() {
     terminalCursorStyle: localStorage.getItem('subterm-terminal-cursor-style') || 'block',
     terminalCursorBlink: localStorage.getItem('subterm-terminal-cursor-blink') !== 'false',
     terminalBell: localStorage.getItem('subterm-terminal-bell') || 'visual',
+    terminalFontFamily: localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
+    terminalLineHeight: parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15'),
+    terminalScrollback: parseInt(localStorage.getItem('subterm-terminal-scrollback') || '5000', 10),
     quickAccessServerIds: (() => {
       try {
         const raw = localStorage.getItem('subterm-quick-access-servers');
@@ -464,6 +467,9 @@ function DesktopApp() {
     localStorage.setItem('subterm-terminal-cursor-style', appSettings.terminalCursorStyle || 'block');
     localStorage.setItem('subterm-terminal-cursor-blink', appSettings.terminalCursorBlink !== false ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-bell', appSettings.terminalBell || 'visual');
+    localStorage.setItem('subterm-terminal-font-family', appSettings.terminalFontFamily || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace');
+    localStorage.setItem('subterm-terminal-line-height', String(appSettings.terminalLineHeight || 1.15));
+    localStorage.setItem('subterm-terminal-scrollback', String(appSettings.terminalScrollback || 5000));
     localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {

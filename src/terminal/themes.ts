@@ -238,3 +238,28 @@ export function getTerminalTheme(id?: string | null): ITheme {
   const match = TERMINAL_THEMES.find((t) => t.id === id);
   return match ? match.theme : TERMINAL_THEMES[0].theme;
 }
+
+export interface FontFamilyPreset {
+  id: string;
+  name: string;
+  value: string;
+}
+
+export const FONT_FAMILY_PRESETS: FontFamilyPreset[] = [
+  { id: "jetbrains", name: "JetBrains Mono / System Monospace", value: 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace' },
+  { id: "fira", name: "Fira Code / System Monospace", value: 'Fira Code, Menlo, Monaco, Consolas, "Courier New", monospace' },
+  { id: "cascadia", name: "Cascadia Code / Consolas", value: 'Cascadia Code, Consolas, "Courier New", monospace' },
+  { id: "consolas", name: "Consolas", value: 'Consolas, "Courier New", monospace' },
+  { id: "apple", name: "Monaco / Menlo (macOS Monospace)", value: 'Monaco, Menlo, "Courier New", monospace' },
+  { id: "source", name: "Source Code Pro", value: '"Source Code Pro", Consolas, monospace' },
+  { id: "custom", name: "Custom Font…", value: "" },
+];
+
+export const SCROLLBACK_PRESETS = [
+  { value: 1000, label: "1,000 lines (Low RAM)" },
+  { value: 5000, label: "5,000 lines (Standard)" },
+  { value: 10000, label: "10,000 lines (Extended)" },
+  { value: 25000, label: "25,000 lines (Heavy logs)" },
+  { value: 50000, label: "50,000 lines (Maximum)" },
+];
+
