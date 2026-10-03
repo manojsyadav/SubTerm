@@ -154,6 +154,23 @@ SubTerm supports three tunnel modalities:
 2. **Remote Forwarding (`-R`)**: Requests the remote SSH daemon to bind a port on the remote machine and forward inbound connections back to a local port or service.
 3. **Dynamic Forwarding (`-D` / SOCKS5)**: Creates a local SOCKS5 proxy server allowing arbitrary browser/tooling traffic to route through the SSH connection.
 
+### 4.4 WebGL Hardware Acceleration Subsystem (`xterm-addon-webgl`)
+To sustain high-throughput output (up to 28+ MB/s text parsing) without CPU degradation:
+- The terminal view (`src/components/TerminalView.tsx`) evaluates the `webgl` setting from `app_settings`.
+- When enabled, `WebglAddon` is mounted to the active `xterm.js` instance immediately after DOM attachment.
+- Automatic context loss handling catches `webglAddon.onContextLoss()`, cleanly disposes the GPU addon, and falls back to standard Canvas 2D rasterization without interrupting active sessions or causing buffer loss.
+
+### 4.5 Split-Pane Multiplexing System
+SubTerm supports arbitrary horizontal and vertical session multiplexing:
+- **State Model**: Managed in `src/DesktopApp.tsx` via `splitOrientation` (`'horizontal' | 'vertical'`) and `splitRatios` (`number[]`).
+- **Dynamic Resizing**: Custom interactive divider handles allow real-time layout resizing using mouse pointer tracking.
+- **Controls**: Tab strip buttons in `src/components/SessionView.tsx` allow 1-click splitting (`Ctrl+\` for vertical, `Ctrl+Shift+\` for horizontal) and quick unsplitting.
+
+### 4.6 Fleet Broadcast & Multi-Session Fan-Out
+- **State Model**: Managed via React Context (`BroadcastContext`, `src/ui/broadcast.tsx`).
+- **Fan-Out Logic**: In `src/components/TerminalView.tsx`, when broadcast is enabled and the session is an armed target, terminal `onData` keystrokes fan out to all targeted sessions concurrently via their respective backend session IDs.
+- **Safety Protections**: Visual glowing indicators and safety warning banners notify the user whenever fleet broadcast is armed.
+
 ---
 
 ## 5. Settings Panel Architecture

@@ -19,6 +19,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - [**Tauri IPC & API Reference**](docs/API_REFERENCE.md): Complete catalog of backend commands, input arguments, return types, and event streams.
 - [**Developer & Setup Guide**](docs/DEVELOPMENT.md): Toolchain prerequisites, local development, cargo feature flags, Android builds, and Linux WebKit workarounds.
 - [**Security & Threat Model**](docs/SECURITY.md): Argon2id KDF specifications, AES-256-GCM AEAD encryption, zero-knowledge cloud sync, and safety controls.
+- [**Performance & Competitive Benchmarks**](docs/PERFORMANCE.md): WebGL hardware acceleration throughput, memory footprint, and competitive matrix against Termius, Warp, Ghostty, PuTTY, WinSCP, and MobaXterm.
 - [**User Guide & Workflows**](docs/USER_GUIDE.md): Step-by-step guides for server connectivity, SFTP editing, port forwarding, and settings.
 - [**Release Notes**](docs/RELEASE_NOTES.md): Customer-ready changelog and feature announcements for version releases.
 
