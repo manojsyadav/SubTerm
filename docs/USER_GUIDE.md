@@ -145,6 +145,8 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
 - **Terminal**:
   - **Curated Color Schemes**: Select from 8 curated terminal themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, *Solarized Dark*) with full 16-color ANSI rendering and live preview swatches. Active terminals update instantly without reconnecting.
   - **Cursor Customization**: Configure cursor shape (*Block*, *Underline*, *Bar / Vertical Line*) and toggle animated cursor blinking.
+  - **Terminal Bell Alerts**: Choose between *Visual Flash* (amber border glow), *Audible Chime* (pure Web Audio synthesizer), *Both*, or *Disabled* when an ASCII Bell (`\a` or `BEL`) is triggered by completed builds or shell alerts.
+  - **Pro Terminal Search (`Ctrl+F`)**: Floating search widget featuring live match counter badge (`3 of 15` / `No matches`), case-sensitive matching (`Aa`), whole-word boundaries (`\b`), regular expressions (`.*`), and navigation arrows.
   - **Font Size & WebGL Acceleration**: Real-time font size adjustment (8px–24px) and WebGL GPU rasterization toggle.
   - **Clipboard & Mouse Behavior**: Choose between glassmorphic Context Menu or instant PuTTY-style paste on right-click, and toggle automatic Copy on Select.
 - **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
