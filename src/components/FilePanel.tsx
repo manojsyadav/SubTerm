@@ -14,6 +14,7 @@ import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions
 import { IS_ANDROID } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
 import { SftpBookmarksPopover, loadSftpBookmarks } from "./SftpBookmarksPopover";
+import { archiveKind } from "../fs/archive";
 
 // Batch overwrite state shared across items in a single download/upload run.
 // Once the user picks "Overwrite all" or "Skip all" the kind is sticky and we
@@ -1717,7 +1718,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           )}
 
           {/* Extract / Compress for remote archives */}
-          {isRemote && !multi && /\.(tar\.gz|tgz|tar|zip)$/i.test(contextMenu.entry.name) && (
+          {isRemote && !multi && Boolean(archiveKind(contextMenu.entry.name)) && (
             <button onClick={() => { setContextMenu(null); extractArchive(contextMenu.entry); }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
               <Archive size={11} className="text-violet-400" /><span>Extract Archive Here</span>
