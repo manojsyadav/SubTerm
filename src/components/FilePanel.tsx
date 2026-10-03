@@ -6,12 +6,13 @@ import {
   Folder, File, ArrowUp, RefreshCw, Trash2, Edit3, Shield,
   X, ChevronUp, ChevronDown, Plus, MoreVertical, FolderSearch,
   Download, Upload, ExternalLink, Move, CheckSquare, Square, Search,
-  TerminalSquare, FileCode, Archive, Copy, Check,
+  TerminalSquare, FileCode, Archive, Copy, Check, Bookmark, Star,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions } from "../ui/confirm";
 import { IS_ANDROID } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
+import { SftpBookmarksPopover, loadSftpBookmarks } from "./SftpBookmarksPopover";
 
 // Batch overwrite state shared across items in a single download/upload run.
 // Once the user picks "Overwrite all" or "Skip all" the kind is sticky and we
@@ -151,6 +152,21 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const [fuzzySearchOpen, setFuzzySearchOpen] = useState(false);
   const [fuzzyQuery, setFuzzyQuery] = useState("");
   const [gitFileStatuses, setGitFileStatuses] = useState<Record<string, string>>({});
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [isCurrentBookmarked, setIsCurrentBookmarked] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      const bms = loadSftpBookmarks();
+      const norm = currentPath.replace(/\/+$/, "") || "/";
+      setIsCurrentBookmarked(
+        bms.some((b) => b.isRemote === (provider.id === "remote") && (b.path.replace(/\/+$/, "") || "/") === norm)
+      );
+    };
+    check();
+    window.addEventListener("subterm-bookmarks-updated", check);
+    return () => window.removeEventListener("subterm-bookmarks-updated", check);
+  }, [currentPath, provider.id]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -1125,6 +1141,25 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             className={`p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0 ${loading ? "animate-spin" : ""}`}>
             <RefreshCw size={11} />
           </button>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setBookmarksOpen(!bookmarksOpen)}
+              title="Directory Bookmarks & Quick Jumps"
+              className={`p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0 transition-colors ${
+                isCurrentBookmarked ? "text-amber-400 border-amber-400/40 bg-amber-500/10" : ""
+              }`}
+            >
+              <Bookmark size={11} className={isCurrentBookmarked ? "fill-amber-400 text-amber-400" : ""} />
+            </button>
+            <SftpBookmarksPopover
+              isOpen={bookmarksOpen}
+              onClose={() => setBookmarksOpen(false)}
+              currentPath={currentPath}
+              isRemote={isRemote}
+              onNavigate={(targetPath) => fetch(targetPath)}
+            />
+          </div>
           {isRemote && (
             <>
               <button
