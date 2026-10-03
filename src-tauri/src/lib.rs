@@ -3876,6 +3876,68 @@ async fn persist_vault(state: tauri::State<'_, DbState>) -> Result<(), String> {
     save_vault_async(&state).await
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct KnownHostRecord {
+    pub id: i64,
+    pub host: String,
+    pub port: i32,
+    pub fingerprint: String,
+    pub key_type: String,
+}
+
+/// Retrieve all trusted host keys and fingerprints recorded in the active vault.
+#[tauri::command]
+async fn get_known_hosts(state: tauri::State<'_, DbState>) -> Result<Vec<KnownHostRecord>, String> {
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    let mut stmt = conn
+        .prepare("SELECT id, host, port, fingerprint, key_type FROM known_hosts ORDER BY host, port")
+        .map_err(|e| format!("[DATABASE] PREPARE_FAILED: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(KnownHostRecord {
+                id: row.get(0)?,
+                host: row.get(1)?,
+                port: row.get(2)?,
+                fingerprint: row.get(3)?,
+                key_type: row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "ssh-ed25519".to_string()),
+            })
+        })
+        .map_err(|e| format!("[DATABASE] QUERY_FAILED: {}", e))?;
+
+    let mut result = Vec::new();
+    for r in rows {
+        if let Ok(rec) = r {
+            result.push(rec);
+        }
+    }
+    Ok(result)
+}
+
+/// Delete a specific known host fingerprint from the active vault.
+#[tauri::command]
+async fn delete_known_host(state: tauri::State<'_, DbState>, id: i64) -> Result<(), String> {
+    {
+        let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+        conn.execute("DELETE FROM known_hosts WHERE id = ?1", rusqlite::params![id])
+            .map_err(|e| format!("[DATABASE] DELETE_FAILED: {}", e))?;
+    }
+    save_vault_async(&state).await
+}
+
+/// Clear all trusted host fingerprints from the active vault.
+#[tauri::command]
+async fn clear_all_known_hosts(state: tauri::State<'_, DbState>) -> Result<(), String> {
+    {
+        let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+        conn.execute("DELETE FROM known_hosts", [])
+            .map_err(|e| format!("[DATABASE] CLEAR_FAILED: {}", e))?;
+    }
+    save_vault_async(&state).await
+}
+
 /// Create a brand-new profile, encrypted with `password`, and select it as
 /// the active profile so the app can proceed directly into the main view
 /// without bouncing back through `select_profile + setup_master_db`.
@@ -7230,6 +7292,7 @@ pub fn run() {
             mirror_dry_run, start_mirror, stop_mirror, list_mirrors, pick_local_directory,
             commands::servers::add_credential, commands::servers::edit_credential, commands::servers::delete_credential,
             commands::servers::add_ssh_key, commands::servers::edit_ssh_key, commands::servers::delete_ssh_key,
+            get_known_hosts, delete_known_host, clear_all_known_hosts,
             initiate_connection, verify_fingerprint_response, submit_kbi_response, disconnect_session,
             commands::tunnels::start_tunnel, commands::tunnels::stop_tunnel, commands::tunnels::list_tunnels, commands::tunnels::restart_session_tunnels, commands::tunnels::persist_session_tunnels,
             commands::terminal::open_terminal, commands::terminal::open_local_terminal, commands::terminal::get_available_local_shells, commands::terminal::write_terminal_data, commands::terminal::resize_terminal, commands::terminal::close_terminal,

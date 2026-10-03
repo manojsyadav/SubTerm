@@ -2,15 +2,16 @@ import { useState } from "react";
 import {
   Settings, Palette, RefreshCw, List, Cloud, User,
   ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
-  Plus, Terminal, Keyboard, ChevronRight, Lock,
+  Plus, Terminal, Keyboard, ChevronRight, Lock, ShieldCheck,
 } from "lucide-react";
 import CloudPanel from "./CloudPanel";
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsCloudSync } from "./SettingsCloudSync";
+import { SettingsKnownHosts } from "./SettingsKnownHosts";
 
-type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "maintenance" | "logs";
+type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
 
 interface Category {
   id: CategoryId;
@@ -20,19 +21,20 @@ interface Category {
 }
 
 // Categories that require the vault to be unlocked before use.
-const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "quickcommands", "servers", "maintenance", "logs"];
+const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "quickcommands", "servers", "security", "maintenance", "logs"];
 
 const CATEGORIES: Category[] = [
-  { id: "appearance",    label: "Appearance",        icon: <Palette size={16} />,   description: "Colors, fonts, and theme" },
-  { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,  description: "Behaviour, clipboard, session-end" },
-  { id: "servers",       label: "Quick Access",       icon: <Server size={16} />,    description: "Pinned servers in the top bar" },
-  { id: "monitoring",    label: "Monitoring",         icon: <Activity size={16} />,  description: "Resource polling and alerts" },
-  { id: "cloud",         label: "Cloud and Sync",     icon: <Cloud size={16} />,     description: "Cloud account and sync settings" },
-  { id: "profile",       label: "Profile",            icon: <User size={16} />,      description: "Manage and switch profiles" },
-  { id: "quickcommands", label: "Quick Commands",     icon: <List size={16} />,      description: "OS / environment quick commands" },
-  { id: "shortcuts",     label: "Keyboard Shortcuts", icon: <Keyboard size={16} />,  description: "Rebind keyboard shortcuts" },
-  { id: "maintenance",   label: "Maintenance",        icon: <RefreshCw size={16} />, description: "Reset defaults and diagnostics" },
-  { id: "logs",          label: "Activity Log",       icon: <List size={16} />,      description: "Session diagnostics timeline" },
+  { id: "appearance",    label: "Appearance",        icon: <Palette size={16} />,     description: "Colors, fonts, and theme" },
+  { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,    description: "Behaviour, clipboard, session-end" },
+  { id: "servers",       label: "Quick Access",       icon: <Server size={16} />,      description: "Pinned servers in the top bar" },
+  { id: "monitoring",    label: "Monitoring",         icon: <Activity size={16} />,    description: "Resource polling and alerts" },
+  { id: "cloud",         label: "Cloud and Sync",     icon: <Cloud size={16} />,       description: "Cloud account and sync settings" },
+  { id: "profile",       label: "Profile",            icon: <User size={16} />,        description: "Manage and switch profiles" },
+  { id: "quickcommands", label: "Quick Commands",     icon: <List size={16} />,        description: "OS / environment quick commands" },
+  { id: "shortcuts",     label: "Keyboard Shortcuts", icon: <Keyboard size={16} />,    description: "Rebind keyboard shortcuts" },
+  { id: "security",      label: "Known Hosts",        icon: <ShieldCheck size={16} />, description: "Trusted host keys and fingerprints" },
+  { id: "maintenance",   label: "Maintenance",        icon: <RefreshCw size={16} />,   description: "Reset defaults and diagnostics" },
+  { id: "logs",          label: "Activity Log",       icon: <List size={16} />,        description: "Session diagnostics timeline" },
 ];
 
 // â”€â”€â”€ Reusable primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -338,6 +340,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       case "profile":       return <PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />;
       case "quickcommands": return <PageQuickCommands />;
       case "shortcuts":     return <PageShortcuts />;
+      case "security":      return <SettingsKnownHosts />;
       case "maintenance":   return <PageMaintenance settings={settings} setSettings={setSettings} />;
       case "logs":          return <PageLogs onOpenLogs={onOpenLogs} />;
       default:              return null;
