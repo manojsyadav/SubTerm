@@ -38,6 +38,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Directory Symlinks as Folders**: SFTP and local file panes resolve directory symlinks as navigable folders with a link badge, instead of treating them as plain files.
 - **Paste Saved Password**: Terminal context-menu action that injects the session's saved SSH password straight into an interactive `[sudo] password for user:` prompt, server-side only.
 - **Wildcard Server Search**: Home-screen search accepts shell-style `*`/`?` glob wildcards on top of plain substring matching.
+- **Terminal Triggers & Alert Keywords**: Keyword/regex patterns matched against live terminal output, firing a toast notification, audible chime, visual flash, or Activity Log entry.
 - **Interactive Network Diagnostics & Port Prober**: TCP port ping with millisecond round-trip latency, concurrent common service port audits (SSH, HTTP/S, DBs, Cache), Wake-on-LAN (WOL), and firewall port knocking.
 - **Configurable SSH Keep-Alive Settings**: Dynamic 15s–120s keep-alive packet intervals to prevent dropped sessions across NAT firewalls and cloud proxies.
 - **Auto-Reconnect with Sleep/Resume & Network-Change Detection**: Detects laptop sleep/resume cycles and network interface changes (Wi-Fi roam, VPN toggle) and retries immediately instead of waiting on the passive health check, with capped exponential backoff (2s–30s) and a live "Reconnecting · attempt N" status banner.

@@ -30,6 +30,9 @@
 - **`feat(nodes)` — Wildcard search in the server filter**:
   The home-screen server search now accepts shell-style glob wildcards (`web-*`, `prod-db?`, `*-staging`) on top of plain substring matching.
 
+- **`feat(terminal)` — Terminal Triggers & Alert Keywords**:
+  Define keyword or regex patterns in **Settings → Terminal → Terminal Triggers & Alert Keywords** that fire a toast notification, audible chime, visual flash, or Activity Log entry whenever they appear in live terminal output — handy for noticing `ERROR`/`FATAL` lines in a session tab you're not actively watching.
+
 ### 🐛 Bug Fixes
 
 - **`fix(sftp)` — Saving a root-owned file silently failed**:

@@ -12,6 +12,7 @@ import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
+import { TerminalTrigger, TriggerAction, getTerminalTriggers, saveTerminalTriggers, newTrigger } from "../terminal/triggers";
 
 type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
 
@@ -151,6 +152,15 @@ const PageTerminal = ({ settings, setSettings }: any) => {
   const [importThemeModal, setImportThemeModal] = useState(false);
   const [importThemeText, setImportThemeText] = useState("");
   const [importThemeError, setImportThemeError] = useState("");
+  const [triggers, setTriggers] = useState<TerminalTrigger[]>(getTerminalTriggers());
+
+  const updateTriggers = (next: TerminalTrigger[]) => {
+    setTriggers(next);
+    saveTerminalTriggers(next);
+  };
+  const updateTrigger = (id: string, patch: Partial<TerminalTrigger>) => {
+    updateTriggers(triggers.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
   const [copiedThemeToast, setCopiedThemeToast] = useState(false);
 
   const currentThemeId = settings.terminalTheme || 'subterm-dark';
@@ -361,6 +371,59 @@ const PageTerminal = ({ settings, setSettings }: any) => {
             <option value="none">Disabled (Mute)</option>
           </select>
         </Row>
+      </SectionCard>
+
+      <SectionCard title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">
+        {triggers.length === 0 && (
+          <p className="text-xs text-zinc-500 italic py-1">No triggers configured yet.</p>
+        )}
+        <div className="space-y-2">
+          {triggers.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-2">
+              <Toggle checked={t.enabled} onChange={() => updateTrigger(t.id, { enabled: !t.enabled })} />
+              <input
+                type="text"
+                value={t.pattern}
+                onChange={(e) => updateTrigger(t.id, { pattern: e.target.value })}
+                placeholder={t.isRegex ? "regex, e.g. (ERROR|FATAL)" : "keyword, e.g. ERROR"}
+                className="flex-1 min-w-[140px] bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50 font-mono"
+              />
+              <label className="flex items-center gap-1 text-[10.5px] text-zinc-400 cursor-pointer select-none">
+                <input type="checkbox" checked={t.isRegex} onChange={(e) => updateTrigger(t.id, { isRegex: e.target.checked })} className="accent-primary" />
+                Regex
+              </label>
+              <label className="flex items-center gap-1 text-[10.5px] text-zinc-400 cursor-pointer select-none">
+                <input type="checkbox" checked={t.caseSensitive} onChange={(e) => updateTrigger(t.id, { caseSensitive: e.target.checked })} className="accent-primary" />
+                Case-sensitive
+              </label>
+              <select
+                value={t.action}
+                onChange={(e) => updateTrigger(t.id, { action: e.target.value as TriggerAction })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2 py-1 text-[10.5px] outline-none focus:border-primary/50"
+              >
+                <option value="notify">Toast Notification</option>
+                <option value="chime">Audible Chime</option>
+                <option value="highlight">Visual Flash</option>
+                <option value="log">Activity Log Entry</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => updateTriggers(triggers.filter((x) => x.id !== t.id))}
+                className="p-1.5 rounded-md bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                title="Remove trigger"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => updateTriggers([...triggers, newTrigger()])}
+          className="mt-3 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold uppercase hover:bg-primary hover:text-zinc-950 transition-all flex items-center gap-1.5"
+        >
+          <Plus size={13} /> Add Trigger
+        </button>
       </SectionCard>
 
       {/* Import Theme Modal */}

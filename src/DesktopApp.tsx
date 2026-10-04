@@ -233,6 +233,19 @@ function DesktopApp() {
       .catch(() => {});
   }, []);
 
+  // Terminal Triggers' "log" action dispatches this from TerminalView (a
+  // leaf component several layers below) instead of threading addLog down
+  // through SessionView — same decoupled-signal pattern as the existing
+  // `submarine-open-copilot-${sessionId}` window events.
+  useEffect(() => {
+    const onTriggerLog = (e: Event) => {
+      const detail = (e as CustomEvent<{ msg: string; type: "info" | "success" | "warning" | "error" }>).detail;
+      if (detail) addLog(detail.msg, detail.type);
+    };
+    window.addEventListener("subterm-add-log", onTriggerLog);
+    return () => window.removeEventListener("subterm-add-log", onTriggerLog);
+  }, [addLog]);
+
   // Local-first launch: open default local shell on startup so user can run commands immediately
   useEffect(() => {
     if (sessions.length === 0) {

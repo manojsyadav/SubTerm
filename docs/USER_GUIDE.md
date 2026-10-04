@@ -202,6 +202,7 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
   - **Font Size & WebGL Acceleration**: Real-time font size adjustment (8px–24px) and WebGL GPU rasterization toggle.
   - **Clipboard & Mouse Behavior**: Choose between glassmorphic Context Menu or instant PuTTY-style paste on right-click, and toggle automatic Copy on Select.
   - **SSH Keep-Alive Interval**: Configure keep-alive ping frequency (Disabled, 15s, 30s, 60s, 120s) to keep remote SSH tunnels and terminal sessions resilient across unstable networks and strict NAT firewalls.
+  - **Terminal Triggers & Alert Keywords**: Define keyword or regex patterns matched against live output in any session. Each trigger fires one of: a toast notification, the audible bell chime, the visual bell flash, or an entry in the Activity Log — useful for noticing `ERROR`/`FATAL`/`Exception` in a background session tab.
 - **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization.

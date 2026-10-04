@@ -16,6 +16,7 @@ import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { getTerminalTheme } from '../terminal/themes';
 import { playTerminalBellChime } from '../terminal/bell';
+import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
 
@@ -106,6 +107,14 @@ const TerminalView = ({
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const openedRef = useRef(false);
+  // Terminal Triggers & Alert Keywords: compiled once, refreshed whenever
+  // the Settings UI saves an updated list — see src/terminal/triggers.ts.
+  const compiledTriggersRef = useRef(compileTriggers(getTerminalTriggers()));
+  useEffect(() => {
+    const refresh = () => { compiledTriggersRef.current = compileTriggers(getTerminalTriggers()); };
+    window.addEventListener(TRIGGERS_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(TRIGGERS_CHANGED_EVENT, refresh);
+  }, []);
   // The xterm `onData` callback is bound once and persists for the life of the
   // component. We read this ref inside the callback so the latest `disabled`
   // state is observed without having to tear down and rebuild xterm.
@@ -1329,6 +1338,32 @@ const TerminalView = ({
         const promptMatch = /(?:^|[\r\n])(?:[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+):([/~][^$#\s)]*)[$#]/.exec(txt);
         if (promptMatch && promptMatch[1]) {
           currentCwdRef.current = promptMatch[1];
+        }
+
+        // Terminal Triggers & Alert Keywords — scanned against just this
+        // chunk (not the sliding tail buffer above) so a persistent match
+        // doesn't re-fire on every subsequent batch. See triggers.ts for why.
+        if (compiledTriggersRef.current.length) {
+          for (const trigger of matchTriggers(txt, compiledTriggersRef.current)) {
+            switch (trigger.action) {
+              case 'notify':
+                notify(`Trigger matched: ${trigger.pattern}`, 'err');
+                break;
+              case 'chime':
+                playTerminalBellChime();
+                break;
+              case 'highlight':
+                setBellActive(true);
+                if (bellTimerRef.current) window.clearTimeout(bellTimerRef.current);
+                bellTimerRef.current = window.setTimeout(() => setBellActive(false), 400);
+                break;
+              case 'log':
+                window.dispatchEvent(new CustomEvent('subterm-add-log', {
+                  detail: { msg: `[Trigger "${trigger.pattern}"] ${txt.trim().slice(0, 200)}`, type: 'warning' },
+                }));
+                break;
+            }
+          }
         }
       } catch { /* decode hiccup on a split multibyte chunk — ignore */ }
 
