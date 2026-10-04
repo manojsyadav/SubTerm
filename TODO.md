@@ -139,9 +139,10 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🖥️ Terminal & Connection Enhancements
 
-- [ ] 🔴 **P1 · S** — **Focus on Select Tab**
-  - Automatically shift active keyboard and cursor focus to the terminal emulator canvas as soon as its tab is selected from the top tab strip.
-  - Eliminates the need to click inside the terminal window after switching tabs before typing.
+- [x] 🔴 **P1 · S** — **Focus on Select Tab** — ✅ Already implemented, verified by code trace
+  - The top tab strip's click handler ([`src/DesktopApp.tsx:1123`](file:///d:/REPO/SubTerm/src/DesktopApp.tsx)) calls `setActiveView(s.id)`, which flips `isFocused` → the `isSessionActive` prop passed into `SessionView` → the `isActive` prop on each `TerminalView` ([`src/components/SessionView.tsx:2169`](file:///d:/REPO/SubTerm/src/components/SessionView.tsx)).
+  - `TerminalView.tsx`'s existing repaint effect ([`src/components/TerminalView.tsx:312-327`](file:///d:/REPO/SubTerm/src/components/TerminalView.tsx)) already calls `t.focus()` whenever `isActive` turns true, so the canvas already regains keyboard focus automatically on every tab switch — no code change was needed.
+  - **Validation:** `npm run typecheck` passes (no change made). Live click-through in the running desktop app is still a recommended manual spot-check, but the full prop chain from tab click to `xterm.focus()` is unbroken.
 
 - [ ] 🔴 **P1 · S** — **Upload Public SSH Keys (`ssh-copy-id`)**
   - 1-click action inside the server details panel or context menu to append a selected public key to the remote server's `~/.ssh/authorized_keys`.
