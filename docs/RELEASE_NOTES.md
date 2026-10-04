@@ -78,6 +78,9 @@
 - **`perf(ipc)` — Binary Tauri channels for terminal output**:
   Terminal byte streams now flow through a Tauri 2 binary `ipc::Channel` instead of base64-encoded `app.emit` events — no base64 (~1.33x overhead) or JSON array encoding, and no `atob`/manual decode loop on the frontend. Split-pane and Fleet Wall multi-viewer support (previously free from the global event broadcast) is preserved via a new per-terminal channel fan-out registry.
 
+- **`feat(sync)` — Visual diff for out-of-sync entities**:
+  **Settings → Cloud Sync** now lists which servers are out of sync with the cloud (and in which direction), with a one-click read-only diff of the local vs. cloud copy — decrypted, pretty-printed, and secret-redacted — so you can see exactly what a sync is about to overwrite before it happens. The merge itself is unchanged (still deterministic last-write-wins by HLC stamp); this is visibility, not interactive resolution. See `docs/API_REFERENCE.md` §10 and `TODO.md` for what's still open (granular per-table sync, keyboard-shortcut sync).
+
 - **`refactor(desktop)` — `DesktopApp.tsx` decomposition (continued)**:
   Pulled the Library (commands/notes), Logins (saved passwords/SSH keys), and Logs (Activity) views out into `src/components/{LibraryView,LoginsView,LogsView}.tsx`. Pure UI extractions — all state stays lifted in `DesktopApp.tsx`, passed down as props, no behavior change — each verified independently with `typecheck`/`lint`/`build`. `DesktopApp.tsx` went from 2,991 to 2,659 lines. The Fleet Wall view and session-tab sidebar/tiling logic remain the largest un-extracted blocks, deliberately deferred as higher-risk (tracked in `TODO.md`).
 

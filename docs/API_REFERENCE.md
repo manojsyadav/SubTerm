@@ -417,6 +417,8 @@ Commands in this module interact with the remote Docker daemon via SSH exec:
 - `cloud_logout()`: Clears stored bearer token.
 - `sync_now()`: Triggers bidirectional sync of active encrypted profile with cloud server.
 - `force_push_profile({ name: string })`: Force-uploads local encrypted profile blob, overwriting cloud copy.
+- `profile_sync_stats()`: Read-only local + cloud diff snapshot (in-sync/needs-push/needs-pull counts, recent edits, and up to 20 named out-of-sync servers with their uuid and push/pull direction).
+- `sync_conflict_diff({ uuid: string })`: Decrypts and pretty-prints the local and cloud copies of one entity (by uuid) for a read-only side-by-side diff — secrets (`password`/`private_key`/`passphrase`) are redacted. Does not change the Last-Write-Wins merge outcome; visibility only.
 
 ---
 

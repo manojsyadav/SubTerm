@@ -47,10 +47,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - Export to `.cast` files, raw terminal log dumps, or animated SVG/GIF for runbooks, documentation, and compliance audit trails.
   - In-app playback preview modal with play/pause, scrub slider, and playback speed controls.
 
-- [ ] 🟡 **P2 · S/M** — **Cloud Sync Enhancements & Conflict Resolution**
-  - Expand self-hosted cloud sync API with visual diffing for simultaneous modifications across multiple devices.
-  - Granular push/pull synchronization for server definitions, credentials, snippet runbooks, and keyboard shortcuts.
-  - Flagged as undersized at **S** — the visual-diffing + granular-sync scope reads more like an **M/L**; re-triage before picking up.
+- [ ] 🟡 **P2 · M** — **Cloud Sync Enhancements & Conflict Resolution** (first slice shipped)
+  - **Done**: read-only visual diffing for concurrent edits. `profile_sync_stats`'s out-of-sync list now carries each entity's uuid and push/pull direction; a new `sync_conflict_diff(uuid)` command decrypts and pretty-prints the local vs. cloud copy (secrets redacted) for a one-click diff view in **Settings → Cloud Sync**, reusing the existing `computeDiff` line-diff algorithm via a new `SyncConflictDiffModal.tsx`. This is visibility only — the underlying merge is still deterministic Last-Write-Wins by HLC stamp; nothing about the merge rule changed.
+  - **Not done (re-scope as its own follow-up)**: granular per-table push/pull selection (today a sync is all-or-nothing across all `SYNCED_TABLES`), and keyboard-shortcut sync — shortcuts (`src/shortcuts/useShortcutsStore.ts`) live entirely in `localStorage`, outside the vault/sync system; bringing them in needs a new table + triggers + `SYNCED_TABLES` entry + a migration off `localStorage`, which is its own well-scoped S/M task.
+  - Interactive conflict *resolution* (picking a field from each side rather than accepting LWW) was explicitly scoped out as true M/L work; the diff view above covers the more valuable half of the ask — seeing what's about to be overwritten — without touching the merge protocol.
 
 - [ ] 🟢 **P3 · XL** — **Dual-Pane Remote-to-Remote SFTP Sync**
   - Side-by-side split SFTP view (Commander / WinSCP style) allowing direct transfers between two distinct remote SSH servers.

@@ -1007,13 +1007,22 @@ pub(crate) struct RecentEdit {
 }
 
 #[derive(serde::Serialize)]
+pub(crate) struct OutOfSyncItem {
+    uuid: String,
+    name: String,
+    /// "push" when the local copy is newer than the cloud's, "pull" the
+    /// other way — lets the panel label each row without re-deriving it.
+    direction: &'static str,
+}
+
+#[derive(serde::Serialize)]
 pub(crate) struct SyncDiff {
     in_sync: usize,
     needs_push: usize,
     needs_pull: usize,
-    /// Names of local nodes whose local copy differs from the cloud (either an
+    /// Local nodes whose local copy differs from the cloud (either an
     /// unpushed local edit, or a cloud copy at a different stamp). Capped.
-    out_of_sync_nodes: Vec<String>,
+    out_of_sync_nodes: Vec<OutOfSyncItem>,
 }
 
 #[derive(serde::Serialize)]
@@ -1147,7 +1156,7 @@ pub(crate) async fn profile_sync_stats(
                 let mut in_sync = 0usize;
                 let mut needs_push = 0usize;
                 let mut needs_pull = 0usize;
-                let mut out: Vec<String> = Vec::new();
+                let mut out: Vec<OutOfSyncItem> = Vec::new();
 
                 let mut uuids: std::collections::HashSet<&str> = std::collections::HashSet::new();
                 uuids.extend(local_map.keys());
@@ -1160,14 +1169,15 @@ pub(crate) async fn profile_sync_stats(
                     if l == s {
                         in_sync += 1;
                     } else {
-                        if l > s {
+                        let direction = if l > s { "push" } else { "pull" };
+                        if direction == "push" {
                             needs_push += 1;
                         } else {
                             needs_pull += 1;
                         }
                         if is_server && out.len() < 20 {
                             if let Some(name) = server_names.get(u) {
-                                out.push(name.clone());
+                                out.push(OutOfSyncItem { uuid: u.to_string(), name: name.clone(), direction });
                             }
                         }
                     }
@@ -1179,6 +1189,114 @@ pub(crate) async fn profile_sync_stats(
     };
 
     Ok(ProfileSyncStats { total_records, vault_bytes, recent_edits, diff })
+}
+
+/// Payload keys that hold secrets. Redacted before a decrypted entity is
+/// shown in the conflict-diff panel — this view exists so a user can SEE
+/// what a sync is about to overwrite, not to put plaintext passwords/private
+/// keys on screen for a side that didn't ask to reveal them.
+const REDACTED_PAYLOAD_KEYS: &[&str] = &["password", "private_key", "passphrase"];
+
+fn redact_payload(mut v: serde_json::Value) -> serde_json::Value {
+    if let serde_json::Value::Object(map) = &mut v {
+        for key in REDACTED_PAYLOAD_KEYS {
+            if let Some(val) = map.get_mut(*key) {
+                if !val.is_null() {
+                    *val = serde_json::Value::String("••••••••".to_string());
+                }
+            }
+        }
+    }
+    v
+}
+
+fn decrypt_record_pretty(rec: &SyncRecord, key: &[u8; 32]) -> Option<String> {
+    if rec.deleted {
+        return Some("(deleted)".to_string());
+    }
+    let blob = rec.blob.as_ref()?;
+    let plain = decrypt_entity(blob, key).ok()?;
+    let v: serde_json::Value = serde_json::from_slice(&plain).ok()?;
+    serde_json::to_string_pretty(&redact_payload(v)).ok()
+}
+
+#[derive(serde::Serialize)]
+pub(crate) struct ConflictDiff {
+    entity_type: String,
+    local_updated_at: Option<String>,
+    remote_updated_at: Option<String>,
+    /// Pretty-printed, secret-redacted JSON for each side. `None` means that
+    /// side has no record at all (created only on the other device).
+    local_json: Option<String>,
+    remote_json: Option<String>,
+}
+
+/// Read-only side-by-side view of what a sync is about to do to one entity:
+/// decrypts and pretty-prints the local copy and the cloud's copy of the
+/// same uuid so the user can see exactly what's about to be overwritten by
+/// the LWW merge, before it happens. Does not change the merge rule itself —
+/// this is visibility, not interactive resolution.
+#[tauri::command]
+pub(crate) async fn sync_conflict_diff(
+    app: tauri::AppHandle,
+    db_state: tauri::State<'_, DbState>,
+    cloud: tauri::State<'_, std::sync::Arc<cloud::CloudState>>,
+    uuid: String,
+) -> Result<ConflictDiff, String> {
+    let (dek, share, cloud_profile, local_rec) = {
+        let conn_g = db_state.conn.lock().map_err(|_| "[STATE] LOCK_CONN")?;
+        let conn = conn_g.as_ref().ok_or("[STATE] DB_NOT_OPEN")?;
+        let (dek, _created) = get_or_create_dek(conn)?;
+        let local_rec = collect_local_records(conn, &dek, "")?
+            .into_iter()
+            .find(|r| r.uuid == uuid);
+        let share_id: Option<String> = conn
+            .query_row("SELECT value FROM sync_meta WHERE key='share_id'", [], |r| r.get(0))
+            .ok();
+        let share_role: Option<String> = conn
+            .query_row("SELECT value FROM sync_meta WHERE key='share_role'", [], |r| r.get(0))
+            .ok();
+        let profile = db_state
+            .active_profile
+            .lock()
+            .map_err(|_| "[STATE] LOCK_PROFILE")?
+            .clone()
+            .ok_or("[SYNC] NO_PROFILE_OPEN")?;
+        let cloud_profile: String = conn
+            .query_row("SELECT value FROM sync_meta WHERE key='cloud_profile'", [], |r| r.get(0))
+            .unwrap_or(profile);
+        (
+            dek,
+            share_id.map(|s| (s, share_role.unwrap_or_else(|| "user".to_string()))),
+            cloud_profile,
+            local_rec,
+        )
+    };
+
+    let pulled = if let Some((share_id, _role)) = &share {
+        cloud::shared_sync_exchange(&app, &cloud, share_id, "", &[]).await
+    } else {
+        cloud::sync_exchange(&app, &cloud, &cloud_profile, "", &[], None).await
+    }
+    .map_err(|e| format!("[SYNC] CONFLICT_DIFF_PULL: {e}"))?;
+
+    let remote_rec = pulled
+        .into_iter()
+        .find(|r| r.uuid == uuid && r.entity_type != ESCROW_ETYPE);
+
+    let entity_type = local_rec
+        .as_ref()
+        .map(|r| r.entity_type.clone())
+        .or_else(|| remote_rec.as_ref().map(|r| r.entity_type.clone()))
+        .ok_or("[SYNC] CONFLICT_DIFF_NOT_FOUND")?;
+
+    Ok(ConflictDiff {
+        entity_type,
+        local_updated_at: local_rec.as_ref().map(|r| r.updated_at.clone()),
+        remote_updated_at: remote_rec.as_ref().map(|r| r.updated_at.clone()),
+        local_json: local_rec.as_ref().and_then(|r| decrypt_record_pretty(r, &dek)),
+        remote_json: remote_rec.as_ref().and_then(|r| decrypt_record_pretty(r, &dek)),
+    })
 }
 
 // ===========================================================================

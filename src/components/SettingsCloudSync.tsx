@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useConfirm, useTextPrompt } from "../ui/confirm";
 import { RoleBadge } from "./shareRoles";
+import { SyncConflictDiffModal } from "./SyncConflictDiffModal";
 
 interface RecentEdit {
   name: string;
@@ -26,11 +27,17 @@ interface RecentEdit {
   updated_at: string;
 }
 
+interface OutOfSyncItem {
+  uuid: string;
+  name: string;
+  direction: "push" | "pull";
+}
+
 interface SyncDiff {
   in_sync: number;
   needs_push: number;
   needs_pull: number;
-  out_of_sync_nodes: string[];
+  out_of_sync_nodes: OutOfSyncItem[];
 }
 
 interface SyncStats {
@@ -103,6 +110,7 @@ export function SettingsCloudSync({
   const [inviteRole, setInviteRole] = useState<"editor" | "user">("editor");
   const [stuck, setStuck] = useState(false);
   const prevPull = useRef<number | null>(null);
+  const [diffTarget, setDiffTarget] = useState<{ uuid: string; name: string } | null>(null);
 
   const clean = (e: unknown) => String(e).replace(/^\[[A-Z_]+\]\s*/, "");
   const flash = (m: string) => {
@@ -467,6 +475,28 @@ export function SettingsCloudSync({
               </div>
             )}
 
+            {!!stats.diff?.out_of_sync_nodes.length && (
+              <div className="pt-2 border-t border-white/5 space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  Out of Sync
+                </div>
+                <div className="space-y-1">
+                  {stats.diff.out_of_sync_nodes.map((item) => (
+                    <button
+                      key={item.uuid}
+                      onClick={() => setDiffTarget({ uuid: item.uuid, name: item.name })}
+                      className="w-full text-[11px] text-zinc-300 flex items-center justify-between p-1.5 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg transition-colors text-left"
+                    >
+                      <span className="truncate">{item.name}</span>
+                      <span className={`text-[10px] font-mono shrink-0 ml-2 ${item.direction === "push" ? "text-blue-400" : "text-amber-400"}`}>
+                        needs {item.direction} · view diff
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {stuck && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between gap-3">
                 <div className="text-xs text-amber-200 leading-snug">
@@ -619,6 +649,13 @@ export function SettingsCloudSync({
           )}
         </div>
       </div>
+
+      <SyncConflictDiffModal
+        isOpen={!!diffTarget}
+        onClose={() => setDiffTarget(null)}
+        uuid={diffTarget?.uuid ?? null}
+        name={diffTarget?.name ?? null}
+      />
     </section>
   );
 }
