@@ -57,7 +57,7 @@ default = []
 full-ssh-algos = ["russh/des", "russh/dsa"]
 ```
 
-As of `russh` 0.63 (upgraded from 0.40.2 to fix [RUSTSEC-2026-0153/0154](file:///d:/REPO/SubTerm/TODO.md)), **both** profiles use the same pure-Rust `ring` crypto backend — no OpenSSL, no Perl, no NASM, on either profile. (russh's own *default* crypto backend, `aws-lc-rs`, needs NASM to build its assembly on Windows; this crate pins `ring` instead specifically to avoid that.) RSA host-key support (`ssh-rsa`, `rsa-sha2-256`, `rsa-sha2-512`) is included in **both** profiles too — it moved from needing OpenSSL (0.40) to russh's own `rsa` feature, which is always enabled now.
+As of `russh` 0.63 (upgraded from 0.40.2 to fix [RUSTSEC-2026-0154](https://rustsec.org/advisories/RUSTSEC-2026-0154)/[-0153](https://rustsec.org/advisories/RUSTSEC-2026-0153)), **both** profiles use the same pure-Rust `ring` crypto backend — no OpenSSL, no Perl, no NASM, on either profile. (russh's own *default* crypto backend, `aws-lc-rs`, needs NASM to build its assembly on Windows; this crate pins `ring` instead specifically to avoid that.) RSA host-key support (`ssh-rsa`, `rsa-sha2-256`, `rsa-sha2-512`) is included in **both** profiles too — it moved from needing OpenSSL (0.40) to russh's own `rsa` feature, which is always enabled now.
 
 ### `default` (Pure Rust Crypto)
 - **Characteristics**: Modern KEX / ciphers (AES-GCM, ChaCha20-Poly1305), Ed25519/ECDSA/RSA host keys.
@@ -145,7 +145,7 @@ npm test
 # Test production Vite bundling
 npm run build
 ```
-`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (see `Add ESLint Configuration` in `TODO.md`) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
+`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (unused imports/vars, `react-hooks/exhaustive-deps` gaps) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
 
 ### 5.2 Rust Backend Verification
 ```bash
