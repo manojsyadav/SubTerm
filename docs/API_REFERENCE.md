@@ -291,6 +291,14 @@ This document provides a technical reference for all Tauri IPC commands register
   ```
 - **Return Type**: `Result<(), String>`
 
+### `write_saved_password`
+- **Description**: Looks up the session's saved SSH password (the same map `docker.rs`'s silent-sudo-elevation path reads) and writes it, followed by a newline, straight into the PTY's input channel. Backs the terminal context menu's "Paste Saved Password" action for interactive `[sudo] password for user:` prompts. The plaintext password never crosses into the frontend — this command returns only whether a password was found and written.
+- **Input Arguments**:
+  ```typescript
+  { sessionId: string, terminalId: string }
+  ```
+- **Return Type**: `Result<bool, String>`
+
 ### `resize_terminal`
 - **Description**: Emits a window-change event to adjust PTY rows and columns.
 - **Input Arguments**:

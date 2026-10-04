@@ -136,9 +136,13 @@ npm run tauri dev
 # Run TypeScript compilation check
 npm run typecheck
 
+# Run ESLint (@typescript-eslint + react-hooks rules)
+npm run lint
+
 # Test production Vite bundling
 npm run build
 ```
+A handful of pre-existing issues are a tracked baseline rather than blockers — see the `Add ESLint Configuration` entry in `TODO.md` for what's expected to still show up (2 `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx`, ~115 warnings) versus a genuinely new regression.
 
 ### 5.2 Rust Backend Verification
 ```bash
