@@ -67,10 +67,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - Audit the 0.40→0.60+ changelog/breaking changes, upgrade both `russh` and `russh-keys`/`russh-cryptovec`, fix call sites, then run the full manual SSH/SFTP/agent-forwarding/auto-reconnect validation pass.
   - **Validation:** `cargo audit` shows no `russh`/`russh-cryptovec` advisories; `cargo build` + all 45 unit tests pass; live SSH connect, SFTP transfer, tunnel, and agent-forwarding all still work.
 
-- [ ] 🟢 **P3 · S** — **Document TOFU Host-Key Verification UX in `SECURITY.md`**
-  - `docs/SECURITY.md` covers the vault crypto spec thoroughly but doesn't document the first-connect trust-on-first-use host key flow, which is the control most responsible for actually preventing MITM in practice.
-  - Add a section describing fingerprint prompt UX, storage location, and revocation flow (ties into the existing "Known Hosts" settings category).
-  - **Validation:** Doc review only; no code change required unless a gap in the actual flow is found while writing it.
+- [x] 🟢 **P3 · S** — **Document TOFU Host-Key Verification UX in `SECURITY.md`** — ✅ Done
+  - Added §8 to [`docs/SECURITY.md`](file:///d:/REPO/SubTerm/docs/SECURITY.md), tracing the actual flow in `check_server_key` (`src-tauri/src/ssh_manager.rs`): first-connection prompt, returning-host silent accept, the same-algorithm-mismatch MITM warning vs. benign new-algorithm addition distinction, storage (inside the encrypted vault blob, not a plaintext file), revocation via Settings → Known Hosts, and fail-closed behavior on a poisoned DB lock.
+  - No gap found between the documented behavior and the actual code — this was a pure write-up.
+  - **Validation:** Doc review only; no code change.
 
 - [ ] 🟢 **P3 · M** — **Vault Format/KDF Rotation Strategy for Deployed Users**
   - No documented process exists for rotating Argon2id parameters or the vault binary format for users who already have `v0x02` vaults on disk.
