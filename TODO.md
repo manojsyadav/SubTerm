@@ -20,12 +20,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🏗️ Engineering Health: Architecture, Testing & CI
 
-- [ ] 🔴 **P1 · M** — **Finish `DesktopApp.tsx` Decomposition** (partial progress)
-  - `src/hooks/useSessionManager.ts`, `useWallManager.ts`, and `useProfileVault.ts` are already extracted and wired in. The four vault-entity CRUD slide-over panels (command/note/credential/SSH key) were also pulled out into `src/components/VaultEditPanels.tsx`, but [`src/DesktopApp.tsx`](file:///d:/REPO/SubTerm/src/DesktopApp.tsx) is still ~2,991 lines — well short of the original <400-line target.
-  - Remaining candidates: the Library view (commands/notes search + cards), Settings-panel wiring, and node-grid/session-view routing — all more entangled than the panels already extracted.
-  - No component-level test coverage exists yet (see the "Reduce `any`" item doesn't cover this either) — each further cut needs manual click-through verification, not just `npm run typecheck`.
-  - **Validation:** `npm run typecheck` passes; all tabs, wall, and vault operations behave identically; manual click-through of whatever view is touched.
-
 - [ ] 🟡 **P2 · L** — **Triage `.unwrap()` / `.expect()` in the Rust Backend**
   - 219 occurrences across `src-tauri/src` (168 in `lib.rs` alone, 23 in `tunnel.rs`, 15 in `identity.rs`). A panic in any of these can crash the whole Tauri process, killing every open SSH session, not just one request.
   - Prioritize paths touching untrusted network input (SSH packet/channel handling) and on-disk vault/config parsing — replace with `Result` propagation and surfaced errors.
@@ -87,9 +81,16 @@ This document tracks active development tasks, pending architectural optimizatio
   - Keyboard-interactive (2FA) auth specifically also wasn't exercised live this session (the smoke test only covers publickey auth) — worth including in the same manual pass.
   - To re-run the smoke test: stand up any local `sshd` with a throwaway keypair in its `authorized_keys`, then `SMOKE_SSH_PORT=<port> SMOKE_SSH_KEY=<path> SMOKE_SSH_USER=<user> cargo run --example russh_smoke_test [--features full-ssh-algos]` from `src-tauri`.
 
+- [ ] 🟡 **P2 · M** — **Further `DesktopApp.tsx` decomposition (wall view, session-tab sidebar)**
+  - This session's decomposition pass pulled the Library (commands/notes), Logins (passwords/SSH keys), and Logs (Activity) views out into `src/components/{LibraryView,LoginsView,LogsView}.tsx` — pure UI extractions, state stays lifted in `DesktopApp.tsx`, zero behavior change, each verified independently (`typecheck`/`lint`/`build`). File went 2,991 → 2,659 lines.
+  - Still well short of the original <400-line aspiration. The remaining bulk is the Fleet Wall view (~235 lines) and the session-tab sidebar/drag-reorder/tiling logic — both read/write `activeView` state and session refs throughout, making them visibly more entangled than the three views already pulled out. Deliberately deferred rather than rushed, since a slip here breaks live SSH sessions, not just a static view.
+  - No component-level test coverage exists yet — each further cut still needs manual click-through verification, not just `npm run typecheck`.
+  - **Validation:** `npm run typecheck` passes; all tabs, wall, and vault operations behave identically; manual click-through of whatever view is touched.
+
 - [ ] 🟡 **P2 · S** — **Manual click-through for session-only verified features**
   - Several features this session were validated by `typecheck`/`lint`/`build`/unit tests only, not live interaction — bundling as one follow-up pass rather than one line each:
     - Server list virtualization in `NodeGrid.tsx` (scroll + drag-reorder on a 500+-server fleet, resize across the 1024/1280px breakpoints).
     - Terminal output over the new Tauri binary IPC channel (firehose throughput, split-pane/Fleet-Wall multi-viewer attach, reconnect).
     - Cross-pane file diff/compare tool (`FileDiffModal`) and the four extracted `VaultEditPanels` (open/edit/save/cancel for a command, note, credential, SSH key).
+    - The three newly-extracted views (`LibraryView`, `LoginsView`, `LogsView`): search/filter, add/edit/delete flows, and the commands/notes tab toggle.
     - Sudo-elevated SFTP file save to a root-owned path, with and without a saved session password.

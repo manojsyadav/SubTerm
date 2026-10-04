@@ -78,6 +78,9 @@
 - **`perf(ipc)` — Binary Tauri channels for terminal output**:
   Terminal byte streams now flow through a Tauri 2 binary `ipc::Channel` instead of base64-encoded `app.emit` events — no base64 (~1.33x overhead) or JSON array encoding, and no `atob`/manual decode loop on the frontend. Split-pane and Fleet Wall multi-viewer support (previously free from the global event broadcast) is preserved via a new per-terminal channel fan-out registry.
 
+- **`refactor(desktop)` — `DesktopApp.tsx` decomposition (continued)**:
+  Pulled the Library (commands/notes), Logins (saved passwords/SSH keys), and Logs (Activity) views out into `src/components/{LibraryView,LoginsView,LogsView}.tsx`. Pure UI extractions — all state stays lifted in `DesktopApp.tsx`, passed down as props, no behavior change — each verified independently with `typecheck`/`lint`/`build`. `DesktopApp.tsx` went from 2,991 to 2,659 lines. The Fleet Wall view and session-tab sidebar/tiling logic remain the largest un-extracted blocks, deliberately deferred as higher-risk (tracked in `TODO.md`).
+
 ---
 
 ## [v0.4.1] — 2026-10-03
