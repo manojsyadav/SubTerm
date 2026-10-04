@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { IS_ANDROID } from "../util/platform";
+import { toExportableServers, serversToJson, serversToCsv } from "../export/serverExport";
 import {
   Settings, Palette, RefreshCw, List, Cloud, User,
   ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
@@ -638,18 +641,66 @@ const PageQuickCommands = () => <div className="space-y-6"><SettingsQuickCommand
 
 const PageShortcuts = () => <div className="space-y-6"><SettingsKeyboardShortcuts /></div>;
 
-const PageMaintenance = ({ settings, setSettings }: any) => (
-  <div className="space-y-6">
-    <SectionCard title="Reset Preferences" subtitle="Resets UI aesthetics to factory defaults. Your servers and profiles are unaffected.">
-      <button
-        onClick={() => { if (window.confirm("Reset all UI customisations to defaults?")) { setSettings((s: any) => ({ ...s, primaryColor: "#60a5fa", backgroundColor: "#0a0a0c", terminalFontSize: 14, enableMonitoring: true })); } }}
-        className="mt-4 px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase hover:bg-white/5 transition-all w-full"
-      >
-        Reset to Defaults
-      </button>
-    </SectionCard>
-  </div>
-);
+const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: any) => {
+  const [exporting, setExporting] = useState<"json" | "csv" | null>(null);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  const doExport = async (format: "json" | "csv") => {
+    setExporting(format);
+    setExportMsg(null);
+    try {
+      const list = toExportableServers(servers, folders);
+      const content = format === "json" ? serversToJson(list) : serversToCsv(list);
+      const fileName = `subterm-servers-export-${new Date().toISOString().slice(0, 10)}.${format}`;
+      const dir = IS_ANDROID
+        ? await invoke<string>("android_default_local_dir")
+        : await invoke<string | null>("select_local_folder");
+      if (!dir) { setExporting(null); return; }
+      const sep = dir.includes("\\") ? "\\" : "/";
+      const localPath = `${dir.replace(/[\\/]+$/, "")}${sep}${fileName}`;
+      await invoke("local_write_file_text", { localPath, content });
+      setExportMsg(`Exported ${list.length} server${list.length === 1 ? "" : "s"} to ${fileName}`);
+    } catch (e: any) {
+      setExportMsg(`Export failed: ${e}`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Reset Preferences" subtitle="Resets UI aesthetics to factory defaults. Your servers and profiles are unaffected.">
+        <button
+          onClick={() => { if (window.confirm("Reset all UI customisations to defaults?")) { setSettings((s: any) => ({ ...s, primaryColor: "#60a5fa", backgroundColor: "#0a0a0c", terminalFontSize: 14, enableMonitoring: true })); } }}
+          className="mt-4 px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase hover:bg-white/5 transition-all w-full"
+        >
+          Reset to Defaults
+        </button>
+      </SectionCard>
+
+      <SectionCard title="Export Server List" subtitle="1-click export of saved server profiles (name, host, port, username, folder, proxy, notes) to a portable JSON or CSV file for backup or migration. Passwords, private keys, and passphrases are never included.">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => doExport("json")}
+            disabled={exporting !== null || servers.length === 0}
+            className="px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-200 rounded-xl text-xs font-bold uppercase hover:bg-white/5 disabled:opacity-40 transition-all flex items-center gap-1.5"
+          >
+            <Download size={13} /> {exporting === "json" ? "Exporting…" : "Export JSON"}
+          </button>
+          <button
+            onClick={() => doExport("csv")}
+            disabled={exporting !== null || servers.length === 0}
+            className="px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-200 rounded-xl text-xs font-bold uppercase hover:bg-white/5 disabled:opacity-40 transition-all flex items-center gap-1.5"
+          >
+            <Download size={13} /> {exporting === "csv" ? "Exporting…" : "Export CSV"}
+          </button>
+        </div>
+        {servers.length === 0 && <p className="text-xs text-zinc-500 italic mt-2">No saved servers to export.</p>}
+        {exportMsg && <p className="text-xs text-zinc-400 mt-2">{exportMsg}</p>}
+      </SectionCard>
+    </div>
+  );
+};
 
 const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
   <div className="space-y-6">
@@ -663,7 +714,7 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 );
 
 // â”€â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: any) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: any) => {
   const [activeCategory, setActiveCategory] = useState<CategoryId>("appearance");
 
   const needsUnlock = (id: CategoryId) => !isUnlocked && LOCKED_CATEGORIES.includes(id);
@@ -683,7 +734,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       case "quickcommands": return <PageQuickCommands />;
       case "shortcuts":     return <PageShortcuts />;
       case "security":      return <SettingsKnownHosts />;
-      case "maintenance":   return <PageMaintenance settings={settings} setSettings={setSettings} />;
+      case "maintenance":   return <PageMaintenance settings={settings} setSettings={setSettings} servers={servers} folders={folders} />;
       case "logs":          return <PageLogs onOpenLogs={onOpenLogs} />;
       default:              return null;
     }

@@ -39,6 +39,9 @@
 - **`feat(library)` — Server-scoped snippets & tags**:
   Saved commands in the Library can now be bound to one specific server (or left **Global**) and given freeform tags, both searchable from the Library's search box. `Ctrl+K`'s Command Palette only lists a server-scoped snippet while that server's session tab is active.
 
+- **`feat(settings)` — Export server list to JSON/CSV**:
+  **Settings → Maintenance → Export Server List** writes every saved server (name, host, port, username, folder, proxy, notes) to a portable JSON or CSV file for backup or migration. Passwords, private keys, and passphrases are never included.
+
 ### 🐛 Bug Fixes
 
 - **`fix(sftp)` — Saving a root-owned file silently failed**:

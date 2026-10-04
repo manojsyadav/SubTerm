@@ -214,8 +214,11 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 📦 Vault, Packaging & Ecosystem
 
-- [ ] 🟡 **P2 · M** — **Vault Export to Portable Formats (JSON / CSV)**
-  - 1-click export of saved server profiles, folders, and non-sensitive configs to portable unencrypted JSON/CSV or password-protected encrypted archives for backup and migration.
+- [x] 🟡 **P2 · M** — **Vault Export to Portable Formats (JSON / CSV)** — ✅ Done (plain JSON/CSV; encrypted archive deferred)
+  - New **Settings → Maintenance → Export Server List**: one-click export of every saved server to JSON or CSV. Purely client-side — `get_servers()` already never returns a plaintext password (confirmed by reading its own doc comment before building on it), so there was no backend change needed; [`src/export/serverExport.ts`](file:///d:/REPO/SubTerm/src/export/serverExport.ts) explicitly **whitelists** exportable fields (name, host, port, username, auth type, folder name, proxy, notes, run-on-connect, production flag, agent-forwarding flag) rather than spreading the raw server row, so a future column added to `servers` is excluded by default instead of silently leaking into an export.
+  - Destination picked via the existing `select_local_folder` (desktop) / `android_default_local_dir` (Android) commands, written with the existing `local_write_file_text` — zero new Tauri commands, zero new permissions.
+  - **Deliberately did not build the "password-protected encrypted archive" variant** from the TODO's wording — that's effectively a second, separate export format (needs its own KDF/encryption choice, not just a zip password) and the primary ask — a portable, inspectable backup/migration format — is fully served by plain JSON/CSV. Worth a dedicated follow-up if an encrypted-at-rest export is actually needed later.
+  - **Validation:** `npm run typecheck`, `npm run lint` (0 errors, 115 pre-existing warnings), and `npm run build` all clean. No backend change, no new unit tests needed (pure data mapping + string formatting, exercised by typecheck).
 
 - [x] 🟡 **P2 · S** — **Portable Standalone Version in Releases** — ✅ Done
   - Added a "Zip portable Windows build" step to the Windows job in [`.github/workflows/release.yml`](file:///d:/REPO/SubTerm/.github/workflows/release.yml) that zips the raw `subterm.exe` into `SubTerm-v<version>-windows-portable.zip` — no installer needed since Tauri embeds the frontend assets into the binary (no `resources` entry in `tauri.conf.json`) and WebView2 already ships with Windows 10/11.

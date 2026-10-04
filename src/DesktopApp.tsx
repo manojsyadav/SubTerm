@@ -1815,6 +1815,7 @@ function DesktopApp() {
                 settings={appSettings}
                 setSettings={setAppSettings}
                 servers={servers}
+                folders={folders}
                 isMobile={isMobile}
                 onOpenLogs={() => setActiveView("logs")}
                 onClose={() => setActiveView("nodes")}

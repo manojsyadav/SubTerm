@@ -212,6 +212,7 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization.
 - **Profiles & Workspaces**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
 - **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
+- **Maintenance**: Reset UI preferences to factory defaults, and **Export Server List** to a portable JSON or CSV file (name, host, port, username, folder, proxy, notes — never passwords or keys) for backup or migration.
 
 ---
 
