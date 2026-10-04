@@ -205,5 +205,6 @@ This document tracks active development tasks, pending architectural optimizatio
   - Windows-only, matching the TODO wording ("alongside the Windows NSIS setup and MSI installers") — macOS already ships a zipped `.app` and Linux already ships an installer-free `.AppImage`, so neither needed a portable variant added.
   - **Validation:** YAML parses cleanly (`python -c "import yaml; yaml.safe_load(open(...))"`). Not runnable locally — this only executes on a tag push / manual `workflow_dispatch`, so a real CI run is the actual validation once a release is cut.
 
-- [ ] 🟢 **P3 · S** — **Wildcard Character Matching in Server Filter**
-  - Support glob wildcard pattern matching (`*` and `?`) in the home server search bar (e.g., `web-*`, `prod-db?`, `*-staging`).
+- [x] 🟢 **P3 · S** — **Wildcard Character Matching in Server Filter** — ✅ Done
+  - [`NodeGrid.tsx`](file:///d:/REPO/SubTerm/src/components/NodeGrid.tsx)'s search now compiles `*`/`?` queries into a case-insensitive regex (escaping every other regex-special character first) and matches against both server name and host. Queries with no wildcard characters fall through to the original plain substring check, so existing search behavior is unchanged.
+  - **Validation:** `npm run typecheck` and `npm run lint` clean (no new issues).

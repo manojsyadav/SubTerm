@@ -34,9 +34,23 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     setRenaming(null);
   };
 
+  // Supports glob wildcards (`*` = any run of characters, `?` = exactly one)
+  // on top of the plain substring search — `web-*` or `prod-db?` now work the
+  // same way they would in a shell. Plain queries with no wildcard chars fall
+  // through to the identical regex (every other char is escaped literally),
+  // so existing substring-search behavior is unchanged.
+  const matchesSearch = (value: string, query: string) => {
+    if (!/[*?]/.test(query)) return value.toLowerCase().includes(query.toLowerCase());
+    const pattern = query.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+    try {
+      return new RegExp(pattern, "i").test(value);
+    } catch {
+      return value.toLowerCase().includes(query.toLowerCase());
+    }
+  };
+
   const filteredServers = servers?.filter((s: any) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.host.includes(search)
+    matchesSearch(s.name, search) || matchesSearch(s.host, search)
   ) || [];
 
   const currentFolder = folders?.find((f: any) => f.id === activeFolderId);
