@@ -1812,14 +1812,6 @@ const ServicesTab = ({ sessionId, data, onRefresh }: { sessionId: string; data: 
     return rows;
   }, [data.rows, filter, stateFilter]);
 
-  if (!data.available) {
-    return (
-      <BannerIcon tone="amber" icon={<AlertTriangle size={14} />}>
-        <code className="font-mono px-1">systemctl</code> not available. This server likely uses a different init system (e.g. OpenRC, runit).
-      </BannerIcon>
-    );
-  }
-
   const counts = useMemo(() => {
     const c = { active: 0, inactive: 0, failed: 0, other: 0 };
     for (const r of data.rows) {
@@ -1842,6 +1834,14 @@ const ServicesTab = ({ sessionId, data, onRefresh }: { sessionId: string; data: 
     if (counts.failed > 0) setStateFilter("failed");
     else setStateFilter("all");
   }, [data.rows, counts.failed]);
+
+  if (!data.available) {
+    return (
+      <BannerIcon tone="amber" icon={<AlertTriangle size={14} />}>
+        <code className="font-mono px-1">systemctl</code> not available. This server likely uses a different init system (e.g. OpenRC, runit).
+      </BannerIcon>
+    );
+  }
 
   const performAction = async (unit: string, action: "start" | "stop" | "restart") => {
     if (action === "stop" || action === "restart") {

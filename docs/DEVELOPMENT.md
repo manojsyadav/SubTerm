@@ -142,7 +142,7 @@ npm run lint
 # Test production Vite bundling
 npm run build
 ```
-A handful of pre-existing issues are a tracked baseline rather than blockers — see the `Add ESLint Configuration` entry in `TODO.md` for what's expected to still show up (2 `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx`, ~115 warnings) versus a genuinely new regression.
+`npm run lint` and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) — a PR that introduces a new lint error or failing test is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (see `Add ESLint Configuration` in `TODO.md`) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
 
 ### 5.2 Rust Backend Verification
 ```bash

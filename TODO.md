@@ -34,10 +34,11 @@ This document tracks active development tasks, pending architectural optimizatio
   - Minimum viable coverage: vault encrypt/decrypt round-trip (Argon2id + AES-256-GCM), KDF parameter regression test, mirror sync diff/reconciliation logic, and SFTP path-handling edge cases.
   - **Validation:** `cargo test` in `src-tauri` and a frontend test runner (e.g. Vitest) both pass in CI.
 
-- [ ] 🔴 **P1 · M** — **Wire Test/Lint Gates into CI**
-  - [`.github/workflows/release.yml`](file:///d:/REPO/SubTerm/.github/workflows/release.yml) only builds and packages release artifacts — there is no `cargo test`, `cargo clippy`, `tsc --noEmit`, or lint step gating merges.
-  - Add a separate `ci.yml` workflow that runs on PRs: `cargo clippy -- -D warnings`, `cargo test`, `npm run typecheck`, and lint.
-  - **Validation:** A PR with a deliberate type error or failing test is blocked from merging.
+- [x] 🔴 **P1 · M** — **Wire Test/Lint Gates into CI** — ✅ Done
+  - Added [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml), triggered on every PR and push to `main`, separate from `release.yml` (which stays focused on packaging). Two jobs: `rust` (`cargo check --all-targets`, `cargo test`, Linux WebKit deps installed for the build to compile), and `frontend` (`npm run typecheck`, `npm run lint`).
+  - `cargo clippy -- -D warnings` (as originally worded) was **not** used as a hard gate — the codebase currently carries ~62 pre-existing clippy warnings (complex types, too-many-arguments, style nits), which would block every PR immediately. `clippy` runs advisory-only (`|| true`) until that backlog gets its own cleanup pass, mirroring the existing `.unwrap()`/`.expect()` Triage item's same deferred-cleanup pattern.
+  - `npm run lint` **is** a hard gate — but it only fails on errors, not ESLint's 115 pre-existing warnings (ESLint's default exit behavior). This required actually fixing the 2 pre-existing `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx`'s `ServicesTab` (the `counts` `useMemo` and the first-arrival `useEffect` were declared *after* an early `return` for the `!data.available` case — moved both above the early return, no behavior change) so the gate isn't broken from the moment it's merged.
+  - **Validation:** `cargo check` + `cargo test` (45/45) pass; `npm run typecheck` clean; `npm run lint` now at 0 errors / 115 warnings (down from 2 errors); `ci.yml` parses as valid YAML (`python -c "import yaml; yaml.safe_load(...)"`). A real PR run is the final confirmation once pushed.
 
 - [x] 🟡 **P2 · S** — **Add ESLint Configuration** — ✅ Done
   - Added [`eslint.config.js`](file:///d:/REPO/SubTerm/eslint.config.js) (flat config, ESLint 9) with `@typescript-eslint` recommended rules, `eslint-plugin-react-hooks`, and `eslint-plugin-react-refresh`. `npm run lint` added to `package.json`.

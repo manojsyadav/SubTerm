@@ -41,10 +41,13 @@
   The 7,385-line `src-tauri/src/lib.rs` monolith has been split into focused modules (`vault.rs` and seven `commands/*.rs` files covering connection lifecycle, profile lifecycle, the sync engine, diagnostics, monitor settings, and mirror commands). `lib.rs` is now 419 lines, holding only `DbState` and the Tauri builder setup. No behavior change — every step was verified with a full build and the existing unit test suite. See `docs/ARCHITECTURE.md` §2.1 for the new module map.
 
 - **`feat(lint)` — ESLint flat config**:
-  Added a baseline `@typescript-eslint` + `eslint-plugin-react-hooks` config and an `npm run lint` script. 115 pre-existing warnings and 2 pre-existing `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx` are tracked as a known baseline rather than fixed blindly — see `TODO.md`.
+  Added a baseline `@typescript-eslint` + `eslint-plugin-react-hooks` config and an `npm run lint` script. 115 pre-existing warnings are tracked as a known baseline rather than fixed blindly — see `TODO.md`. The 2 pre-existing `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx` were since fixed as part of wiring CI lint/test gates.
 
 - **`docs` — TOFU host-key verification flow documented**:
   `docs/SECURITY.md` §8 now covers the first-connect trust-on-first-use fingerprint prompt, storage location, and revocation flow for host keys.
+
+- **`ci` — Test/lint gates wired into CI**:
+  Added `.github/workflows/ci.yml`, running on every PR and push to `main`: `cargo check` + `cargo test` for the Rust backend, `npm run typecheck` + `npm run lint` for the frontend. `cargo clippy` runs advisory-only pending a dedicated warning-cleanup pass (~62 pre-existing warnings).
 
 ---
 

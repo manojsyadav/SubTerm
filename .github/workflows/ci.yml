@@ -1,0 +1,83 @@
+name: CI
+
+# Gates pull requests and pushes to main with the checks release.yml doesn't
+# run: Rust compile + unit tests, TypeScript typecheck, and ESLint. Keeps
+# release.yml focused purely on building/packaging release artifacts.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "always"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  rust:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo test
+        run: cargo test
+
+      # Advisory only, not gating: the codebase currently carries ~62
+      # pre-existing clippy warnings (complex types, too-many-arguments,
+      # style nits). Flipping this to `-D warnings` would block every PR
+      # until that backlog is cleaned up as its own pass — see the
+      # ".unwrap()/.expect() Triage" entry in TODO.md for the same
+      # pattern. Revisit once that cleanup lands.
+      - name: cargo clippy (advisory)
+        run: cargo clippy --all-targets || true
+
+  frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Gating on errors only (ESLint's default exit behavior) — 115
+      # pre-existing warnings are a tracked baseline (see "Add ESLint
+      # Configuration" in TODO.md), not blockers. A PR that introduces a
+      # NEW error (e.g. a rules-of-hooks violation) still fails this step.
+      - name: Lint
+        run: npm run lint
