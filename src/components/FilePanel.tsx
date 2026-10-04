@@ -7,7 +7,7 @@ import {
   X, ChevronUp, ChevronDown, Plus, MoreVertical, FolderSearch,
   Download, Upload, ExternalLink, Move, CheckSquare, Square, Search,
   TerminalSquare, FileCode, Archive, Copy, Check, Bookmark, Star,
-  Eye, EyeOff,
+  Eye, EyeOff, GitCompare,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions } from "../ui/confirm";
@@ -124,6 +124,14 @@ export interface FilePanelProps {
   terminalId?: string;
   /** Compact layout: reveal terminal. */
   onRevealTerminal?: () => void;
+  /**
+   * Opens the cross-pane file diff viewer for `entry` against the
+   * same-named file in the opposite pane's current directory. Wired from
+   * SftpWorkspace, which owns both panes and the FileDiffModal instance —
+   * omitted here when no sibling pane context exists (e.g. local-only
+   * desktop file browsing with no SFTP session).
+   */
+  onCompareWithOpposite?: (entry: FileEntry) => void;
 }
 
 export interface FilePanelHandle {
@@ -145,6 +153,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   profile,
   terminalId,
   onRevealTerminal,
+  onCompareWithOpposite,
 }, ref) => {
   const [currentPath, setCurrentPath] = useState("");
   // Last five distinct directories visited in this panel, MRU first. Lives
@@ -1964,6 +1973,14 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             <button onClick={() => { setContextMenu(null); setEditorEntry(contextMenu.entry); }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
               <FileCode size={11} className="text-cyan-400" /><span>Edit in SubTerm</span>
+            </button>
+          )}
+
+          {/* Compare with the same-named file in the opposite pane */}
+          {!multi && !contextMenu.entry.isDir && onCompareWithOpposite && (
+            <button onClick={() => { setContextMenu(null); onCompareWithOpposite(contextMenu.entry); }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <GitCompare size={11} className="text-sky-400" /><span>Compare with Other Pane</span>
             </button>
           )}
 

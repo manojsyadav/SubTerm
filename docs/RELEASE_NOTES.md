@@ -33,6 +33,9 @@
 - **`feat(terminal)` — Terminal Triggers & Alert Keywords**:
   Define keyword or regex patterns in **Settings → Terminal → Terminal Triggers & Alert Keywords** that fire a toast notification, audible chime, visual flash, or Activity Log entry whenever they appear in live terminal output — handy for noticing `ERROR`/`FATAL` lines in a session tab you're not actively watching.
 
+- **`feat(sftp)` — Cross-pane file diff & compare**:
+  Right-click a file in either SFTP pane and choose **Compare with Other Pane** for a unified diff against the same-named file in the opposite pane — local vs. remote, or two different sessions. **Use Left →** / **← Use Right** overwrite one file with the other's contents in one click.
+
 ### 🐛 Bug Fixes
 
 - **`fix(sftp)` — Saving a root-owned file silently failed**:

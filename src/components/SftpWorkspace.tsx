@@ -4,6 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { File as FileIcon, Folder, FolderUp, Rows, LayoutPanelTop } from "lucide-react";
 import FilePanel, { ActiveDrag, FilePanelHandle } from "./FilePanel";
+import { FileDiffModal, DiffFileRef } from "./FileDiffModal";
+import { FileEntry } from "../fs/types";
 import MirrorsPanel from "./MirrorsPanel";
 import TransfersBar, { Transfer } from "./TransfersBar";
 import { onRovingKeyDown } from "../ui/rovingKeys";
@@ -126,6 +128,32 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
 
   const localRef = useRef<FilePanelHandle | null>(null);
   const remoteRef = useRef<FilePanelHandle | null>(null);
+
+  // Cross-pane file diff — see FileDiffModal. Compares `entry` (from
+  // whichever pane the user right-clicked) against a same-named file in the
+  // opposite pane's current directory; the opposite file doesn't need to be
+  // confirmed to exist first, FileDiffModal just surfaces a read error if not.
+  const [diffPair, setDiffPair] = useState<{ left: DiffFileRef; right: DiffFileRef } | null>(null);
+  const joinPath = (dir: string, name: string) => {
+    const sep = dir.includes("\\") ? "\\" : "/";
+    return dir.replace(/[\\/]+$/, "") + sep + name;
+  };
+  const compareFromLocal = (entry: FileEntry) => {
+    const oppositeDir = remoteRef.current?.currentDir();
+    if (!oppositeDir) return;
+    setDiffPair({
+      left: { label: `${entry.name} (local)`, path: entry.path, provider: "local" },
+      right: { label: `${entry.name} (remote)`, path: joinPath(oppositeDir, entry.name), provider: "remote", sessionId },
+    });
+  };
+  const compareFromRemote = (entry: FileEntry) => {
+    const oppositeDir = localRef.current?.currentDir();
+    if (!oppositeDir) return;
+    setDiffPair({
+      left: { label: `${entry.name} (local)`, path: joinPath(oppositeDir, entry.name), provider: "local" },
+      right: { label: `${entry.name} (remote)`, path: entry.path, provider: "remote", sessionId },
+    });
+  };
 
   // Persist the last directory each panel was in per (session, side) so the
   // user lands on the same path next time they open this server. If the
@@ -437,6 +465,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             initialPath={savedDirsRef.current.local}
             onPathChange={(p) => saveDir("local", p)}
             getOppositeDir={() => remoteRef.current?.currentDir()}
+            onCompareWithOpposite={compareFromLocal}
           />
         </div>
         <div className={
@@ -457,6 +486,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             getOppositeDir={() => localRef.current?.currentDir()}
             terminalId={terminalId}
             onRevealTerminal={onRevealTerminal}
+            onCompareWithOpposite={compareFromRemote}
           />
         </div>
       </div>
@@ -491,6 +521,14 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
       {/* Cursor-following drag ghost. Self-contained so its per-mousemove
           position updates don't re-render this workspace or the FilePanels. */}
       <DragGhost ref={ghostRef} />
+
+      <FileDiffModal
+        isOpen={diffPair !== null}
+        onClose={() => setDiffPair(null)}
+        left={diffPair?.left ?? null}
+        right={diffPair?.right ?? null}
+        onOverwritten={() => { localRef.current?.refresh(); remoteRef.current?.refresh(); }}
+      />
     </div>
   );
 };
