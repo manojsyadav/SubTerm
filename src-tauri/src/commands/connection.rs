@@ -88,7 +88,11 @@ pub(crate) async fn run_keyboard_interactive<H: russh::client::Handler>(
     loop {
         match resp {
             KeyboardInteractiveAuthResponse::Success => return Some(Ok(true)),
-            KeyboardInteractiveAuthResponse::Failure => {
+            // 0.63 made Failure a struct variant carrying the server's
+            // suggested remaining methods + partial-success flag — neither
+            // changes this function's own retry/fallback behavior, so they're
+            // intentionally discarded here.
+            KeyboardInteractiveAuthResponse::Failure { .. } => {
                 if !asked_anything {
                     // Server declined the method outright — not really offered.
                     return None;
@@ -282,47 +286,50 @@ pub(crate) fn build_ssh_client_config() -> russh::client::Config {
     // streams keep the BDP full on high-latency links.
     config.window_size = 8 * 1024 * 1024;
     config.maximum_packet_size = 65535;
-    // Widen the negotiation set to match OpenSSH — but only in builds that
-    // include the OpenSSL backend (release CI via `full-ssh-algos`). See the
-    // long rationale that used to sit inline: legacy DH groups, the full RSA
-    // host-key family, and HMAC-SHA1 MAC variants for older/embedded servers.
+    // Widen the negotiation set to match OpenSSH. Unlike the 0.40-era
+    // version of this function, this no longer needs to be gated behind
+    // `full-ssh-algos` for RSA support — russh 0.63's OWN `Preferred::DEFAULT`
+    // already includes the full RSA host-key family (ssh-rsa, rsa-sha2-256,
+    // rsa-sha2-512) and every ECDSA curve, because RSA moved from needing an
+    // OpenSSL backend (0.40) to russh's own `rsa` feature, which is on by
+    // default now. So `key` and `cipher` below are just russh's own
+    // defaults; the only things actually worth widening are the
+    // security-deprecated algorithms russh's defaults deliberately exclude
+    // (legacy SHA-1 KEX/MAC) — gated behind `full-ssh-algos` because they're
+    // still a real algorithm downgrade, just no longer a Perl/OpenSSL one.
+    use std::borrow::Cow;
+    // All four are only mutated under `full-ssh-algos` below — `allow` keeps
+    // the default (feature-off) build warning-free instead of needing a
+    // second `#[cfg]`-gated `let` for each.
+    #[allow(unused_mut)]
+    let mut kex = russh::Preferred::DEFAULT.kex.into_owned();
+    #[allow(unused_mut)]
+    let mut mac = russh::Preferred::DEFAULT.mac.into_owned();
+    #[allow(unused_mut)]
+    let mut key = russh::Preferred::DEFAULT.key.into_owned();
+    #[allow(unused_mut)]
+    let mut cipher = russh::Preferred::DEFAULT.cipher.into_owned();
     #[cfg(feature = "full-ssh-algos")]
     {
-        config.preferred = russh::Preferred {
-            kex: &[
-                russh::kex::CURVE25519,
-                russh::kex::CURVE25519_PRE_RFC_8731,
-                russh::kex::DH_G14_SHA256,
-                russh::kex::DH_G14_SHA1,
-                russh::kex::DH_G1_SHA1,
-                russh::kex::EXTENSION_SUPPORT_AS_CLIENT,
-                russh::kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
-            ],
-            key: &[
-                russh_keys::key::ED25519,
-                russh_keys::key::ECDSA_SHA2_NISTP256,
-                russh_keys::key::RSA_SHA2_512,
-                russh_keys::key::RSA_SHA2_256,
-                russh_keys::key::SSH_RSA,
-            ],
-            cipher: &[
-                russh::cipher::CHACHA20_POLY1305,
-                russh::cipher::AES_256_GCM,
-                russh::cipher::AES_256_CTR,
-                russh::cipher::AES_192_CTR,
-                russh::cipher::AES_128_CTR,
-            ],
-            mac: &[
-                russh::mac::HMAC_SHA512_ETM,
-                russh::mac::HMAC_SHA256_ETM,
-                russh::mac::HMAC_SHA512,
-                russh::mac::HMAC_SHA256,
-                russh::mac::HMAC_SHA1_ETM,
-                russh::mac::HMAC_SHA1,
-            ],
-            compression: &["zlib@openssh.com", "zlib", "none"],
-        };
+        kex.push(russh::kex::DH_G14_SHA1);
+        kex.push(russh::kex::DH_G1_SHA1);
+        mac.push(russh::mac::HMAC_SHA1_ETM);
+        mac.push(russh::mac::HMAC_SHA1);
+        // Only meaningful alongside the `russh/des`/`russh/dsa` cargo
+        // features this crate's own `full-ssh-algos` feature turns on —
+        // without those, russh can't compile support for either algorithm
+        // at all, so pushing the name here would just be an unreachable
+        // negotiation offer the server could never agree to.
+        key.push(russh::keys::Algorithm::Dsa);
+        cipher.push(russh::cipher::TRIPLE_DES_CBC);
     }
+    config.preferred = russh::Preferred {
+        kex: Cow::Owned(kex),
+        mac: Cow::Owned(mac),
+        key: Cow::Owned(key),
+        cipher: Cow::Owned(cipher),
+        ..russh::Preferred::DEFAULT
+    };
     config
 }
 
@@ -498,10 +505,6 @@ pub(crate) async fn connect_jump_host(
         fp_rx: Some(fp_rx),
         forwarded_targets: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         fp_outcome,
-        // Jump/bastion hops never request agent forwarding on themselves —
-        // these are throwaway, never-populated maps so the struct is valid.
-        connections: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
-        agent_forward_channels: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         agent_forward_socket: None,
     };
 
@@ -523,16 +526,29 @@ pub(crate) async fn connect_jump_host(
     };
 
     // 5. Auth ladder: key → password → keyboard-interactive.
-    let mut auth_res = if let Some((private_key, passphrase)) = key_data {
+    // authenticate_publickey/authenticate_password return Result<AuthResult,
+    // Error> as of russh 0.63 (was Result<bool, Error>) — `.map(|r|
+    // r.success())` collapses it back to the bool this ladder's downstream
+    // logic (`matches!(auth_res, Ok(true))`) already expects, so nothing
+    // past this block needs to change.
+    let mut auth_res: Result<bool, russh::Error> = if let Some((private_key, passphrase)) = key_data {
         log("Jump host: private key authentication...", "info");
         let normalized_key = private_key.replace("\r\n", "\n");
-        match russh_keys::decode_secret_key(&normalized_key, passphrase.as_deref()) {
-            Ok(keypair) => session.authenticate_publickey(&effective_user, std::sync::Arc::new(keypair)).await,
+        match russh::keys::decode_secret_key(&normalized_key, passphrase.as_deref()) {
+            Ok(key) => match session.best_supported_rsa_hash().await {
+                Ok(hash_alg) => {
+                    session
+                        .authenticate_publickey(&effective_user, russh::keys::PrivateKeyWithHashAlg::new(std::sync::Arc::new(key), hash_alg.flatten()))
+                        .await
+                        .map(|r| r.success())
+                }
+                Err(e) => Err(e),
+            },
             Err(e) => Err(russh::Error::from(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))),
         }
     } else if let Some(pass) = password {
         log("Jump host: password authentication...", "info");
-        session.authenticate_password(&effective_user, pass).await
+        session.authenticate_password(&effective_user, pass).await.map(|r| r.success())
     } else {
         Ok(false)
     };
@@ -917,8 +933,6 @@ pub(crate) async fn initiate_connection(
         fp_rx: Some(fp_rx),
         forwarded_targets: Arc::clone(&session_forwarded_targets),
         fp_outcome: std::sync::Arc::clone(&fp_outcome),
-        connections: Arc::clone(&state.connections),
-        agent_forward_channels: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         agent_forward_socket: None,
     };
 
@@ -1189,29 +1203,29 @@ pub(crate) async fn initiate_connection(
                 let final_pass = custom_password.or(password);
                 let saved_pass_for_sudo = final_pass.clone();
                 
-                let mut auth_res = if let Some((private_key, passphrase)) = key_data {
+                // authenticate_publickey/authenticate_password return
+                // Result<AuthResult, Error> as of russh 0.63 (was
+                // Result<bool, Error>) — `.map(|r| r.success())` collapses
+                // it back to bool for the `matches!(auth_res, Ok(true))`
+                // checks below, which don't need to change.
+                let mut auth_res: Result<bool, russh::Error> = if let Some((private_key, passphrase)) = key_data {
                     emit_log("Attempting Private Key Authentication...", "info");
                     let normalized_key = private_key.replace("\r\n", "\n");
-                    match russh_keys::decode_secret_key(&normalized_key, passphrase.as_deref()) {
-                        Ok(keypair) => {
-                            let key_arc = std::sync::Arc::new(keypair);
-                            session.authenticate_publickey(&effective_user, key_arc).await
-                        }
-                        Err(e) => {
-                            // RSA private keys only work in builds that include the
-                            // OpenSSL backend (release CI). Local debug builds skip
-                            // OpenSSL to stay Perl-free, so surface a targeted hint
-                            // instead of the raw "Unsupported key type rsa" string.
-                            #[cfg(not(feature = "full-ssh-algos"))]
-                            {
-                                let err_str = e.to_string();
-                                if err_str.contains("Unsupported key type rsa")
-                                    || err_str.contains("rsa")
-                                    || private_key.contains("RSA PRIVATE KEY")
-                                {
-                                    emit_log("RSA private keys aren't supported in this debug build — use Ed25519 for local testing, or grab a release build from GitHub for full RSA support.", "error");
-                                }
+                    match russh::keys::decode_secret_key(&normalized_key, passphrase.as_deref()) {
+                        Ok(key) => match session.best_supported_rsa_hash().await {
+                            Ok(hash_alg) => {
+                                let key_arc = russh::keys::PrivateKeyWithHashAlg::new(std::sync::Arc::new(key), hash_alg.flatten());
+                                session.authenticate_publickey(&effective_user, key_arc).await.map(|r| r.success())
                             }
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => {
+                            // Note: RSA host/private keys no longer need the old
+                            // `full-ssh-algos` OpenSSL-backend feature — russh
+                            // 0.63 includes RSA support in its own default
+                            // feature set, so this parse failure means the key
+                            // itself is malformed/encrypted-wrong, not a missing
+                            // build feature.
                             emit_log(&format!("Failed to parse private key: {}", e), "error");
                             Err(russh::Error::from(std::io::Error::new(
                                 std::io::ErrorKind::InvalidData,
@@ -1221,7 +1235,7 @@ pub(crate) async fn initiate_connection(
                     }
                 } else if let Some(pass) = final_pass {
                     emit_log("Attempting Password Authentication...", "info");
-                    session.authenticate_password(&effective_user, pass).await
+                    session.authenticate_password(&effective_user, pass).await.map(|r| r.success())
                 } else {
                     emit_log("Neither private key nor password auth credentials provided.", "error");
                     Ok(false)
@@ -1927,10 +1941,11 @@ pub(crate) fn classify_russh_error(e: &russh::Error) -> ConnectErrorKind {
         NotAuthenticated | NoAuthMethod => ConnectErrorKind::Auth,
 
         // Algorithm negotiation — server's reachable, we just don't share
-        // the cipher / KEX / etc. it asked for.
-        NoCommonCipher | NoCommonKexAlgo | NoCommonKeyAlgo
-        | NoCommonCompression | NoCommonMac
-        | UnknownAlgo | UnknownKey => ConnectErrorKind::Algorithm,
+        // the cipher / KEX / etc. it asked for. russh 0.63 unified the five
+        // separate NoCommon{Cipher,KexAlgo,KeyAlgo,Compression,Mac} variants
+        // from 0.40 into one NoCommonAlgo{kind,..} carrying which algorithm
+        // class failed to negotiate — we don't need to distinguish further.
+        NoCommonAlgo { .. } | UnknownAlgo | UnknownKey => ConnectErrorKind::Algorithm,
 
         // Host-key flow: the server's signature didn't verify. KeyChanged
         // carries data so it falls through to the catch-all branch which

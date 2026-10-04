@@ -54,18 +54,18 @@ SubTerm defines two build profiles in `src-tauri/Cargo.toml`:
 ```toml
 [features]
 default = []
-full-ssh-algos = ["russh/openssl", "russh-keys/openssl", "dep:openssl-sys"]
+full-ssh-algos = ["russh/des", "russh/dsa"]
 ```
 
-### `default` (Pure Rust Crypto)
-- **Characteristics**: Compiles with 100% pure Rust cryptographic backends. Does not require OpenSSL, Perl, or external C tooling.
-- **Algorithms**: Ed25519 and ECDSA host keys and modern KEX / ciphers (AES-GCM, ChaCha20-Poly1305).
-- **Limitation**: Cannot connect to legacy SSH servers that only offer RSA host keys (`ssh-rsa`) or legacy diffie-hellman key exchange.
+As of `russh` 0.63 (upgraded from 0.40.2 to fix [RUSTSEC-2026-0153/0154](file:///d:/REPO/SubTerm/TODO.md)), **both** profiles use the same pure-Rust `ring` crypto backend — no OpenSSL, no Perl, no NASM, on either profile. (russh's own *default* crypto backend, `aws-lc-rs`, needs NASM to build its assembly on Windows; this crate pins `ring` instead specifically to avoid that.) RSA host-key support (`ssh-rsa`, `rsa-sha2-256`, `rsa-sha2-512`) is included in **both** profiles too — it moved from needing OpenSSL (0.40) to russh's own `rsa` feature, which is always enabled now.
 
-### `full-ssh-algos` (Production / Complete Compatibility)
-- **Characteristics**: Enables russh's OpenSSL backend with a vendored, statically-linked `libcrypto`.
-- **Algorithms**: Full RSA host-key family (`rsa-sha2-512`, `rsa-sha2-256`, `ssh-rsa`), legacy DH groups, older HMAC-SHA1 algorithms.
-- **Requirement**: Requires `perl` on the build machine to compile vendored OpenSSL.
+### `default` (Pure Rust Crypto)
+- **Characteristics**: Modern KEX / ciphers (AES-GCM, ChaCha20-Poly1305), Ed25519/ECDSA/RSA host keys.
+- **Limitation**: Excludes algorithms considered insecure by modern standards — legacy SHA-1 KEX/MAC, DSA host keys, 3DES.
+
+### `full-ssh-algos` (Legacy Compatibility)
+- **Characteristics**: Adds the algorithms `default` deliberately excludes, for connecting to old/embedded appliances still offering them: legacy Diffie-Hellman groups (`diffie-hellman-group14-sha1`, `diffie-hellman-group1-sha1`), HMAC-SHA1 MAC variants, DSA host keys, and the 3DES cipher.
+- **Requirement**: None beyond the same C compiler `default` already needs — unlike the pre-0.63 version of this feature, there's no extra toolchain cost to enabling it.
 - **Usage**:
   ```bash
   npm run tauri dev -- --features full-ssh-algos

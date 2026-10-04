@@ -43,21 +43,21 @@ opt-level = 3
 opt-level = 3
 
 [features]
-# Default build is OpenSSL-free so it compiles on any machine without Perl /
-# system libcrypto. The trade-off is reduced SSH compatibility: russh's
-# default only negotiates Ed25519 / ECDSA-P256 host keys + modern KEX /
-# MAC algorithms, so older Linux servers and most shared hosts still using
-# RSA host keys won't connect ("No common key algorithm").
+# russh 0.63 restructured its crypto backend entirely around aws-lc-rs/ring
+# (no more OpenSSL backend at all — the `russh/openssl` feature this crate
+# used to gate on was removed upstream), and folded RSA host-key support
+# into its OWN default feature set (`default = ["flate2", "aws-lc-rs",
+# "rsa"]` in russh's Cargo.toml). That means the RSA-host-key compatibility
+# gap `full-ssh-algos` existed to close is now covered by a plain `cargo
+# build` with no extra feature or Perl/C-compiler requirement.
 default = []
-# Turned on by the release workflow (tauri-action `args: ... --features
-# full-ssh-algos`) so the shipped binaries can talk to essentially any SSH
-# server in production: full RSA host-key family, legacy DH groups, the
-# older HMAC-SHA1 family. Pulls in russh's openssl backend plus a vendored
-# (statically-linked, built-from-source) libcrypto so the resulting binary
-# has no runtime libssl dependency. Cost is a one-time perl + C compiler
-# requirement on the build host, which is why we don't make it default —
-# developers debugging locally shouldn't need to install Perl.
-full-ssh-algos = ["russh/openssl", "russh-keys/openssl", "dep:openssl-sys"]
+# What's left to gate behind a feature: the genuinely-insecure legacy
+# algorithms russh now ships behind their own opt-in flags (`des`: 3DES,
+# `dsa`: DSA host keys) — still occasionally needed for ancient appliances
+# (old NAS/router firmware) but not worth the slightly larger attack surface
+# by default. No more openssl-sys / vendored libcrypto / Perl build
+# requirement at all now — this is purely a russh feature toggle.
+full-ssh-algos = ["russh/des", "russh/dsa"]
 
 [dependencies]
 tauri = { version = "2.1", features = [] }
@@ -97,9 +97,13 @@ directories = "5.0"
 # OpenSSL-backed features (RSA host keys, legacy KEX, full MAC suite) are
 # gated behind the `full-ssh-algos` feature so the default `cargo build`
 # stays Perl-free for local debugging. See the [features] block above.
-russh = "0.40.2"
-russh-keys = "0.40.1"
-openssl-sys = { version = "0.9", features = ["vendored"], optional = true }
+# Default crypto backend is `ring`, not russh's own default `aws-lc-rs` —
+# aws-lc-rs needs NASM on the build host to compile its hand-written x86/ARM
+# assembly on Windows, which would reintroduce exactly the extra-toolchain
+# burden this crate already avoids by not requiring Perl/OpenSSL by default.
+# `ring` needs only a C compiler (already required for other deps), same as
+# before this upgrade.
+russh = { version = "0.63", default-features = false, features = ["flate2", "ring", "rsa"] }
 ssh-key = { version = "0.6", features = ["alloc", "encryption", "getrandom", "ed25519", "rsa"] }
 tokio-socks = "0.5"
 async-http-proxy = { version = "1.2", features = ["runtime-tokio"] }

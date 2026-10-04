@@ -20,9 +20,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use russh::client;
-use russh_keys::key::PublicKey;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncReadExt;
@@ -610,15 +608,14 @@ pub struct MonitorHandler {
     port: u16,
 }
 
-#[async_trait]
 impl client::Handler for MonitorHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
-        self,
-        server_public_key: &PublicKey,
-    ) -> Result<(Self, bool), Self::Error> {
-        let fp = server_public_key.fingerprint().to_string();
+        &mut self,
+        server_public_key: &russh::keys::PublicKeyOrCertificate,
+    ) -> Result<bool, Self::Error> {
+        let fp = server_public_key.public_key().fingerprint(russh::keys::HashAlg::Sha256).to_string();
         let mut ok = false;
         if let Ok(guard) = self.db.lock() {
             if let Some(conn) = guard.as_ref() {
@@ -633,7 +630,7 @@ impl client::Handler for MonitorHandler {
                 }
             }
         }
-        Ok((self, ok))
+        Ok(ok)
     }
 }
 
@@ -797,14 +794,15 @@ async fn connect_for_monitor(
     let mut accepted = false;
 
     if let Some((pem, passphrase)) = key_pair.as_ref() {
-        match russh_keys::decode_secret_key(pem, passphrase.as_deref()) {
-            Ok(kp) => {
+        match russh::keys::decode_secret_key(pem, passphrase.as_deref()) {
+            Ok(key) => {
+                let hash_alg = session.best_supported_rsa_hash().await.ok().flatten().flatten();
                 match session
-                    .authenticate_publickey(&auth.username, Arc::new(kp))
+                    .authenticate_publickey(&auth.username, russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg))
                     .await
                 {
-                    Ok(true) => accepted = true,
-                    Ok(false) => last_err = Some(format!(
+                    Ok(r) if r.success() => accepted = true,
+                    Ok(_) => last_err = Some(format!(
                         "publickey auth rejected by {}@{}",
                         auth.username, auth.host,
                     )),
@@ -825,8 +823,8 @@ async fn connect_for_monitor(
     if !accepted && key_pair.is_none() {
         if let Some(p) = password.as_ref() {
             match session.authenticate_password(&auth.username, p).await {
-                Ok(true) => accepted = true,
-                Ok(false) => last_err = Some(format!(
+                Ok(r) if r.success() => accepted = true,
+                Ok(_) => last_err = Some(format!(
                     "password auth rejected by {}@{}",
                     auth.username, auth.host,
                 )),

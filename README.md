@@ -89,7 +89,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 ## Technology Stack
 
 - **Backend**: Rust 1.70+, Tokio async runtime, Tauri 2.1+
-- **SSH & SFTP**: `russh` 0.40, `russh-sftp`
+- **SSH & SFTP**: `russh` 0.63, `russh-sftp`
 - **Local PTY**: `portable-pty`
 - **Crypto & Compression**: `argon2` 0.5, `aes-gcm` 0.10, `zstd`
 - **Database**: `rusqlite` (in-memory deserialized SQLite with serialized encrypted blob storage)
