@@ -75,6 +75,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
       # Gating on errors only (ESLint's default exit behavior) — 115
       # pre-existing warnings are a tracked baseline (see "Add ESLint
       # Configuration" in TODO.md), not blockers. A PR that introduces a

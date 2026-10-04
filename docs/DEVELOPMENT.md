@@ -139,10 +139,13 @@ npm run typecheck
 # Run ESLint (@typescript-eslint + react-hooks rules)
 npm run lint
 
+# Run frontend unit tests (Vitest)
+npm test
+
 # Test production Vite bundling
 npm run build
 ```
-`npm run lint` and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) — a PR that introduces a new lint error or failing test is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (see `Add ESLint Configuration` in `TODO.md`) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
+`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (see `Add ESLint Configuration` in `TODO.md`) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
 
 ### 5.2 Rust Backend Verification
 ```bash

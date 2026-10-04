@@ -1103,3 +1103,94 @@ async fn process_event(
         }
     }
 }
+
+#[cfg(test)]
+mod reconciliation_tests {
+    use super::*;
+
+    // --- is_excluded: the filter deciding which local changes mirror sync
+    // reconciles against the remote side at all -----------------------------
+
+    #[test]
+    fn is_excluded_matches_hardcoded_defaults() {
+        for path in [".git/config", "node_modules/foo/index.js", ".DS_Store", "Thumbs.db"] {
+            assert!(is_excluded(path, &[]), "should exclude default: {path}");
+        }
+    }
+
+    #[test]
+    fn is_excluded_matches_default_extensions() {
+        for path in ["draft.swp", "backup.swo", "upload.part", "cache.tmp"] {
+            assert!(is_excluded(path, &[]), "should exclude by extension: {path}");
+        }
+    }
+
+    #[test]
+    fn is_excluded_normalizes_windows_separators() {
+        // A Windows local path (backslashes) must still match the ('/'-based)
+        // default exclusion markers — mirror sync runs on Windows hosts too.
+        assert!(is_excluded(r".git\config", &[]));
+        assert!(is_excluded(r"node_modules\foo\index.js", &[]));
+    }
+
+    #[test]
+    fn is_excluded_honors_user_glob_extension_patterns() {
+        assert!(is_excluded("notes.log", &["*.log".to_string()]));
+        assert!(!is_excluded("notes.txt", &["*.log".to_string()]));
+    }
+
+    #[test]
+    fn is_excluded_honors_user_substring_patterns() {
+        assert!(is_excluded("build/output/app.js", &["build/".to_string()]));
+    }
+
+    #[test]
+    fn is_excluded_ignores_blank_user_patterns() {
+        // A stray empty/whitespace-only entry in the user's exclude list
+        // (e.g. a trailing newline in the settings textarea) must not match
+        // everything — `"".contains("")` is true in Rust, which would
+        // silently exclude the entire tree if this guard were missing.
+        assert!(!is_excluded("src/main.rs", &["".to_string(), "   ".to_string()]));
+    }
+
+    #[test]
+    fn is_excluded_allows_ordinary_source_files() {
+        assert!(!is_excluded("src/components/App.tsx", &[]));
+    }
+
+    // --- local_to_remote: path translation that decides WHERE a change
+    // lands on the other side of the mirror ----------------------------------
+
+    #[test]
+    fn local_to_remote_maps_nested_file() {
+        let root = Path::new("/home/user/project");
+        let local = Path::new("/home/user/project/src/main.rs");
+        assert_eq!(
+            local_to_remote(local, root, "/srv/app"),
+            Some("/srv/app/src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn local_to_remote_maps_root_itself() {
+        let root = Path::new("/home/user/project");
+        assert_eq!(local_to_remote(root, root, "/srv/app"), Some("/srv/app".to_string()));
+    }
+
+    #[test]
+    fn local_to_remote_trims_trailing_slash_on_remote_root() {
+        let root = Path::new("/home/user/project");
+        let local = Path::new("/home/user/project/file.txt");
+        assert_eq!(
+            local_to_remote(local, root, "/srv/app/"),
+            Some("/srv/app/file.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn local_to_remote_rejects_path_outside_root() {
+        let root = Path::new("/home/user/project");
+        let outside = Path::new("/home/user/other/file.txt");
+        assert_eq!(local_to_remote(outside, root, "/srv/app"), None);
+    }
+}

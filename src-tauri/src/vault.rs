@@ -232,3 +232,143 @@ pub(crate) fn get_or_create_dek(conn: &Connection) -> Result<([u8; 32], bool), S
     .map_err(|e| format!("[SHARE] DEK_STORE: {e}"))?;
     Ok((d, true))
 }
+
+#[cfg(test)]
+mod vault_crypto_tests {
+    use super::*;
+
+    // --- KDF (Argon2id) ---------------------------------------------------
+
+    #[test]
+    fn derive_key_is_deterministic() {
+        let salt = [7u8; SALT_LEN];
+        let k1 = derive_key("correct horse battery staple", &salt).unwrap();
+        let k2 = derive_key("correct horse battery staple", &salt).unwrap();
+        assert_eq!(k1, k2, "same password+salt must always derive the same key");
+    }
+
+    #[test]
+    fn derive_key_changes_with_salt() {
+        // Regression guard: if a future refactor ever stops threading the
+        // salt into Argon2id (e.g. accidentally hardcoding it), every vault
+        // would derive the same key regardless of its stored salt — this
+        // would silently defeat the whole point of a per-profile salt.
+        let k1 = derive_key("same password", &[1u8; SALT_LEN]).unwrap();
+        let k2 = derive_key("same password", &[2u8; SALT_LEN]).unwrap();
+        assert_ne!(k1, k2, "different salts must derive different keys");
+    }
+
+    #[test]
+    fn derive_key_changes_with_password() {
+        let salt = [9u8; SALT_LEN];
+        let k1 = derive_key("password one", &salt).unwrap();
+        let k2 = derive_key("password two", &salt).unwrap();
+        assert_ne!(k1, k2, "different passwords must derive different keys");
+    }
+
+    // --- AES-256-GCM round trip --------------------------------------------
+
+    #[test]
+    fn encrypt_decrypt_round_trips() {
+        let key = derive_key("master password", &[3u8; SALT_LEN]).unwrap();
+        let plaintext = b"CREATE TABLE servers(...); -- pretend sqlite blob";
+        let (ciphertext, nonce) = encrypt_with_key(plaintext, &key).unwrap();
+        let recovered = decrypt_with_key(&ciphertext, &nonce, &key).unwrap();
+        assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn decrypt_fails_with_wrong_key() {
+        let key_a = derive_key("password A", &[4u8; SALT_LEN]).unwrap();
+        let key_b = derive_key("password B", &[4u8; SALT_LEN]).unwrap();
+        let (ciphertext, nonce) = encrypt_with_key(b"secret data", &key_a).unwrap();
+        assert!(
+            decrypt_with_key(&ciphertext, &nonce, &key_b).is_err(),
+            "decrypting with the wrong key must fail, not return garbage plaintext"
+        );
+    }
+
+    #[test]
+    fn decrypt_fails_on_tampered_ciphertext() {
+        // AES-GCM's authentication tag must catch a flipped byte — proves the
+        // vault can't be silently corrupted/tampered with undetected.
+        let key = derive_key("master password", &[5u8; SALT_LEN]).unwrap();
+        let (mut ciphertext, nonce) = encrypt_with_key(b"integrity matters", &key).unwrap();
+        let last = ciphertext.len() - 1;
+        ciphertext[last] ^= 0xFF;
+        assert!(decrypt_with_key(&ciphertext, &nonce, &key).is_err());
+    }
+
+    // --- zstd compression round trip ---------------------------------------
+
+    #[test]
+    fn compress_decompress_round_trips() {
+        let original = b"the quick brown fox jumps over the lazy dog".repeat(100);
+        let compressed = vault_compress(&original).unwrap();
+        let decompressed = vault_decompress(&compressed).unwrap();
+        assert_eq!(decompressed, original);
+    }
+
+    #[test]
+    fn decompress_rejects_oversized_payload() {
+        // zstd makes a highly-repetitive buffer trivial to compress to a few
+        // KB even well past the 64 MiB decompressed guard, so this runs fast.
+        let huge = vec![0u8; 70 * 1024 * 1024];
+        let compressed = vault_compress(&huge).unwrap();
+        let err = vault_decompress(&compressed).unwrap_err();
+        assert!(err.contains("DECOMPRESS_TOO_LARGE"), "got: {err}");
+    }
+
+    // --- on-disk blob framing -----------------------------------------------
+
+    #[test]
+    fn vault_blob_round_trips() {
+        let salt = [6u8; SALT_LEN];
+        let nonce = [8u8; NONCE_LEN];
+        let ciphertext = b"ciphertext-and-tag-placeholder".to_vec();
+        let blob = write_vault_blob(&salt, &nonce, &ciphertext);
+        let (parsed_salt, parsed_nonce, parsed_ct) = parse_vault_blob(&blob).unwrap();
+        assert_eq!(parsed_salt, salt);
+        assert_eq!(parsed_nonce, nonce);
+        assert_eq!(parsed_ct, ciphertext);
+    }
+
+    #[test]
+    fn parse_vault_blob_rejects_bad_magic() {
+        let mut blob = write_vault_blob(&[0u8; SALT_LEN], &[0u8; NONCE_LEN], b"x");
+        blob[0] = b'X'; // corrupt the magic
+        let err = parse_vault_blob(&blob).unwrap_err();
+        assert!(err.contains("BAD_MAGIC"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_vault_blob_rejects_unsupported_version() {
+        let mut blob = write_vault_blob(&[0u8; SALT_LEN], &[0u8; NONCE_LEN], b"x");
+        blob[4] = VAULT_VERSION + 1; // a version this binary has never written
+        let err = parse_vault_blob(&blob).unwrap_err();
+        assert!(err.contains("UNSUPPORTED_VERSION"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_vault_blob_rejects_truncated_header() {
+        let blob = write_vault_blob(&[0u8; SALT_LEN], &[0u8; NONCE_LEN], b"x");
+        let truncated = &blob[..HEADER_LEN]; // header present, nonce+ciphertext missing
+        let err = parse_vault_blob(truncated).unwrap_err();
+        assert!(err.contains("INVALID_FORMAT"), "got: {err}");
+    }
+
+    // --- DEK (per-entity sync key) ------------------------------------------
+
+    #[test]
+    fn get_or_create_dek_errors_on_malformed_stored_hex() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)", []).unwrap();
+        conn.execute(
+            "INSERT INTO sync_meta(key,value) VALUES('dek','not-valid-hex!!')",
+            [],
+        ).unwrap();
+        // A corrupted stored DEK should surface an error rather than being
+        // silently treated as valid key material.
+        assert!(get_or_create_dek(&conn).is_err());
+    }
+}

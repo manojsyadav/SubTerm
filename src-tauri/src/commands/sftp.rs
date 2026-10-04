@@ -3144,3 +3144,118 @@ pub async fn local_list_dir(path: String) -> Result<Vec<LocalFileEntry>, String>
 
     Ok(entries)
 }
+
+#[cfg(test)]
+mod path_safety_tests {
+    use super::*;
+
+    // --- removable_dir_path: guards remote `rm -rf`-equivalent paths --------
+
+    #[test]
+    fn removable_dir_path_rejects_root() {
+        assert!(removable_dir_path("/").is_err());
+    }
+
+    #[test]
+    fn removable_dir_path_rejects_relative() {
+        assert!(removable_dir_path("some/relative/path").is_err());
+    }
+
+    #[test]
+    fn removable_dir_path_rejects_traversal_segments() {
+        assert!(removable_dir_path("/var/www/../../etc").is_err());
+        assert!(removable_dir_path("/home/user/./x").is_err());
+    }
+
+    #[test]
+    fn removable_dir_path_accepts_legit_nested_path() {
+        assert_eq!(removable_dir_path("/home/user/projects/").unwrap(), "/home/user/projects");
+    }
+
+    // --- is_child_name: guards a single path segment used in remote ops -----
+
+    #[test]
+    fn is_child_name_rejects_empty_separators_and_traversal() {
+        assert!(!is_child_name(""));
+        assert!(!is_child_name("a/b"));
+        assert!(!is_child_name("..")); // caught by the backslash-split .. check
+        for seg in ["a\\..\\b", "..\\x"] {
+            assert!(!is_child_name(seg), "should reject {:?}", seg);
+        }
+    }
+
+    #[test]
+    fn is_child_name_accepts_plain_names() {
+        for ok in ["file.txt", "my-folder", "report_2024.csv"] {
+            assert!(is_child_name(ok), "should accept {:?}", ok);
+        }
+    }
+
+    // --- safe_temp_leaf_name: guards the local staging filename for a
+    // remote-path-derived download -------------------------------------------
+
+    #[test]
+    fn safe_temp_leaf_name_extracts_basename() {
+        assert_eq!(safe_temp_leaf_name("/var/log/nginx/access.log").unwrap(), "access.log");
+    }
+
+    #[test]
+    fn safe_temp_leaf_name_rejects_unsafe_names() {
+        // Note: Path::file_name() normalizes away trailing "/" and "." components
+        // before returning the last one, so "/etc/" -> "etc" and "/a/." -> "a"
+        // are both perfectly safe leaf names, not cases this function needs
+        // to reject — these cases exercise names still unsafe after that
+        // normalization.
+        for bad in [".", "..", "/a/..", "/a/b\0c"] {
+            assert!(safe_temp_leaf_name(bad).is_err(), "should reject {:?}", bad);
+        }
+    }
+
+    // --- guard_local_path: guards every local filesystem destination --------
+
+    fn unique_scratch_dir(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "subterm-test-{}-{}-{}",
+            label,
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn guard_local_path_accepts_real_path_in_a_normal_location() {
+        let dir = unique_scratch_dir("ok");
+        let file = dir.join("data.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let guarded = guard_local_path(file.to_str().unwrap(), false).unwrap();
+        assert_eq!(guarded.file_name().unwrap(), "data.txt");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn guard_local_path_allows_nonexistent_leaf_when_requested() {
+        let dir = unique_scratch_dir("nonexistent-leaf");
+        let not_yet_created = dir.join("will-be-created.txt");
+        let guarded = guard_local_path(not_yet_created.to_str().unwrap(), true).unwrap();
+        assert_eq!(guarded.file_name().unwrap(), "will-be-created.txt");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn guard_local_path_rejects_nonexistent_when_not_allowed() {
+        let dir = unique_scratch_dir("reject-nonexistent");
+        let missing = dir.join("nope.txt");
+        assert!(guard_local_path(missing.to_str().unwrap(), false).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn guard_local_path_rejects_known_system_directories() {
+        // These directories are near-universally present, so canonicalize()
+        // succeeds and the blocklist check is what's actually exercised.
+        let blocked = if cfg!(windows) { r"C:\Windows" } else { "/etc" };
+        assert!(guard_local_path(blocked, false).is_err());
+    }
+}

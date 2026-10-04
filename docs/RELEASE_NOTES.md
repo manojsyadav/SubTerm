@@ -63,6 +63,9 @@
 - **`feat(lint)` — ESLint flat config**:
   Added a baseline `@typescript-eslint` + `eslint-plugin-react-hooks` config and an `npm run lint` script. 115 pre-existing warnings are tracked as a known baseline rather than fixed blindly — see `TODO.md`. The 2 pre-existing `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx` were since fixed as part of wiring CI lint/test gates.
 
+- **`test` — First automated test suite**:
+  36 new Rust unit tests cover vault encrypt/decrypt round-trips, Argon2id KDF determinism, SFTP local-path safety guards, and mirror-sync path exclusion/translation logic (45 → 81 total). Added Vitest for the frontend with 22 tests covering the file-diff algorithm, terminal triggers, and server-export logic — the first frontend tests in the repo. Both suites run in CI.
+
 - **`docs` — TOFU host-key verification flow documented**:
   `docs/SECURITY.md` §8 now covers the first-connect trust-on-first-use fingerprint prompt, storage location, and revocation flow for host keys.
 
