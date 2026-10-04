@@ -73,10 +73,11 @@ This document tracks active development tasks, pending architectural optimizatio
   - No gap found between the documented behavior and the actual code — this was a pure write-up.
   - **Validation:** Doc review only; no code change.
 
-- [ ] 🟢 **P3 · M** — **Vault Format/KDF Rotation Strategy for Deployed Users**
-  - No documented process exists for rotating Argon2id parameters or the vault binary format for users who already have `v0x02` vaults on disk.
-  - Define a migration path (e.g. lazy re-encrypt on next unlock when params change) before it's needed under pressure.
-  - **Validation:** Design doc covers old-vault detection and forward migration without data loss; no immediate code required.
+- [x] 🟢 **P3 · M** — **Vault Format/KDF Rotation Strategy for Deployed Users** — ✅ Done (design doc)
+  - Added [`docs/SECURITY.md` §9](file:///d:/REPO/SubTerm/docs/SECURITY.md) — design-only, no code changes, per the TODO's own validation bar. Covers: a `KdfProfile` table replacing the three bare `ARGON2_*_COST` constants so a profile change is additive (new table entry + bump `CURRENT_KDF_PROFILE`), widening the header with a 1-byte KDF profile ID gated by `VAULT_VERSION` the same way `parse_vault_blob` already fails closed on an unrecognized version, and a lazy re-encrypt-on-next-save migration that reuses `save_vault_blocking`'s existing atomic tmp-write/fsync/rename path unchanged — so there's no new write path to get wrong, and no data-loss window (the original file is untouched until the replacement is fully written).
+  - Along the way, found and fixed a real doc/code drift in §1.3: the vault header table claimed magic `"SUBT"` / version `0x02`, but `vault.rs` actually uses `"OMNV"` / version `1`. Corrected to match the code.
+  - Also clarifies `VAULT_VERSION` (crypto/file-format framing) is a distinct concept from `SCHEMA_VERSION` (the SQL schema inside the decrypted plaintext, from the `schema_meta` table) — the two are easy to conflate and a rotation only ever touches the former.
+  - **Validation:** Doc review only, no code change — matches the TODO's own bar ("no immediate code required").
 
 ---
 
