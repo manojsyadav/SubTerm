@@ -9,6 +9,7 @@ type RawLocalEntry = {
   name: string;
   path: string;
   is_dir: boolean;
+  is_symlink: boolean;
   size: number;
   modified?: number;
 };
@@ -64,6 +65,7 @@ export function createLocalProvider(): LocalFileProvider {
         name: r.name,
         path: r.path,
         isDir: r.is_dir,
+        isSymlink: r.is_symlink,
         size: r.size,
         modified: r.modified,
       }));

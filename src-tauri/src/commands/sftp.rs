@@ -10,6 +10,11 @@ pub struct SftpFileEntry {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    /// True when this entry is itself a symlink — regardless of what it
+    /// points at. The frontend uses this to badge the icon; `is_dir` already
+    /// reflects the link's TARGET type (resolved below) so navigation works
+    /// the same as a real directory.
+    pub is_symlink: bool,
     pub size: u64,
     pub permissions: Option<u32>,
     pub uid: Option<u32>,
@@ -249,24 +254,36 @@ pub async fn sftp_list_dir(
             if name == "." || name == ".." {
                 continue;
             }
-            let is_dir = entry.file_type().is_dir();
+            let is_symlink = entry.file_type().is_symlink();
+            let mut is_dir = entry.file_type().is_dir();
             let metadata = entry.metadata();
             let size = metadata.size.unwrap_or(0);
             let permissions = metadata.permissions;
             let uid = metadata.uid;
             let gid = metadata.gid;
             let modified = metadata.mtime.map(|t| t as u64);
-            
+
             let entry_path = if canonical_path.ends_with('/') {
                 format!("{}{}", canonical_path, name)
             } else {
                 format!("{}/{}", canonical_path, name)
             };
-            
+
+            // READDIR only lstat's entries, so a symlink always reports as
+            // neither file nor dir here. Follow it with a real STAT to find
+            // out what it actually points at — a broken link (stat fails)
+            // just stays non-navigable rather than erroring the whole listing.
+            if is_symlink {
+                if let Ok(target_meta) = sftp.metadata(&entry_path).await {
+                    is_dir = target_meta.file_type().is_dir();
+                }
+            }
+
             entries.push(SftpFileEntry {
                 name,
                 path: entry_path,
                 is_dir,
+                is_symlink,
                 size,
                 permissions,
                 uid,
@@ -323,16 +340,23 @@ pub async fn sftp_list_dir(
         let parts: Vec<&str> = t.split_whitespace().collect();
         if parts.len() < 8 { continue; }
         let perms = parts[0];
+        let is_symlink = perms.starts_with('l');
+        // Plain `ls -la` has no `-F`/`-p` classification flag, so we can't tell
+        // what a symlink points at without a second round-trip per entry. Treat
+        // it as non-navigable here; the primary SFTP-protocol path above (which
+        // does resolve the target) is what most servers use.
         let is_dir = perms.starts_with('d');
         let size = parts[4].parse::<u64>().unwrap_or(0);
-        
-        let name = if parts.len() >= 7 && parts[5].chars().all(|c| c.is_ascii_digit()) {
+
+        let raw_name = if parts.len() >= 7 && parts[5].chars().all(|c| c.is_ascii_digit()) {
             parts[6..].join(" ")
         } else if parts.len() >= 9 {
             parts[8..].join(" ")
         } else {
             parts.last().copied().unwrap_or("").to_string()
         };
+        // Symlink lines look like "name -> target"; strip the target.
+        let name = raw_name.split(" -> ").next().unwrap_or(&raw_name).to_string();
 
         if name == "." || name == ".." || name.is_empty() {
             continue;
@@ -348,6 +372,7 @@ pub async fn sftp_list_dir(
             name,
             path: entry_path,
             is_dir,
+            is_symlink,
             size,
             permissions: None,
             uid: None,
@@ -2202,6 +2227,7 @@ pub struct LocalFileEntry {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    pub is_symlink: bool,
     pub size: u64,
     pub modified: Option<u64>,
 }
@@ -3014,12 +3040,22 @@ pub async fn local_list_dir(path: String) -> Result<Vec<LocalFileEntry>, String>
 
     for entry in read_dir {
         if let Ok(entry) = entry {
+            // `DirEntry::metadata()` is an lstat — a directory symlink reports
+            // `is_dir() == false` here. Follow it with `fs::metadata` (a real
+            // stat) to find out what it points at; a broken link just falls
+            // back to the lstat result instead of erroring the whole listing.
             let metadata = entry.metadata().ok();
-            let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+            let is_symlink = metadata.as_ref().map(|m| m.file_type().is_symlink()).unwrap_or(false);
+            let is_dir = if is_symlink {
+                std::fs::metadata(entry.path()).map(|m| m.is_dir())
+                    .unwrap_or_else(|_| metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false))
+            } else {
+                metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false)
+            };
             let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
             let name = entry.file_name().to_string_lossy().to_string();
             let full_path = entry.path().to_string_lossy().to_string();
-            
+
             let modified = metadata.as_ref()
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
@@ -3029,6 +3065,7 @@ pub async fn local_list_dir(path: String) -> Result<Vec<LocalFileEntry>, String>
                 name,
                 path: full_path,
                 is_dir,
+                is_symlink,
                 size,
                 modified,
             });

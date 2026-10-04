@@ -9,6 +9,7 @@ type RawSftpEntry = {
   name: string;
   path: string;
   is_dir: boolean;
+  is_symlink: boolean;
   size: number;
   permissions?: number;
   uid?: number;
@@ -41,6 +42,7 @@ export function createRemoteProvider(sessionId: string): RemoteFileProvider {
         name: r.name,
         path: r.path,
         isDir: r.is_dir,
+        isSymlink: r.is_symlink,
         size: r.size,
         permissions: r.permissions,
         uid: r.uid,

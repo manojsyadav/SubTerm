@@ -139,9 +139,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - Integrated side-by-side or unified diff viewer to compare differences between local and remote files, or between two remote files across sessions.
   - Syntax-highlighted change visualization with inline merge and save capabilities.
 
-- [ ] 🟢 **P3 · S** — **Option to Treat Directory Symlinks as Folders in SFTP**
-  - Resolve symbolic links pointing to directories (`lrwxrwxrwx`) as navigable folders in remote and local file managers instead of treating them as plain files.
-  - Show a small link badge on the folder icon while allowing seamless navigation into the linked target directory.
+- [x] 🟢 **P3 · S** — **Option to Treat Directory Symlinks as Folders in SFTP** — ✅ Done
+  - Backend: `SftpFileEntry`/`LocalFileEntry` gained an `is_symlink` field. The primary SFTP-protocol listing (`sftp_list_dir`) and the local listing (`local_list_dir`) both lstat the entry first, then follow a symlink with a real stat to resolve `is_dir` against the link's *target* — so a directory symlink navigates exactly like a real folder. The `ls -la` exec-fallback path (used only when the sftp subsystem is unavailable) detects symlinks from the `l` permission bit and strips the `-> target` suffix from the name, but can't resolve the target type without a second round-trip per entry, so it stays non-navigable there — a documented, acceptable degradation since the primary SFTP path is what most servers use.
+  - Frontend: `FileEntry.isSymlink` (already declared in `src/fs/types.ts`) is now populated by both `remoteProvider.ts` and `localProvider.ts`. [`FilePanel.tsx`](file:///d:/REPO/SubTerm/src/components/FilePanel.tsx) renders a small `ExternalLink` badge over the folder/file icon when `isSymlink` is set.
+  - **Validation:** `cargo check` + all 45 backend unit tests pass; `npm run typecheck` and `npm run lint` clean (no new issues).
 
 ---
 

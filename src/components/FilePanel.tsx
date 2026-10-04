@@ -1829,9 +1829,19 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                     : <Square size={12} className="text-zinc-500 hover:text-zinc-300" />}
                 </div>
                 <div className="flex items-center gap-2 min-w-0 pr-1">
-                  {entry.isDir
-                    ? <Folder size={12} className="text-indigo-300 shrink-0" />
-                    : <File size={12} className="text-zinc-500 shrink-0" />}
+                  <div className="relative shrink-0">
+                    {entry.isDir
+                      ? <Folder size={12} className="text-indigo-300" />
+                      : <File size={12} className="text-zinc-500" />}
+                    {entry.isSymlink && (
+                      <span
+                        className="absolute -bottom-0.5 -right-1 leading-none"
+                        title="Symlink"
+                      >
+                        <ExternalLink size={7} className="text-zinc-300 bg-zinc-900 rounded-sm" />
+                      </span>
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="truncate text-zinc-100 text-[11px]">{entry.name}</span>
