@@ -1487,6 +1487,50 @@ function DesktopApp() {
               }}
             >Disconnect</button>
 
+            {/* ssh-copy-id: append a saved public key to this server's
+                ~/.ssh/authorized_keys over the already-authenticated
+                session, so the user never has to leave SubTerm (or paste
+                a key by hand) to set up passwordless login. Only offered
+                while connected — there's no live channel to exec on
+                otherwise. The key is single-quoted with embedded quotes
+                escaped (`'\''`) so its comment field can't break out of
+                the remote shell command. */}
+            {sessionStatuses[targetId] === "connected" && sshKeys.length > 0 && (
+              <>
+                <div className="border-t border-white/5 my-1" />
+                <div className="px-3 pt-1 pb-1.5 text-[9.5px] font-bold uppercase tracking-widest text-zinc-500">
+                  Upload public key
+                </div>
+                <div className="max-h-[160px] overflow-y-auto custom-scrollbar">
+                  {sshKeys.map((k: any) => (
+                    <button
+                      key={k.id}
+                      className="w-full text-left px-3 py-1.5 hover:bg-primary/15 hover:text-primary text-zinc-200 flex items-center gap-2 truncate"
+                      onClick={async () => {
+                        setTabMenu(null);
+                        const pubKey = (k.public_key || "").trim();
+                        if (!pubKey) {
+                          await confirm({ title: "No public key", message: `"${k.name}" has no public key saved.`, okLabel: "OK" });
+                          return;
+                        }
+                        const escaped = pubKey.replace(/'/g, `'\\''`);
+                        const cmd = `mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && KEY='${escaped}'; grep -qxF "$KEY" ~/.ssh/authorized_keys || echo "$KEY" >> ~/.ssh/authorized_keys`;
+                        try {
+                          await invoke("sftp_exec_command", { sessionId: targetId, command: cmd });
+                          await confirm({ title: "Public key uploaded", message: `"${k.name}" was appended to ~/.ssh/authorized_keys.`, okLabel: "OK" });
+                        } catch (e) {
+                          await confirm({ title: "Upload failed", message: String(e), okLabel: "OK" });
+                        }
+                      }}
+                    >
+                      <Key size={11} className="shrink-0 text-zinc-500" />
+                      <span className="truncate">{k.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
             {/* Pin/Unpin the session's currently-active terminal to
                 the Wall — one-click convenience so users don't have to
                 open the picker + tick a specific terminal for the

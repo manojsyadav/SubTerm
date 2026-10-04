@@ -144,9 +144,11 @@ This document tracks active development tasks, pending architectural optimizatio
   - `TerminalView.tsx`'s existing repaint effect ([`src/components/TerminalView.tsx:312-327`](file:///d:/REPO/SubTerm/src/components/TerminalView.tsx)) already calls `t.focus()` whenever `isActive` turns true, so the canvas already regains keyboard focus automatically on every tab switch — no code change was needed.
   - **Validation:** `npm run typecheck` passes (no change made). Live click-through in the running desktop app is still a recommended manual spot-check, but the full prop chain from tab click to `xterm.focus()` is unbroken.
 
-- [ ] 🔴 **P1 · S** — **Upload Public SSH Keys (`ssh-copy-id`)**
-  - 1-click action inside the server details panel or context menu to append a selected public key to the remote server's `~/.ssh/authorized_keys`.
-  - Automatically ensures correct directory permissions (`0700` for `~/.ssh`, `0600` for `authorized_keys`).
+- [x] 🔴 **P1 · S** — **Upload Public SSH Keys (`ssh-copy-id`)** — ✅ Done
+  - Added an "Upload public key" section to the session tab's right-click context menu ([`src/DesktopApp.tsx`](file:///d:/REPO/SubTerm/src/DesktopApp.tsx), inside the `tabMenu` block), listing every saved key from `sshKeys`. Picking one runs a single remote shell command over the already-authenticated session via the existing `sftp_exec_command` Tauri command (no new backend code needed — it already execs arbitrary commands on an open SSH channel).
+  - The command does `mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`, then appends the key only if it isn't already present (`grep -qxF` dedupe check). The key is single-quoted with embedded `'` escaped (`'\''`) so a key's comment field can't break out of the remote shell command.
+  - Only offered while the session is `connected` (there's no live channel to exec on otherwise) and when at least one key is saved.
+  - **Validation:** `npm run typecheck` passes. A live end-to-end run (connect, upload a key, confirm passwordless login on a second connection) is still a recommended manual follow-up — not simulable in this sandbox without a real SSH target.
 
 - [ ] 🟡 **P2 · S** — **Direct Shortcut to Add Keys from Server Edit Modal**
   - Add a quick `[+]` button next to the SSH Key dropdown inside [`src/components/AddNodePanel.tsx`](file:///d:/REPO/SubTerm/src/components/AddNodePanel.tsx) to generate or import a key without having to cancel out of editing the server.
