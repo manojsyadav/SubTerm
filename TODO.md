@@ -196,8 +196,11 @@ This document tracks active development tasks, pending architectural optimizatio
 - [ ] 🟡 **P2 · M** — **Vault Export to Portable Formats (JSON / CSV)**
   - 1-click export of saved server profiles, folders, and non-sensitive configs to portable unencrypted JSON/CSV or password-protected encrypted archives for backup and migration.
 
-- [ ] 🟡 **P2 · S** — **Portable Standalone Version in Releases**
-  - Automated CI workflow release step to package and publish a zero-install portable `.zip` bundle alongside the Windows NSIS setup and MSI installers.
+- [x] 🟡 **P2 · S** — **Portable Standalone Version in Releases** — ✅ Done
+  - Added a "Zip portable Windows build" step to the Windows job in [`.github/workflows/release.yml`](file:///d:/REPO/SubTerm/.github/workflows/release.yml) that zips the raw `subterm.exe` into `SubTerm-v<version>-windows-portable.zip` — no installer needed since Tauri embeds the frontend assets into the binary (no `resources` entry in `tauri.conf.json`) and WebView2 already ships with Windows 10/11.
+  - The zip is staged alongside the `.msi`/`.exe` artifacts and the release job's flatten step now also picks up `*-portable.zip` so it lands on the GitHub Release.
+  - Windows-only, matching the TODO wording ("alongside the Windows NSIS setup and MSI installers") — macOS already ships a zipped `.app` and Linux already ships an installer-free `.AppImage`, so neither needed a portable variant added.
+  - **Validation:** YAML parses cleanly (`python -c "import yaml; yaml.safe_load(open(...))"`). Not runnable locally — this only executes on a tag push / manual `workflow_dispatch`, so a real CI run is the actual validation once a release is cut.
 
 - [ ] 🟢 **P3 · S** — **Wildcard Character Matching in Server Filter**
   - Support glob wildcard pattern matching (`*` and `?`) in the home server search bar (e.g., `web-*`, `prod-db?`, `*-staging`).
