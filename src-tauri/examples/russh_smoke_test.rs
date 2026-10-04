@@ -82,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "client_key".into());
     let user = std::env::var("SMOKE_SSH_USER").unwrap_or_else(|_| "manoj".into());
 
-    println!("[0/6] Starting a local echo listener as the port-forward target...");
+    println!("[0/7] Starting a local echo listener as the port-forward target...");
     let local_listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?;
     let local_target_port = local_listener.local_addr()?.port();
     tokio::spawn(async move {
@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     println!("      listening on 127.0.0.1:{local_target_port}.");
 
-    println!("[1/6] Building client config (same build_ssh_client_config shape as the app)...");
+    println!("[1/7] Building client config (same build_ssh_client_config shape as the app)...");
     let mut config = client::Config::default();
     config.preferred = Preferred::DEFAULT; // exercises the new Preferred shape
     let config = Arc::new(config);
@@ -107,11 +107,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         forwarded_channel_opened: Some(opened_tx),
     };
 
-    println!("[2/6] Connecting to 127.0.0.1:{port}...");
+    println!("[2/7] Connecting to 127.0.0.1:{port}...");
     let mut session = client::connect(config, ("127.0.0.1", port), handler).await?;
     println!("      connected.");
 
-    println!("[3/6] Loading key + authenticating via publickey (PrivateKeyWithHashAlg)...");
+    println!("[3/7] Loading key + authenticating via publickey (PrivateKeyWithHashAlg)...");
     let pem = std::fs::read_to_string(&key_path)?;
     let key = decode_secret_key(&pem, None)?;
     let hash_alg = session.best_supported_rsa_hash().await?.flatten();
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("      authenticated as {user}.");
 
-    println!("[4/6] Opening channel + exec'ing a command...");
+    println!("[4/7] Opening channel + exec'ing a command...");
     let mut channel = session.channel_open_session().await?;
     channel.exec(true, "echo RUSSH_SMOKE_TEST_OK").await?;
     let mut output = Vec::new();
@@ -142,11 +142,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("exec output did not contain expected marker".into());
     }
 
-    println!("[5/6] Requesting a remote port forward (tcpip_forward)...");
+    println!("[5/7] Requesting a remote port forward (tcpip_forward)...");
     let bound_port = session.tcpip_forward("127.0.0.1", 0).await?;
     println!("      server granted forward on port {bound_port}.");
 
-    println!("[6/6] Connecting to the forwarded port to trigger the ChannelOpenHandle callback...");
+    println!("[6/7] Connecting to the forwarded port to trigger the ChannelOpenHandle callback...");
     {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut external = tokio::net::TcpStream::connect(("127.0.0.1", bound_port as u16)).await?;
@@ -161,9 +161,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    println!("[7/7] Opening an SFTP subsystem channel (russh-sftp, unaffected by the russh API changes but exercised here for completeness)...");
+    {
+        let sftp_channel = session.channel_open_session().await?;
+        sftp_channel.request_subsystem(true, "sftp").await?;
+        let sftp = russh_sftp::client::SftpSession::new(sftp_channel.into_stream()).await?;
+        let remote_dir = std::env::var("SMOKE_SFTP_DIR").unwrap_or_else(|_| ".".into());
+        let remote_path = format!("{}/subterm-smoke-test-{}.txt", remote_dir.trim_end_matches('/'), std::process::id());
+        use tokio::io::{AsyncWriteExt, AsyncReadExt};
+        {
+            let mut f = sftp
+                .open_with_flags(&remote_path, russh_sftp::protocol::OpenFlags::WRITE | russh_sftp::protocol::OpenFlags::CREATE | russh_sftp::protocol::OpenFlags::TRUNCATE)
+                .await?;
+            f.write_all(b"SFTP_SMOKE_TEST_CONTENT").await?;
+            f.shutdown().await?;
+        }
+        let mut readback = Vec::new();
+        {
+            let mut f = sftp.open(&remote_path).await?;
+            f.read_to_end(&mut readback).await?;
+        }
+        sftp.remove_file(&remote_path).await?;
+        if readback != b"SFTP_SMOKE_TEST_CONTENT" {
+            return Err("SFTP read-back content did not match what was written".into());
+        }
+        println!("      SFTP write/read/remove round-trip OK.");
+    }
+
     session
         .disconnect(russh::Disconnect::ByApplication, "smoke test done", "en")
         .await?;
-    println!("\nALL CHECKS PASSED (including the Channel<Msg>+ChannelOpenHandle bridge pattern agent-forward now shares)");
+    println!("\nALL CHECKS PASSED (including the Channel<Msg>+ChannelOpenHandle bridge pattern agent-forward now shares, and a live SFTP round trip)");
     Ok(())
 }
