@@ -12,10 +12,39 @@
 - **`feat(connection)` — Faster auto-reconnect on sleep/resume and network changes**:
   SubTerm now detects a laptop sleep/resume cycle and network interface changes (Wi-Fi roam, VPN toggle, cable unplug) and immediately retries a pending reconnect instead of waiting for the passive connection-health check to notice. The retry interval is also now capped exponential backoff (2s → 4s → 8s → 16s → 30s max) instead of a fixed 5-second retry.
 
+- **`feat(sessions)` — Upload public SSH keys (`ssh-copy-id`)**:
+  Right-click a connected session's tab and choose a key under **Upload public key** to append it to the remote `~/.ssh/authorized_keys` in one click, over the session's already-authenticated connection — `~/.ssh` and `authorized_keys` permissions are set correctly (`0700`/`0600`) and duplicate keys are skipped.
+
+- **`feat(nodes)` — Inline SSH key generation from the server edit modal**:
+  A `[+]` button next to the SSH Key dropdown in the Add/Edit Server panel generates a new key and auto-selects it, without leaving the panel.
+
+- **`feat(connection)` — Blank username resolves from `~/.ssh/config`**:
+  A server profile saved with a blank username now resolves the `User` declared for that host in your local `~/.ssh/config` before falling back to `root`, matching how the OpenSSH client itself behaves.
+
+- **`feat(sftp)` — Directory symlinks navigate as folders**:
+  Symbolic links pointing at directories are now resolved and shown as navigable folders (with a small link badge) in both the remote and local file panes, instead of being treated as plain files.
+
+- **`feat(terminal)` — Paste Saved Password for sudo prompts**:
+  A new **Paste Saved Password** terminal context-menu action writes the active session's saved SSH password straight into an interactive `[sudo] password for user:` prompt. The password is injected directly into the PTY on the backend and never crosses into the frontend.
+
+- **`feat(nodes)` — Wildcard search in the server filter**:
+  The home-screen server search now accepts shell-style glob wildcards (`web-*`, `prod-db?`, `*-staging`) on top of plain substring matching.
+
+### 📦 Packaging
+
+- **`feat(ci)` — Portable standalone Windows build**:
+  Releases now also publish a zero-install portable `.zip` alongside the NSIS and MSI installers.
+
 ### 🏗️ Internal
 
 - **`refactor(backend)` — `lib.rs` modularization**:
   The 7,385-line `src-tauri/src/lib.rs` monolith has been split into focused modules (`vault.rs` and seven `commands/*.rs` files covering connection lifecycle, profile lifecycle, the sync engine, diagnostics, monitor settings, and mirror commands). `lib.rs` is now 419 lines, holding only `DbState` and the Tauri builder setup. No behavior change — every step was verified with a full build and the existing unit test suite. See `docs/ARCHITECTURE.md` §2.1 for the new module map.
+
+- **`feat(lint)` — ESLint flat config**:
+  Added a baseline `@typescript-eslint` + `eslint-plugin-react-hooks` config and an `npm run lint` script. 115 pre-existing warnings and 2 pre-existing `react-hooks/rules-of-hooks` errors in `InfoPanel.tsx` are tracked as a known baseline rather than fixed blindly — see `TODO.md`.
+
+- **`docs` — TOFU host-key verification flow documented**:
+  `docs/SECURITY.md` §8 now covers the first-connect trust-on-first-use fingerprint prompt, storage location, and revocation flow for host keys.
 
 ---
 

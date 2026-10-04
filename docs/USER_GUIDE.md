@@ -12,6 +12,9 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 - **Subsequent Launches**: Enter your master password to unlock your stored servers, SSH keys, and credentials.
 - **Locking Your Vault**: Click the Lock icon in the sidebar or top bar at any time to immediately flush unencrypted data from memory.
 
+### 1.2 Finding a Server
+The home dashboard's search bar filters by server name or host as you type. It also accepts shell-style glob wildcards: `*` matches any run of characters and `?` matches exactly one — e.g. `web-*`, `prod-db?`, `*-staging`.
+
 ---
 
 ## 2. Core Workflows
@@ -25,7 +28,8 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
    - Provide a friendly **Name**, **Host/IP**, and **Port** (default: `22`).
 2. **Configure Authentication**:
    - Choose **Password Authentication** or **Private Key**.
-   - Select an existing saved key from your vault or click **Generate Key** / **Import Key**.
+   - Select an existing saved key from your vault, or click the `[+]` button next to the SSH Key dropdown to generate a new key inline without leaving this panel.
+   - Leave **Username** blank to resolve it from the matching `Host` block in your local `~/.ssh/config` at connect time (falls back to `root` if there's no match).
 3. **Optional Configurations**:
    - **Jump Host**: If behind a bastion, select another saved server as your `ProxyJump`.
    - **Production Flag**: Check the `Production Server` box if the server hosts live customer traffic (enables safe mode command interception).
@@ -52,6 +56,7 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 
 8. **Terminal Context Menu & Buffer Export**:
    - **Right-Click Context Menu**: Right-click anywhere in the active terminal to open a modern glassmorphic context menu with actions for **Copy** (`Ctrl+C`), **Paste** (`Ctrl+V`), **Select All** (`Ctrl+A`), **Find in Terminal** (`Ctrl+F`), **Clear Scrollback**, **Reset Terminal**, and **Export Buffer**.
+   - **Paste Saved Password**: For sessions that connected with a saved password, this entry writes it straight into an interactive `[sudo] password for user:` prompt — the password is injected on the backend and never passes through the frontend.
    - **Export Buffer to .log**: Click **Export Buffer** in the context menu to download the complete scrollback history into a timestamped `.log` file (e.g., `terminal-serverName-YYYY-MM-DDTHH-mm-ss.log`) for offline analysis or audit trails.
     - **Right-Click Action Preference**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, choose between **Open Context Menu** or **Paste Immediately (PuTTY style)**.
     - **Copy on Select**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, toggle **Copy on select** to automatically copy highlighted terminal text to your system clipboard without pressing any key.
@@ -64,6 +69,7 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
      - **Close Tab**: Disconnect and dismiss the active tab.
      - **Close Other Tabs**: Disconnect and close all tabs except the selected session.
      - **Close Tabs to the Right**: Batch-dismiss all tabs situated to the right of the current tab.
+     - **Upload public key**: While connected, pick a saved key to append its public half to the server's `~/.ssh/authorized_keys` (`~/.ssh` and `authorized_keys` permissions are set correctly, duplicates are skipped) — the one-click equivalent of `ssh-copy-id`.
 
 10. **1-Click OpenSSH `~/.ssh/config` & Client Importer**:
     - Effortlessly migrate existing SSH hosts without manual entry.
@@ -94,6 +100,7 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 2. **Directory Navigation**:
    - Browse through remote directories using the clickable breadcrumb bar or path input.
    - Right-click any file to download, rename, change permissions (`chmod`), or delete.
+   - Symbolic links pointing at directories are shown as navigable folders (with a small link badge on the icon) in both the remote and local panes, so you can open them the same way as a real folder.
 3. **Editing Remote Files**:
    - Double-click any text configuration file (e.g. `nginx.conf` or `.env`).
    - The in-app code editor opens with syntax highlighting.
