@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal } from "lucide-react";
+import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal, Plus } from "lucide-react";
 import PasswordField from "./PasswordField";
+import { useTextPrompt } from "../ui/confirm";
 
 // Compact "2h ago" style relative time for the attribution line.
 function relTime(d: Date): string {
@@ -33,7 +34,8 @@ type ImportedHost = {
   proxy_jump: string | null;
 };
 
-const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile, initialImportOpen }: any) => {
+const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, refreshSshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile, initialImportOpen }: any) => {
+  const textPrompt = useTextPrompt();
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
 
@@ -429,10 +431,39 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-zinc-400 ml-1">SSH key</label>
-                  <select className="w-full h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-zinc-300 border border-white/10 outline-none focus:border-primary/50 transition-all shadow-inner" value={newNode.keyId} onChange={e => setNewNode({ ...newNode, keyId: e.target.value })}>
-                    <option value="" className="bg-[#1a1a1e] text-zinc-500">-- Pick a key --</option>
-                    {sshKeys?.map((k: any) => <option key={k.id} value={k.id.toString()} className="bg-[#1a1a1e] text-zinc-300">{k.name}</option>)}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select className="flex-1 min-w-0 h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-zinc-300 border border-white/10 outline-none focus:border-primary/50 transition-all shadow-inner" value={newNode.keyId} onChange={e => setNewNode({ ...newNode, keyId: e.target.value })}>
+                      <option value="" className="bg-[#1a1a1e] text-zinc-500">-- Pick a key --</option>
+                      {sshKeys?.map((k: any) => <option key={k.id} value={k.id.toString()} className="bg-[#1a1a1e] text-zinc-300">{k.name}</option>)}
+                    </select>
+                    {/* Quick-generate so picking a key doesn't force the user to
+                        cancel out of editing this server, go to Settings, make
+                        a key, then come back and re-open this same form. */}
+                    <button
+                      type="button"
+                      title="Generate a new SSH key"
+                      onClick={async () => {
+                        const name = await textPrompt({
+                          title: "Generate SSH key",
+                          message: "Give this key a name — it's just for your reference here in SubTerm.",
+                          placeholder: "e.g. laptop-2026",
+                          okLabel: "Generate",
+                          validate: (v) => v.length === 0 ? "Name is required" : null,
+                        });
+                        if (!name) return;
+                        try {
+                          await invoke("generate_ssh_key", { name });
+                          await refreshSshKeys?.();
+                          const keys = await invoke<any[]>("get_ssh_keys");
+                          const created = keys.find((k) => k.name === name);
+                          if (created) setNewNode({ ...newNode, keyId: created.id.toString() });
+                        } catch { /* generate failure surfaces via the keys list staying unchanged */ }
+                      }}
+                      className="h-9 w-9 shrink-0 flex items-center justify-center bg-[#1a1a1e] rounded-lg border border-white/10 text-zinc-400 hover:text-primary hover:border-primary/40 transition-all"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

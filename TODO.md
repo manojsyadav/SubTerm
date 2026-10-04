@@ -158,8 +158,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - Only offered while the session is `connected` (there's no live channel to exec on otherwise) and when at least one key is saved.
   - **Validation:** `npm run typecheck` passes. A live end-to-end run (connect, upload a key, confirm passwordless login on a second connection) is still a recommended manual follow-up — not simulable in this sandbox without a real SSH target.
 
-- [ ] 🟡 **P2 · S** — **Direct Shortcut to Add Keys from Server Edit Modal**
-  - Add a quick `[+]` button next to the SSH Key dropdown inside [`src/components/AddNodePanel.tsx`](file:///d:/REPO/SubTerm/src/components/AddNodePanel.tsx) to generate or import a key without having to cancel out of editing the server.
+- [x] 🟡 **P2 · S** — **Direct Shortcut to Add Keys from Server Edit Modal** — ✅ Done
+  - Added a `[+]` button next to the SSH Key dropdown inside [`src/components/AddNodePanel.tsx`](file:///d:/REPO/SubTerm/src/components/AddNodePanel.tsx). Reuses the exact `useTextPrompt` → `generate_ssh_key` → refresh pattern already used in the Settings → SSH Keys panel (`DesktopApp.tsx`), then auto-selects the freshly generated key in the dropdown so the user never leaves the form.
+  - Scoped to "generate" only (not "import") — importing needs the full key-paste form (`public_key`/`private_key`/`passphrase`), which didn't fit a one-button inline action; that's still reachable via Settings → SSH Keys → Add Key as before.
+  - **Validation:** `npm run typecheck` passes; `npm run lint` unchanged at 117 problems (2 pre-existing errors, 115 warnings — no new issues introduced).
 
 - [ ] 🟡 **P2 · M** — **Server-Specific Snippets & Command Libraries**
   - Allow segmenting saved commands and snippet runbooks so snippets can be bound specifically to individual servers or tags alongside the global snippet library.

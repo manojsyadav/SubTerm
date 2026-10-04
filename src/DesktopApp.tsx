@@ -2799,7 +2799,7 @@ function DesktopApp() {
           }
         }}
         formError={formError}
-        credentials={credentials} sshKeys={sshKeys} folders={folders} refreshFolders={refreshFolders}
+        credentials={credentials} sshKeys={sshKeys} refreshSshKeys={refreshSshKeys} folders={folders} refreshFolders={refreshFolders}
         refreshServers={refreshServers}
         servers={servers}
         isMobile={isMobile}
