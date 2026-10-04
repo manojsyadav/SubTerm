@@ -65,3 +65,5 @@ coverage/
 .nyc_output/
 
 all-logos/
+release-portable/
+*.zip
