@@ -58,8 +58,8 @@
 
 ### 📦 Packaging
 
-- **`feat(ci)` — Portable standalone Windows build**:
-  Releases now also publish a zero-install portable `.zip` alongside the NSIS and MSI installers.
+- **`feat(packaging)` — Portable standalone Windows build & local build script**:
+  Releases now publish a zero-install portable `.zip` alongside the NSIS and MSI installers. Added `npm run build:portable` (via `scripts/build-portable.ps1`) to compile in release mode and package `SubTerm-v<version>-windows-portable.zip` locally with `--no-bundle`, bypassing installer generation for fast zero-install deployments.
 
 ### 🏗️ Internal
 

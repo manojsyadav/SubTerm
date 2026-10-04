@@ -174,11 +174,15 @@ cargo run --example russh_smoke_test --features full-ssh-algos
 # Build desktop native installers (MSI/NSIS on Windows, AppImage/deb on Linux, DMG on macOS)
 npm run tauri build -- --features full-ssh-algos
 
+# Build zero-install Windows portable .zip (skips MSI/NSIS bundling)
+npm run build:portable
+
 # Build Android release APK
 npm run android:build
 ```
-The output installers will be located in:
-- Desktop: `src-tauri/target/release/bundle/`
+The output artifacts will be located in:
+- Desktop Installers (MSI/NSIS): `src-tauri/target/release/bundle/`
+- Portable Standalone Binary: `src-tauri/target/release/subterm.exe` (or `release-portable/*.zip` via `npm run build:portable`)
 - Android: `src-tauri/gen/android/app/build/outputs/apk/release/`
 
 ---

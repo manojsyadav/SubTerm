@@ -117,8 +117,11 @@ npm install
 # 3. Run development build
 npm run tauri dev
 
-# 4. Build release bundle
+# 4. Build release installers (MSI / NSIS)
 npm run tauri build
+
+# 5. (Optional) Build standalone portable zip
+npm run build:portable
 ```
 
 For advanced builds (e.g. legacy RSA host key support via `--features full-ssh-algos` or Android development), see [Developer Guide](docs/DEVELOPMENT.md).
