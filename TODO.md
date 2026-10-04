@@ -166,8 +166,11 @@ This document tracks active development tasks, pending architectural optimizatio
 - [ ] 🟡 **P2 · M** — **Server-Specific Snippets & Command Libraries**
   - Allow segmenting saved commands and snippet runbooks so snippets can be bound specifically to individual servers or tags alongside the global snippet library.
 
-- [ ] 🟡 **P2 · S** — **Blank Username Fallback & Interactive Prompt**
-  - Allow saving connection profiles with blank usernames that automatically resolve to the `User` defined in `~/.ssh/config`, or prompt interactively on connect rather than strictly defaulting to `root`.
+- [x] 🟡 **P2 · S** — **Blank Username Fallback & Interactive Prompt** — ✅ Done (ssh_config resolution; interactive prompt deferred)
+  - Blank usernames were already saveable (no frontend validation blocked it) — the gap was entirely server-side: [`src-tauri/src/commands/connection.rs`](file:///d:/REPO/SubTerm/src-tauri/src/commands/connection.rs) hardcoded `"root"` the moment `user.trim().is_empty()`, in both `initiate_connection` and `connect_jump_host`.
+  - Added `resolve_user_from_ssh_config(host)`, which reuses the existing `parse_ssh_config` parser (already shipped for the "Import from ~/.ssh/config" flow) to look for a `Host` block matching the connecting host (by alias or resolved `Hostname`) with a `User` directive, and tries it before falling back to `root`. Best-effort by design — any parse failure (missing config, unreadable file, Android) is swallowed and falls through to the existing `root` default, never a connect-blocking error.
+  - **Interactive prompt-on-connect deliberately not implemented**: `initiate_connection` resolves username synchronously from the DB row before any network I/O, with no existing round-trip mechanism to pause mid-connect for a frontend dialog and resume with a typed answer (unlike the keyboard-interactive/fingerprint flows, which already have that plumbing for a different purpose). The TODO's phrasing offers resolve-from-config *or* prompt as alternatives; config resolution covers the common case without that added complexity.
+  - **Validation:** `cargo check` clean; all 45 backend unit tests pass. A live connect to a blank-username profile with a matching `~/.ssh/config` entry is a recommended manual follow-up.
 
 - [ ] 🟢 **P3 · S** — **Auto-Pasting Password for Sudo Prompts**
   - Convenience hotkey or context action to securely inject the active session's saved password into interactive `[sudo] password for user:` prompts.

@@ -7,10 +7,27 @@
 // auto-reconnect detection and SSH agent forwarding follow-up work lands.
 
 use crate::commands::servers::QuickAuth;
+use crate::commands::sftp::parse_ssh_config;
 use crate::commands::tunnels::start_tunnel_specs_on;
 use crate::{mirror, session_drag_dir, session_sftp_dir, ssh_manager, tunnel};
 use crate::{DbState, MirrorMap, SshState};
 use rand::Rng;
+
+/// When a server profile has no username saved, check `~/.ssh/config` for a
+/// `Host` block matching this `host` (by alias or by its `Hostname`) with a
+/// `User` directive, before giving up and falling back to `root`. Lets users
+/// save blank-username profiles that inherit whatever their local SSH client
+/// would already use for that host. Best-effort: any parse failure (missing
+/// config, unreadable file, Android) just means no match, never an error —
+/// this is an optional convenience, not something that should block connecting.
+fn resolve_user_from_ssh_config(host: &str) -> Option<String> {
+    let hosts = parse_ssh_config(None).ok()?;
+    hosts
+        .into_iter()
+        .find(|h| h.host_alias == host || h.hostname == host)
+        .map(|h| h.user)
+        .filter(|u| !u.trim().is_empty())
+}
 
 
 /// Drive keyboard-interactive (RFC 4256) authentication — the method behind
@@ -439,7 +456,7 @@ pub(crate) async fn connect_jump_host(
         }
     };
     let effective_user = if user.trim().is_empty() {
-        "root".to_string()
+        resolve_user_from_ssh_config(&host).unwrap_or_else(|| "root".to_string())
     } else {
         user.trim().to_string()
     };
@@ -950,8 +967,16 @@ pub(crate) async fn initiate_connection(
 
         emit_log("Initializing SSH connection process...", "info");
         let effective_user = if user.trim().is_empty() {
-            emit_log("Username is empty. Defaulting to 'root'.", "info");
-            "root".to_string()
+            match resolve_user_from_ssh_config(&host) {
+                Some(u) => {
+                    emit_log(&format!("Username is empty. Resolved '{}' from ~/.ssh/config.", u), "info");
+                    u
+                }
+                None => {
+                    emit_log("Username is empty. Defaulting to 'root'.", "info");
+                    "root".to_string()
+                }
+            }
         } else {
             user.trim().to_string()
         };
