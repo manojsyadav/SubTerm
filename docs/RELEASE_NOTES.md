@@ -36,6 +36,9 @@
 - **`feat(sftp)` — Cross-pane file diff & compare**:
   Right-click a file in either SFTP pane and choose **Compare with Other Pane** for a unified diff against the same-named file in the opposite pane — local vs. remote, or two different sessions. **Use Left →** / **← Use Right** overwrite one file with the other's contents in one click.
 
+- **`feat(library)` — Server-scoped snippets & tags**:
+  Saved commands in the Library can now be bound to one specific server (or left **Global**) and given freeform tags, both searchable from the Library's search box. `Ctrl+K`'s Command Palette only lists a server-scoped snippet while that server's session tab is active.
+
 ### 🐛 Bug Fixes
 
 - **`fix(sftp)` — Saving a root-owned file silently failed**:

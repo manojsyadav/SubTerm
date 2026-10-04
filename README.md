@@ -40,6 +40,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Wildcard Server Search**: Home-screen search accepts shell-style `*`/`?` glob wildcards on top of plain substring matching.
 - **Terminal Triggers & Alert Keywords**: Keyword/regex patterns matched against live terminal output, firing a toast notification, audible chime, visual flash, or Activity Log entry.
 - **Cross-Pane File Diff & Compare**: Unified diff viewer comparing any two files — local vs. remote, or across sessions — with one-click overwrite in either direction.
+- **Server-Scoped Snippets & Tags**: Bind a saved command to one specific server (or leave it global), plus freeform tags — the Command Palette only surfaces a server-scoped snippet while that server's tab is active.
 - **Interactive Network Diagnostics & Port Prober**: TCP port ping with millisecond round-trip latency, concurrent common service port audits (SSH, HTTP/S, DBs, Cache), Wake-on-LAN (WOL), and firewall port knocking.
 - **Configurable SSH Keep-Alive Settings**: Dynamic 15s–120s keep-alive packet intervals to prevent dropped sessions across NAT firewalls and cloud proxies.
 - **Auto-Reconnect with Sleep/Resume & Network-Change Detection**: Detects laptop sleep/resume cycles and network interface changes (Wi-Fi roam, VPN toggle) and retries immediately instead of waiting on the passive health check, with capped exponential backoff (2s–30s) and a live "Reconnecting · attempt N" status banner.

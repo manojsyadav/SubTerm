@@ -394,7 +394,7 @@ function DesktopApp() {
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
-  const [editCommandData, setEditCommandData] = useState<{ id: number | null, title: string, content: string }>({ id: null, title: "", content: "" });
+  const [editCommandData, setEditCommandData] = useState<{ id: number | null, title: string, content: string, serverId: number | null, tags: string }>({ id: null, title: "", content: "", serverId: null, tags: "" });
 
   const [isNotePanelOpen, setIsNotePanelOpen] = useState(false);
   const [editNoteData, setEditNoteData] = useState<{ id: number | null, title: string, body: string }>({ id: null, title: "", body: "" });
@@ -2447,7 +2447,8 @@ function DesktopApp() {
               const filteredCommands = q
                 ? commands.filter(c =>
                     (c.title || "").toLowerCase().includes(q) ||
-                    (c.content || "").toLowerCase().includes(q))
+                    (c.content || "").toLowerCase().includes(q) ||
+                    (c.tags || "").toLowerCase().includes(q))
                 : commands;
               const filteredNotes = q
                 ? notes.filter(n =>
@@ -2458,7 +2459,7 @@ function DesktopApp() {
               const addLabel = onCommandsTab ? "Add Command" : "Add Note";
               const openAdd = () => {
                 if (onCommandsTab) {
-                  setEditCommandData({ id: null, title: "", content: "" });
+                  setEditCommandData({ id: null, title: "", content: "", serverId: null, tags: "" });
                   setIsCommandPanelOpen(true);
                 } else {
                   setEditNoteData({ id: null, title: "", body: "" });
@@ -2544,8 +2545,8 @@ function DesktopApp() {
                         </div>
                       ) : (
                         filteredCommands.map(cmd => (
-                          <div key={cmd.id} className="bg-[#16161a] border border-white/5 rounded-2xl p-4 flex flex-col group relative overflow-hidden shadow-inner h-[150px]">
-                            <div className="flex justify-between items-start mb-2">
+                          <div key={cmd.id} className="bg-[#16161a] border border-white/5 rounded-2xl p-4 flex flex-col group relative overflow-hidden shadow-inner h-[170px]">
+                            <div className="flex justify-between items-start mb-1">
                               <h3 className="text-[16px] font-bold text-primary tracking-tight truncate flex-1">{cmd.title}</h3>
                               <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                 {sessions.length > 0 && (
@@ -2566,6 +2567,20 @@ function DesktopApp() {
                                 }} className="text-zinc-500 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                               </div>
                             </div>
+                            {(cmd.serverId || (cmd.tags && cmd.tags.trim())) && (
+                              <div className="flex flex-wrap items-center gap-1 mb-2">
+                                {cmd.serverId ? (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-300 text-[9.5px] font-bold uppercase tracking-wide">
+                                    {servers.find((s: any) => s.id === cmd.serverId)?.name || `Server #${cmd.serverId}`}
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-zinc-400 text-[9.5px] font-bold uppercase tracking-wide">Global</span>
+                                )}
+                                {(cmd.tags || "").split(",").map((t: string) => t.trim()).filter(Boolean).map((t: string) => (
+                                  <span key={t} className="px-1.5 py-0.5 rounded-md bg-violet-500/10 text-violet-300 text-[9.5px] font-bold">#{t}</span>
+                                ))}
+                              </div>
+                            )}
                             <div className="bg-black/30 rounded-xl p-3 border border-white/5 flex-1 relative group-hover:border-primary/20 transition-colors overflow-hidden">
                               <pre className="text-[12px] text-zinc-400 font-mono whitespace-pre-wrap leading-relaxed line-clamp-3">{cmd.content}</pre>
                             </div>
@@ -2923,6 +2938,23 @@ function DesktopApp() {
               <label className="text-[12px] font-bold text-zinc-400 ml-1">Command</label>
               <textarea className="w-full flex-1 bg-black rounded-lg p-3 text-[13px] text-zinc-300 font-mono border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner custom-scrollbar resize-none" placeholder="sudo apt update && sudo apt upgrade -y" value={editCommandData.content} onChange={e => setEditCommandData({ ...editCommandData, content: e.target.value })} />
             </div>
+            <div className="space-y-1.5">
+              <label className="text-[12px] font-bold text-zinc-400 ml-1">Scope</label>
+              <select
+                className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner"
+                value={editCommandData.serverId ?? ""}
+                onChange={e => setEditCommandData({ ...editCommandData, serverId: e.target.value ? parseInt(e.target.value, 10) : null })}
+              >
+                <option value="">Global (every server)</option>
+                {servers.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name || s.host}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[12px] font-bold text-zinc-400 ml-1">Tags (comma-separated)</label>
+              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="e.g. maintenance, docker" value={editCommandData.tags} onChange={e => setEditCommandData({ ...editCommandData, tags: e.target.value })} />
+            </div>
           </div>
           <div className="p-6 border-t border-white/5 shrink-0">
             <button 
@@ -2932,9 +2964,9 @@ function DesktopApp() {
                   return;
                 }
                 try {
-                  const action = editCommandData.id 
-                    ? invoke("edit_command", { id: editCommandData.id, title: editCommandData.title, content: editCommandData.content })
-                    : invoke("add_command", { title: editCommandData.title, content: editCommandData.content });
+                  const action = editCommandData.id
+                    ? invoke("edit_command", { id: editCommandData.id, title: editCommandData.title, content: editCommandData.content, serverId: editCommandData.serverId, tags: editCommandData.tags })
+                    : invoke("add_command", { title: editCommandData.title, content: editCommandData.content, serverId: editCommandData.serverId, tags: editCommandData.tags });
                   await action;
                   setIsCommandPanelOpen(false);
                   refreshCommands();

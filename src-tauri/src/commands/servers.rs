@@ -959,30 +959,30 @@ pub async fn get_folders(state: tauri::State<'_, DbState>) -> Result<Vec<serde_j
 }
 
 #[tauri::command]
-pub async fn add_command(state: tauri::State<'_, DbState>, title: String, content: String) -> Result<(), String> {
+pub async fn add_command(state: tauri::State<'_, DbState>, title: String, content: String, server_id: Option<i32>, tags: Option<String>) -> Result<(), String> {
     let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
     let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
-    
+
     conn.execute(
-        "INSERT INTO commands (title, content) VALUES (?1, ?2)",
-        rusqlite::params![title, content],
+        "INSERT INTO commands (title, content, server_id, tags) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![title, content, server_id, tags.unwrap_or_default()],
     ).map_err(|e| format!("[DATABASE] COMMAND_INSERT_FAILED: {}", e))?;
-    
+
     drop(conn_guard);
     save_vault_internal(&state)?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn edit_command(state: tauri::State<'_, DbState>, id: i32, title: String, content: String) -> Result<(), String> {
+pub async fn edit_command(state: tauri::State<'_, DbState>, id: i32, title: String, content: String, server_id: Option<i32>, tags: Option<String>) -> Result<(), String> {
     let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
     let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
-    
+
     conn.execute(
-        "UPDATE commands SET title=?1, content=?2 WHERE id=?3",
-        rusqlite::params![title, content, id],
+        "UPDATE commands SET title=?1, content=?2, server_id=?3, tags=?4 WHERE id=?5",
+        rusqlite::params![title, content, server_id, tags.unwrap_or_default(), id],
     ).map_err(|e| format!("[DATABASE] COMMAND_UPDATE_FAILED: {}", e))?;
-    
+
     drop(conn_guard);
     save_vault_internal(&state)?;
     Ok(())
@@ -1007,13 +1007,15 @@ pub async fn delete_command(state: tauri::State<'_, DbState>, id: i32) -> Result
 pub async fn get_commands(state: tauri::State<'_, DbState>) -> Result<Vec<serde_json::Value>, String> {
     let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
     let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
-    let mut stmt = conn.prepare("SELECT id, title, content FROM commands").map_err(|e| e.to_string())?;
-    
+    let mut stmt = conn.prepare("SELECT id, title, content, server_id, tags FROM commands").map_err(|e| e.to_string())?;
+
     let rows = stmt.query_map([], |row| {
         Ok(json!({
-            "id": row.get::<_, i32>(0)?, 
-            "title": row.get::<_, String>(1)?, 
-            "content": row.get::<_, String>(2)?
+            "id": row.get::<_, i32>(0)?,
+            "title": row.get::<_, String>(1)?,
+            "content": row.get::<_, String>(2)?,
+            "serverId": row.get::<_, Option<i32>>(3)?,
+            "tags": row.get::<_, String>(4)?,
         }))
     }).map_err(|e| e.to_string())?;
     

@@ -28,7 +28,7 @@ interface CommandPaletteProps {
   onOpenAddNode: () => void;
   onOpenSettings: () => void;
   onCloseSession: (sessionId: string) => void;
-  commands?: { id: number; title: string; content: string }[];
+  commands?: { id: number; title: string; content: string; serverId?: number | null }[];
   onExecuteCommand?: (cmd: string) => void;
   enableMonitoring?: boolean;
   onOpenLocalTerminal?: () => void;
@@ -250,18 +250,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     });
 
-    // 5. Saved Snippet Commands
+    // 5. Saved Snippet Commands — scoped to the active session's server plus
+    // every global (no serverId) snippet, so a palette opened inside one
+    // server's tab doesn't surface snippets written for a different one.
     if (isSessionActive && onExecuteCommand) {
-      commands.forEach((c) => {
-        list.push({
-          id: `cmd-${c.id}`,
-          category: "Command",
-          title: `Run: ${c.title}`,
-          subtitle: c.content.split("\n")[0],
-          icon: <Play size={14} className="text-amber-400" />,
-          action: () => onExecuteCommand(c.content),
+      const currentServerId = sessions.find((s) => s.id === activeView)?.serverId;
+      commands
+        .filter((c) => !c.serverId || c.serverId === currentServerId)
+        .forEach((c) => {
+          list.push({
+            id: `cmd-${c.id}`,
+            category: "Command",
+            title: `Run: ${c.title}`,
+            subtitle: c.content.split("\n")[0],
+            icon: <Play size={14} className="text-amber-400" />,
+            action: () => onExecuteCommand(c.content),
+          });
         });
-      });
     }
 
     return list;

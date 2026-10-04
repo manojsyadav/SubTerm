@@ -178,8 +178,12 @@ This document tracks active development tasks, pending architectural optimizatio
   - Scoped to "generate" only (not "import") — importing needs the full key-paste form (`public_key`/`private_key`/`passphrase`), which didn't fit a one-button inline action; that's still reachable via Settings → SSH Keys → Add Key as before.
   - **Validation:** `npm run typecheck` passes; `npm run lint` unchanged at 117 problems (2 pre-existing errors, 115 warnings — no new issues introduced).
 
-- [ ] 🟡 **P2 · M** — **Server-Specific Snippets & Command Libraries**
-  - Allow segmenting saved commands and snippet runbooks so snippets can be bound specifically to individual servers or tags alongside the global snippet library.
+- [x] 🟡 **P2 · M** — **Server-Specific Snippets & Command Libraries** — ✅ Done
+  - Schema: `commands` gained `server_id INTEGER` (NULL = global, matching every existing row) and `tags TEXT NOT NULL DEFAULT ''` (plain comma-separated string, not JSON — simple labels don't need a parser). Added to both the fresh-profile `CREATE TABLE` and the additive `ALTER TABLE` migration list in `profile.rs`, following the exact precedent of `jump_host_id`/`forward_agent` (nullable/defaulted, no `SCHEMA_VERSION` bump needed).
+  - Backend: `add_command`/`edit_command` accept optional `server_id`/`tags`; `get_commands` returns them (`serverId`/`tags` camelCase, matching the app's existing JS-facing naming convention).
+  - Frontend: the Library "New/Edit Command" panel in `DesktopApp.tsx` gained a **Scope** dropdown (Global or any saved server) and a **Tags** text input. Library cards show a scope badge (server name, or "Global") and tag chips, and the search box now also matches against tags.
+  - **Command Palette filtering**: `CommandPalette.tsx`'s saved-snippet section now filters to `!serverId || serverId === <active session's server>` — opening `Ctrl+K` inside one server's tab no longer surfaces snippets written for a different server, while global snippets always show.
+  - **Validation:** `cargo check`/`cargo test` (45/45) pass; `npm run typecheck`, `npm run lint` (0 errors, 115 pre-existing warnings), and `npm run build` all clean.
 
 - [x] 🟡 **P2 · S** — **Blank Username Fallback & Interactive Prompt** — ✅ Done (ssh_config resolution; interactive prompt deferred)
   - Blank usernames were already saveable (no frontend validation blocked it) — the gap was entirely server-side: [`src-tauri/src/commands/connection.rs`](file:///d:/REPO/SubTerm/src-tauri/src/commands/connection.rs) hardcoded `"root"` the moment `user.trim().is_empty()`, in both `initiate_connection` and `connect_jump_host`.

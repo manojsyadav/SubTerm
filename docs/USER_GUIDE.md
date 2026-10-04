@@ -180,6 +180,9 @@ The home dashboard's search bar filters by server name or host as you type. It a
      - Live monospace preview of the interpolated command.
      - Fleet Broadcast indicator if running across multiple sessions.
    - Click **Run Command** (`Enter`) to execute, or **Paste to Prompt** to insert into the terminal without executing.
+4. **Scoping a Snippet to One Server**:
+   - When adding or editing a command in the Library, set **Scope** to a specific server instead of **Global**, and optionally add comma-separated **Tags**.
+   - A server-scoped snippet only appears in that server's Command Palette (`Ctrl+K`) — global snippets (the default) still show everywhere. Library cards show a scope badge and tag chips, and the Library search box matches against tags too.
 
 ---
 
