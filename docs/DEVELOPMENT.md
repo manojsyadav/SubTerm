@@ -161,6 +161,14 @@ cargo test
 cargo clippy
 ```
 
+**Live SSH protocol smoke test** — `cargo test` doesn't touch a real network, so after a `russh`/`russh-sftp` upgrade or any change to `ssh_manager.rs`'s connect/auth/channel code, run [`src-tauri/examples/russh_smoke_test.rs`](file:///d:/REPO/SubTerm/src-tauri/examples/russh_smoke_test.rs) against any local `sshd` (a throwaway keypair in its `authorized_keys` is enough) to exercise connect, publickey auth, exec, and the port-forward channel-bridge pattern end-to-end:
+```bash
+cd src-tauri
+SMOKE_SSH_PORT=2222 SMOKE_SSH_KEY=/path/to/client_key SMOKE_SSH_USER=youruser cargo run --example russh_smoke_test
+# and with the legacy-algorithms profile:
+cargo run --example russh_smoke_test --features full-ssh-algos
+```
+
 ### 5.3 Building Release Packages
 ```bash
 # Build desktop native installers (MSI/NSIS on Windows, AppImage/deb on Linux, DMG on macOS)

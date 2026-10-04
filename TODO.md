@@ -80,10 +80,11 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ⚠️ Known Follow-Ups From Recent Work
 
-- [ ] 🔴 **P1** — **Live-verify the `russh` 0.63 upgrade against a real server**
-  - The 0.40.2 → 0.63.3 upgrade (fixing RUSTSEC-2026-0153/0154) compiles clean and passes all 81 unit tests in both build profiles, but has **not** been exercised against a live SSH server in this environment.
-  - Needs a manual pass covering: SSH connect + auth (password, key, keyboard-interactive), SFTP transfer, port forwarding (`-L`/`-R`/-D`), and — especially — SSH agent forwarding, whose bridge was rewritten (not just signature-adapted) to use a direct `Channel<Msg>` stream instead of the old `ChannelId` + manual routing map.
-  - If this surfaces a regression, the previous pin (`russh = "0.40.2"`) and its known advisory are the fallback — see git history at the commit upgrading `src-tauri/Cargo.toml`.
+- [ ] 🟡 **P2** — **Live-verify SSH agent forwarding end-to-end with a real agent**
+  - Follow-up to the `russh` 0.40.2 → 0.63.3 upgrade (fixed RUSTSEC-2026-0153/0154). A live local-server smoke test ([`src-tauri/examples/russh_smoke_test.rs`](file:///d:/REPO/SubTerm/src-tauri/examples/russh_smoke_test.rs), run against a throwaway Windows OpenSSH `sshd` on `127.0.0.1:2222`) already confirmed, in both build profiles: connect, publickey auth via the new `PrivateKeyWithHashAlg` API, channel open + exec + reading `ChannelMsg::Data`, `tcpip_forward`, and — critically — a live round trip through the exact `Channel<Msg>` + `ChannelOpenHandle` callback pattern the rewritten `server_channel_open_agent_forward` now shares with `server_channel_open_forwarded_tcpip` (bytes sent into a forwarded port came back byte-for-byte through the handler's `copy_bidirectional` bridge).
+  - **What's still unverified**: the actual ssh-agent wire protocol round-tripping through that bridge with a real agent (`ssh-add -l` on the remote reaching back to a real local OpenSSH agent/Pageant/1Password/KeePassXC). Windows's `ssh-agent` service was stopped on the dev machine and starting it needs admin elevation this environment didn't have — re-run once available, or test on a machine with the service already running.
+  - Also worth a real pass: keyboard-interactive (2FA) auth and SFTP transfer specifically (the smoke test didn't touch either — SFTP rides on the separate `russh-sftp` crate, unaffected by this upgrade's API changes, but never actually exercised live this session).
+  - To re-run the smoke test: stand up any local `sshd` with a throwaway keypair in its `authorized_keys`, then `SMOKE_SSH_PORT=<port> SMOKE_SSH_KEY=<path> SMOKE_SSH_USER=<user> cargo run --example russh_smoke_test [--features full-ssh-algos]` from `src-tauri`.
 
 - [ ] 🟡 **P2 · S** — **Manual click-through for session-only verified features**
   - Several features this session were validated by `typecheck`/`lint`/`build`/unit tests only, not live interaction — bundling as one follow-up pass rather than one line each:
