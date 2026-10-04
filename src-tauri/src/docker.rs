@@ -34,7 +34,7 @@ impl DockerStreams {
 // POSIX-safe quoting: wrap in single quotes, escape internal single quotes.
 // Works on the typical Linux/macOS docker host. Windows servers running
 // docker almost always use WSL2 (POSIX), so this is the right default.
-fn shq(s: &str) -> String {
+pub(crate) fn shq(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
 }
 
@@ -62,7 +62,7 @@ fn is_safe_path(s: &str) -> bool {
     ))
 }
 
-async fn run_capture_with_stdin(
+pub(crate) async fn run_capture_with_stdin(
     state: &SshState,
     session_id: &str,
     cmd: &str,
@@ -129,7 +129,7 @@ async fn run_capture_with_stdin(
     Ok((code, out))
 }
 
-async fn run_capture(
+pub(crate) async fn run_capture(
     state: &SshState,
     session_id: &str,
     cmd: &str,

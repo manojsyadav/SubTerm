@@ -30,6 +30,11 @@
 - **`feat(nodes)` — Wildcard search in the server filter**:
   The home-screen server search now accepts shell-style glob wildcards (`web-*`, `prod-db?`, `*-staging`) on top of plain substring matching.
 
+### 🐛 Bug Fixes
+
+- **`fix(sftp)` — Saving a root-owned file silently failed**:
+  The quick-editor's `Ctrl+S` save fell back to a raw shell pipe when the sftp subsystem couldn't open the file, but ignored the shell's exit code — saving e.g. `/etc/nginx/nginx.conf` as a non-root user looked successful in the UI while writing nothing. The save now stages to a temp file and `mv`s it into place, retrying under `sudo` (non-interactive, then with the session's saved password) on a real permission error, same elevation order as the existing Docker management commands.
+
 ### 📦 Packaging
 
 - **`feat(ci)` — Portable standalone Windows build**:

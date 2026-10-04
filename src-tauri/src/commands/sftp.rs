@@ -2178,15 +2178,76 @@ pub async fn sftp_write_file_text(
         return Ok(());
     }
 
-    // 2. Fallback to SSH command execution via base64 pipe
+    // 2. Fallback to SSH command execution. Stage the content into a
+    // `mktemp`-generated path first (unprivileged, and not a guessable name
+    // another local user could pre-plant as a symlink — same rationale as
+    // `app_temp_root` above), resolve ~-relative paths the same way the old
+    // single-shot command did, then `mv` the staged file into place.
+    //
+    // Splitting staging from the move (instead of one `echo b64 | base64 -d
+    // > "$FILE"` pipeline) is what makes sudo elevation possible below: sudo
+    // can only cleanly re-exec a flat `mv src dst` argv, not a multi-stage
+    // shell pipeline with its own `$FILE` resolution logic.
     use base64::Engine;
+    use crate::docker::{run_capture, run_capture_with_stdin, shq};
     let b64 = base64::engine::general_purpose::STANDARD.encode(content.as_bytes());
-    let escaped = remote_path.replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
-    let cmd = format!(
-        "FILE=\"{}\"; if [ ! -e \"$FILE\" ] && [ -e \"$HOME/$FILE\" ]; then FILE=\"$HOME/$FILE\"; fi; echo \"{}\" | base64 -d > \"$FILE\"",
-        escaped, b64
+    let stage_cmd = format!("TMP=$(mktemp) && echo {} | base64 -d > \"$TMP\" && printf '%s' \"$TMP\"", shq(&b64));
+    let (stage_code, tmp_path) = run_capture(&state, &session_id, &stage_cmd, 10).await?;
+    let tmp_path = tmp_path.trim().to_string();
+    if stage_code != 0 || tmp_path.is_empty() {
+        return Err(format!("Failed to stage write: {}", tmp_path));
+    }
+
+    // Resolve the same $HOME-relative fallback the old inline command used,
+    // as a plain path string so the later mv/sudo-mv is just `mv src dst`
+    // with no shell control structures for sudo to misparse.
+    let resolve_cmd = format!(
+        "if [ -e {dest} ] || [ ! -e \"$HOME\"/{dest} ]; then printf '%s' {dest}; else printf '%s' \"$HOME\"/{dest}; fi",
+        dest = shq(&remote_path)
     );
-    exec_ssh_cmd(&state, &session_id, &cmd).await.map(|_| ())
+    let (resolve_code, resolved_dest) = run_capture(&state, &session_id, &resolve_cmd, 10).await?;
+    let resolved_dest = if resolve_code == 0 && !resolved_dest.trim().is_empty() {
+        resolved_dest.trim().to_string()
+    } else {
+        remote_path.clone()
+    };
+
+    let cleanup = || async { let _ = run_capture(&state, &session_id, &format!("rm -f {}", shq(&tmp_path)), 5).await; };
+
+    let mv_cmd = format!("mv {} {}", shq(&tmp_path), shq(&resolved_dest));
+    let (mv_code, mv_out) = run_capture(&state, &session_id, &mv_cmd, 10).await?;
+    if mv_code == 0 {
+        return Ok(());
+    }
+
+    let lower = mv_out.to_lowercase();
+    let needs_sudo = lower.contains("permission denied") || lower.contains("operation not permitted");
+    if !needs_sudo {
+        cleanup().await;
+        return Err(mv_out);
+    }
+
+    // Root-owned destination (e.g. /etc/nginx/nginx.conf): retry the same
+    // mv under sudo, same silent-elevation pattern as docker.rs's
+    // run_docker_smart — non-interactive sudo first, then the session's
+    // saved password via `sudo -S -p ''` if one exists.
+    let sudo_cmd = format!("sudo -n {}", mv_cmd);
+    let (sudo_code, sudo_out) = run_capture(&state, &session_id, &sudo_cmd, 10).await?;
+    if sudo_code == 0 {
+        return Ok(());
+    }
+
+    let saved_password = state.session_passwords.lock().await.get(&session_id).cloned();
+    if let Some(pass) = saved_password {
+        let sudo_stdin_cmd = format!("sudo -S -p '' {}", mv_cmd);
+        let stdin_payload = format!("{}\n", pass);
+        let (code, out) = run_capture_with_stdin(&state, &session_id, &sudo_stdin_cmd, 10, Some(&stdin_payload)).await?;
+        cleanup().await;
+        return if code == 0 { Ok(()) } else { Err(out) };
+    }
+
+    cleanup().await;
+    Err(format!("Permission denied writing {} (no saved password to elevate with sudo): {}", remote_path, sudo_out))
 }
 
 #[tauri::command]
