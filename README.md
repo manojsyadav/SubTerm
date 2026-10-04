@@ -124,7 +124,7 @@ npm run tauri build
 npm run build:portable
 ```
 
-For advanced builds (e.g. legacy RSA host key support via `--features full-ssh-algos` or Android development), see [Developer Guide](docs/DEVELOPMENT.md).
+For advanced builds, see [Developer Guide](docs/DEVELOPMENT.md) and [Testing Guide](docs/TESTING.md).
 
 ---
 

@@ -131,6 +131,8 @@ npm run tauri dev
 
 ## 5. Testing & Verification
 
+> For a complete guide covering all test suites, live protocol smoke testing, and environment variables, see [Testing Guide](TESTING.md).
+
 ### 5.1 Frontend Verification
 ```bash
 # Run TypeScript compilation check
