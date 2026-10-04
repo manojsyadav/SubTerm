@@ -7,12 +7,14 @@ import {
   Trash2,
   RotateCw,
   Download,
+  KeyRound,
 } from "lucide-react";
 
 export interface ContextMenuState {
   x: number;
   y: number;
   hasSelection: boolean;
+  hasSavedPassword: boolean;
 }
 
 interface TerminalContextMenuProps {
@@ -25,6 +27,7 @@ interface TerminalContextMenuProps {
   onClear: () => void;
   onReset: () => void;
   onExport: () => void;
+  onPasteSavedPassword: () => void;
 }
 
 export function TerminalContextMenu({
@@ -37,6 +40,7 @@ export function TerminalContextMenu({
   onClear,
   onReset,
   onExport,
+  onPasteSavedPassword,
 }: TerminalContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -116,6 +120,23 @@ export function TerminalContextMenu({
           </div>
           <kbd className="text-[10px] text-zinc-500 font-mono">Ctrl+V</kbd>
         </button>
+
+        {/* Paste saved password — only offered for sessions that connected
+            with a saved password (vault or custom), since that's the only
+            case the backend has anything to inject. */}
+        {menu.hasSavedPassword && (
+          <button
+            type="button"
+            onClick={() => {
+              onPasteSavedPassword();
+              onClose();
+            }}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-zinc-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <KeyRound size={13} className="text-primary" />
+            <span>Paste Saved Password</span>
+          </button>
+        )}
 
         {/* Select All */}
         <button

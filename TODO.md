@@ -173,8 +173,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - **Interactive prompt-on-connect deliberately not implemented**: `initiate_connection` resolves username synchronously from the DB row before any network I/O, with no existing round-trip mechanism to pause mid-connect for a frontend dialog and resume with a typed answer (unlike the keyboard-interactive/fingerprint flows, which already have that plumbing for a different purpose). The TODO's phrasing offers resolve-from-config *or* prompt as alternatives; config resolution covers the common case without that added complexity.
   - **Validation:** `cargo check` clean; all 45 backend unit tests pass. A live connect to a blank-username profile with a matching `~/.ssh/config` entry is a recommended manual follow-up.
 
-- [ ] 🟢 **P3 · S** — **Auto-Pasting Password for Sudo Prompts**
-  - Convenience hotkey or context action to securely inject the active session's saved password into interactive `[sudo] password for user:` prompts.
+- [x] 🟢 **P3 · S** — **Auto-Pasting Password for Sudo Prompts** — ✅ Done
+  - New backend command `write_saved_password(session_id, terminal_id)` in [`commands/terminal.rs`](file:///d:/REPO/SubTerm/src-tauri/src/commands/terminal.rs) looks up the session's saved SSH password from `session_passwords` (the same map `docker.rs`'s silent-sudo-elevation path already reads) and writes it + `\n` straight into the PTY's input channel — the plaintext password never round-trips into JS.
+  - "Paste Saved Password" terminal context-menu action in [`TerminalContextMenu.tsx`](file:///d:/REPO/SubTerm/src/components/TerminalContextMenu.tsx), shown for any non-local (SSH) session; no-ops with a toast if the session has no saved password (e.g. key-based auth).
+  - **Validation:** `cargo check` + all 45 backend unit tests pass; `npm run typecheck` and `npm run lint` both clean (same 117 pre-existing baseline problems, no new ones).
 
 ---
 

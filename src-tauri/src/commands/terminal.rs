@@ -133,6 +133,30 @@ pub async fn write_terminal_data(
     Ok(())
 }
 
+/// Writes the session's saved SSH password followed by Enter straight into
+/// the PTY — used by the "Paste saved password" terminal action for
+/// `[sudo] password for user:` prompts. The plaintext password never crosses
+/// into JS: it's looked up from `session_passwords` (the same map
+/// `docker.rs`'s silent-sudo-elevation path reads) and written directly to
+/// the terminal's input channel here.
+#[tauri::command]
+pub async fn write_saved_password(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    terminal_id: String,
+) -> Result<bool, String> {
+    let password = state.session_passwords.lock().await.get(&session_id).cloned();
+    let Some(password) = password else { return Ok(false); };
+
+    let tx = state.terminal_txs.lock().await.get(&terminal_id).cloned();
+    let Some(tx) = tx else { return Ok(false); };
+
+    let mut payload = password.into_bytes();
+    payload.push(b'\n');
+    let _ = tx.send(TerminalCommand::Data(payload)).await;
+    Ok(true)
+}
+
 #[tauri::command]
 pub async fn resize_terminal(
     state: tauri::State<'_, SshState>,

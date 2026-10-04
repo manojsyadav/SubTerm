@@ -460,6 +460,15 @@ const TerminalView = ({
     xtermRef.current?.selectAll();
   };
 
+  const handlePasteSavedPassword = async () => {
+    try {
+      const injected = await invoke<boolean>('write_saved_password', { sessionId, terminalId });
+      if (!injected) notify('No saved password for this session', 'err');
+    } catch {
+      notify('Failed to paste saved password', 'err');
+    }
+  };
+
   const handleContextFind = () => {
     setShowSearch(true);
   };
@@ -1125,6 +1134,10 @@ const TerminalView = ({
         x: ev.clientX,
         y: ev.clientY,
         hasSelection: !!term.getSelection(),
+        // Only remote sessions can have a saved SSH password; the backend
+        // additionally no-ops (with a toast) if this particular session
+        // authenticated via key instead.
+        hasSavedPassword: !isLocal,
       });
     };
 
@@ -1903,6 +1916,7 @@ const TerminalView = ({
           onClear={handleContextClear}
           onReset={handleContextReset}
           onExport={handleContextExport}
+          onPasteSavedPassword={handlePasteSavedPassword}
         />
       )}
     </div>
