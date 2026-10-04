@@ -24,10 +24,10 @@ This document tracks active development tasks, pending architectural optimizatio
   - `commands/sftp.rs` (3,048 lines) was **not** split further — out of scope for this pass; revisit separately if it keeps growing.
   - **Validation:** `cargo check`/`cargo build` clean after every step; all 45 existing unit tests passed unchanged throughout; no behavior change.
 
-- [ ] 🔴 **P1 · M** — **Finish `DesktopApp.tsx` Decomposition**
-  - `src/hooks/useSessionManager.ts`, `useWallManager.ts`, and `useProfileVault.ts` already exist and are wired in, but [`src/DesktopApp.tsx`](file:///d:/REPO/SubTerm/src/DesktopApp.tsx) is still 3,137 lines — the root component itself was never trimmed after the hook extraction.
-  - Move remaining view-wiring/layout logic out of the root component; target was originally <400 lines.
-  - **Validation:** `npm run typecheck` passes; all tabs, wall, and vault operations behave identically.
+- [ ] 🔴 **P1 · M** — **Finish `DesktopApp.tsx` Decomposition** — 🟡 Partial progress, not complete
+  - `src/hooks/useSessionManager.ts`, `useWallManager.ts`, and `useProfileVault.ts` already exist and are wired in. [`src/DesktopApp.tsx`](file:///d:/REPO/SubTerm/src/DesktopApp.tsx) went from 3,230 → 2,991 lines: the four near-identical "New/Edit X" slide-over panels (command snippet, note, credential, SSH key) were pulled into [`src/components/VaultEditPanels.tsx`](file:///d:/REPO/SubTerm/src/components/VaultEditPanels.tsx), sharing one `PanelShell` for the repeated chrome instead of four inline copies. Pure extraction — state stays lifted in `DesktopApp.tsx`, passed down as props; no behavior change.
+  - **Not re-attempting the full <400-line target in this pass** — deliberately stopped after one safely-verified, independently-committed increment rather than continuing to cut into entangled view logic (the Library view, the Settings-panel wiring, the node-grid/session-view routing) with no component-level test coverage as a safety net (see the Automated Test Suite item above — it covers backend + pure frontend logic only). Each further cut needs the same care: identify a genuinely self-contained chunk, extract with zero behavior change, typecheck/lint/build, commit, repeat.
+  - **Validation (for the increment actually made):** `npm run typecheck`, `npm run lint` (0 errors, 115 pre-existing warnings), `npm run build` all clean. A live click-through of the four edit panels (open/edit/save/cancel for a command, note, credential, and SSH key) is a recommended manual follow-up.
 
 - [x] 🔴 **P1 · L** — **Add an Automated Test Suite (Currently Zero Tests)** — ✅ Done (minimum-viable coverage, not exhaustive)
   - **Backend** — 36 new `#[cfg(test)]` cases (45 → 81 total), each targeting a real, previously-untested security/correctness boundary rather than padding a count:
