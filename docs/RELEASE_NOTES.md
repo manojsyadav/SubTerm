@@ -42,6 +42,9 @@
 - **`feat(settings)` — Export server list to JSON/CSV**:
   **Settings → Maintenance → Export Server List** writes every saved server (name, host, port, username, folder, proxy, notes) to a portable JSON or CSV file for backup or migration. Passwords, private keys, and passphrases are never included.
 
+- **`perf(nodes)` — Virtualized server list**:
+  The home-screen server grid now renders only the rows near the viewport (via `@tanstack/react-virtual`) instead of every saved server's DOM node, keeping scrolling smooth on fleets with hundreds of servers. Drag-to-reorder was rewritten to compute drop targets analytically instead of from live card geometry, so it still works correctly for cards scrolled out of view.
+
 ### 🐛 Bug Fixes
 
 - **`fix(sftp)` — Saving a root-owned file silently failed**:

@@ -1,9 +1,19 @@
 import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert, Download, Activity } from "lucide-react";
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useConfirm } from "../ui/confirm";
+import { useViewportWidth } from "../hooks/useViewport";
 import { renderServerIcon } from "./ServerIcon";
 import DistroLogo from "./DistroLogo";
+
+// Fixed card geometry — MUST match the rendered card's actual CSS (h-16 =
+// 64px) and the grid's gap-3 (12px). Both the row virtualizer and the
+// drag-reorder math below key off these constants instead of measuring the
+// DOM, which is what lets reordering work correctly even when most of the
+// list is scrolled out of view and not mounted.
+const CARD_H = 64;
+const GRID_GAP = 12;
 
 export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onOpenNetworkTools, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
   const [search, setSearch] = useState("");
@@ -62,6 +72,17 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   const displayedServers = isSearching
     ? filteredServers
     : filteredServers.filter((s: any) => s.folder_id === activeFolderId);
+
+  // Single source of truth for column count — drives both the virtualized
+  // grid's row layout AND the drag-reorder geometry below, instead of the
+  // old pure-CSS `grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` classes (which
+  // JS can't read back synchronously). Mirrors Tailwind's default lg/xl
+  // breakpoints (1024/1280) so the visual result is unchanged.
+  const viewportWidth = useViewportWidth();
+  const columnCount = isMobile ? 1 : viewportWidth >= 1280 ? 4 : viewportWidth >= 1024 ? 3 : 2;
+
+  const showFolders = !isSearching && activeFolderId === null;
+  const folderCount = showFolders ? (folders?.length || 0) : 0;
 
   // ── Modern floating drag-to-reorder (pointer-based: mouse AND touch) ────────
   // Grabbing the grip lifts the node out of the grid: a fixed-position clone
@@ -225,16 +246,33 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     grabOffsetRef.current = r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: 20, y: 32 };
     cardSizeRef.current = r ? { w: r.width, h: r.height } : { w: 240, h: 64 };
     pointerRef.current = { x: e.clientX, y: e.clientY };
-    // Snapshot every grid cell's centre NOW, while all cards are full and
-    // untransformed, in visual (row-major) order — the stable reference the
-    // move handler counts against.
-    const cells = gridRef.current ? Array.from(gridRef.current.querySelectorAll<HTMLElement>('[data-sid]')) : [];
-    slotsRef.current = cells.map((el) => {
-      const rr = el.getBoundingClientRect();
-      return { x: rr.left + rr.width / 2, y: rr.top + rr.height / 2, h: rr.height };
+    // Analytic slot snapshot instead of querying real card DOM rects — with
+    // virtualization, most server cards past a screenful aren't mounted at
+    // all, so there's nothing for querySelectorAll to find. Column count,
+    // card width (measured from the dragged card itself, which IS mounted),
+    // and the fixed CARD_H/GRID_GAP constants fully determine every slot's
+    // centre, including ones currently scrolled out of view. `folderCount`
+    // leading cells shift every server's effective grid index the same way
+    // the folders' real DOM cells used to.
+    const wrapperRect = gridRef.current?.getBoundingClientRect();
+    const originX = wrapperRect?.left ?? 0;
+    const originY = wrapperRect?.top ?? 0;
+    const cardW = cardSizeRef.current.w;
+    const cols = columnCount;
+    slotsRef.current = displayedServers.map((_: any, i: number) => {
+      const gridIndex = folderCount + i;
+      const row = Math.floor(gridIndex / cols);
+      const col = gridIndex % cols;
+      return {
+        x: originX + col * (cardW + GRID_GAP) + cardW / 2,
+        y: originY + row * (CARD_H + GRID_GAP) + CARD_H / 2,
+        h: CARD_H,
+      };
     });
     // Remember the scroll container + position so mid-drag scrolling can be
-    // compensated in the move handler (keeps the drop index aligned).
+    // compensated in the move handler (keeps the drop index aligned) — the
+    // analytic slots above are a snapshot at the CURRENT scroll position,
+    // exactly like the old DOM-rect snapshot was.
     scrollerRef.current = (gridRef.current?.closest('.custom-scrollbar') as HTMLElement | null) ?? null;
     scrollTop0Ref.current = scrollerRef.current ? scrollerRef.current.scrollTop : 0;
     draggedRef.current = false;
@@ -254,6 +292,30 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   })();
 
   const draggedServer = dragId != null ? displayedServers.find((s: any) => s.id === dragId) : null;
+
+  // Flat list of grid cells in render order (folders first, then servers),
+  // chunked into rows of `columnCount` for the row virtualizer. Rebuilt
+  // whenever any of its inputs change — cheap relative to a render anyway.
+  type Cell = { kind: "folder"; f: any } | { kind: "server"; s: any };
+  const cells: Cell[] = useMemo(() => {
+    const out: Cell[] = [];
+    if (showFolders) for (const f of folders || []) out.push({ kind: "folder", f });
+    for (const s of orderedServers) out.push({ kind: "server", s });
+    return out;
+  }, [showFolders, folders, orderedServers]);
+  const rows: Cell[][] = useMemo(() => {
+    const out: Cell[][] = [];
+    for (let i = 0; i < cells.length; i += columnCount) out.push(cells.slice(i, i + columnCount));
+    return out;
+  }, [cells, columnCount]);
+
+  const scrollParentRef = useRef<HTMLDivElement | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => CARD_H + GRID_GAP,
+    overscan: 6,
+  });
 
   // Compact horizontal node card: a monogram avatar carries identity, the
   // server projects its own colour as a left accent bar. Kept short (h-16) so
@@ -519,11 +581,11 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
+      <div className="flex-1 flex flex-col min-h-0">
 
         {/* Header navigation if in folder */}
         {!isSearching && activeFolderId !== null && (
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-6 shrink-0">
             <button
               onClick={() => setActiveFolderId(null)}
               className="w-8 h-8 bg-black rounded-xl border border-white/5 flex items-center justify-center hover:bg-white/10 hover:text-white text-zinc-500 transition-all shadow-inner"
@@ -555,7 +617,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
         )}
 
         {servers?.length === 0 && folders?.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center gap-4">
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <button
               onClick={onAddClick}
               className="flex flex-col items-center gap-4 p-12 rounded-3xl border-2 border-dashed border-zinc-800 hover:border-primary/40 hover:bg-primary/5 transition-all group"
@@ -590,7 +652,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
             {/* Compact action toolbar (root only) — sized to its own content
                 rather than filling a full grid cell like the cards. */}
             {(!isSearching && activeFolderId === null) && (
-              <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div className="flex items-center gap-2 mb-4 flex-wrap shrink-0">
                 <button
                   onClick={onAddClick}
                   className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary/10 border border-primary/25 text-primary text-[11px] font-bold uppercase tracking-wider hover:bg-primary/20 transition-colors"
@@ -644,30 +706,43 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
               </div>
             )}
 
-          <div ref={gridRef} className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'} gap-3`}>
-
-            {/* Render Folders (only in root, and when not searching) */}
-            {!isSearching && activeFolderId === null && folders?.map((f: any) => (
-              <FolderCard key={`folder-${f.id}`} f={f} />
-            ))}
-
-            {/* Render Servers — honours the live drag order while reordering. */}
-            {orderedServers.map((s: any) => renderServer(s))}
-
-            {/* Empty Folder State */}
-            {!isSearching && activeFolderId !== null && displayedServers.length === 0 && (
+          {/* Scroll container the row virtualizer measures against. Pulled out
+              of the header/toolbar's flow (those are shrink-0 siblings above)
+              so only the grid itself scrolls — needed because the virtualizer
+              positions rows as absolute offsets from the TOP of its own
+              wrapper, which only lines up correctly if that wrapper starts at
+              the scroll container's scroll origin. */}
+          <div ref={scrollParentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 pb-10">
+            {rows.length === 0 ? (
               <div className="col-span-full py-10 text-center text-zinc-600 text-xs italic">
-                Nothing in this folder yet.
+                {isSearching ? "No matches." : "Nothing in this folder yet."}
+              </div>
+            ) : (
+              <div ref={gridRef} style={{ position: "relative", height: rowVirtualizer.getTotalSize() }}>
+                {rowVirtualizer.getVirtualItems().map((vRow) => (
+                  <div
+                    key={vRow.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: CARD_H,
+                      transform: `translateY(${vRow.start}px)`,
+                      display: "grid",
+                      gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+                      gap: GRID_GAP,
+                    }}
+                  >
+                    {rows[vRow.index].map((cell) =>
+                      cell.kind === "folder"
+                        ? <FolderCard key={`folder-${cell.f.id}`} f={cell.f} />
+                        : renderServer(cell.s)
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-
-            {/* Empty Search State */}
-            {isSearching && displayedServers.length === 0 && (
-              <div className="col-span-full py-10 text-center text-zinc-600 text-xs italic">
-                No matches.
-              </div>
-            )}
-
           </div>
           </>
         )}

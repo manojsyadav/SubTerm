@@ -17,6 +17,7 @@
     "android:build": "npm run android:build:apk"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.13",
     "@tauri-apps/api": "^2.11.0",
     "lucide-react": "^0.300.0",
     "react": "^18.2.0",
