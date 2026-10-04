@@ -50,6 +50,9 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(info-panel)` — Processes, Services, and Ports tabs always showed "not available"**:
+  The Info panel's parsers for these three tabs key off a literal `PSFMT:`/`ENGINE:` marker line that the backend's probe scripts never actually printed, so each tab always fell through to its "not available on this host" banner regardless of what the remote host actually had installed. The probe scripts now emit the marker the parser expects.
+
 - **`fix(sftp)` — Saving a root-owned file silently failed**:
   The quick-editor's `Ctrl+S` save fell back to a raw shell pipe when the sftp subsystem couldn't open the file, but ignored the shell's exit code — saving e.g. `/etc/nginx/nginx.conf` as a non-root user looked successful in the UI while writing nothing. The save now stages to a temp file and `mv`s it into place, retrying under `sudo` (non-interactive, then with the session's saved password) on a real permission error, same elevation order as the existing Docker management commands.
 

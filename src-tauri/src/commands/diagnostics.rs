@@ -52,24 +52,44 @@ if command -v nft >/dev/null 2>&1; then
 fi
 "#;
 
+// The frontend parser (InfoPanel.tsx's `detectPortsEngine`) keys off a literal
+// `ENGINE:<name>` line printed before the data — it has no other way to tell
+// which columns `body` is in, or that neither tool exists at all.
 const INFO_SCRIPT_PORTS: &str = r#"if command -v ss >/dev/null 2>&1; then
+  echo "ENGINE:ss"
   ss -tulpn 2>/dev/null || sudo -n ss -tulpn 2>/dev/null
-else
+elif command -v netstat >/dev/null 2>&1; then
+  echo "ENGINE:netstat"
   netstat -tulpn 2>/dev/null || sudo -n netstat -tulpn 2>/dev/null
-fi
-"#;
-
-const INFO_SCRIPT_PROCESSES: &str = r#"if ps -eo pid,user,pcpu,pmem,rss,comm >/dev/null 2>&1; then
-  ps -eo pid,user,pcpu,pmem,rss,comm --sort=-pcpu
 else
-  ps aux
+  echo "ENGINE:none"
 fi
 "#;
 
+// Same contract as above, via `PSFMT:<full|aux|none>` — `parseProcesses` reads
+// the first line to know whether `comm` is in `full`'s 6-column position or
+// `aux`'s, and `none` means `ps` isn't on this host at all (e.g. a
+// procps-less minimal/Alpine image), not just that the preferred format failed.
+const INFO_SCRIPT_PROCESSES: &str = r#"if ps -eo pid,user,pcpu,pmem,rss,comm >/dev/null 2>&1; then
+  echo "PSFMT:full"
+  ps -eo pid,user,pcpu,pmem,rss,comm --sort=-pcpu
+elif ps aux >/dev/null 2>&1; then
+  echo "PSFMT:aux"
+  ps aux
+else
+  echo "PSFMT:none"
+fi
+"#;
+
+// Same contract as above, via `ENGINE:<systemd|none>` — `parseServices` only
+// knows how to read `systemctl list-units` columns, so a `service`-based
+// fallback host (no systemd) is reported as unavailable rather than shown
+// with the wrong column layout.
 const INFO_SCRIPT_SERVICES: &str = r#"if command -v systemctl >/dev/null 2>&1; then
+  echo "ENGINE:systemd"
   systemctl list-units --type=service --all --no-pager --no-legend 2>/dev/null
-elif command -v service >/dev/null 2>&1; then
-  service --status-all 2>&1
+else
+  echo "ENGINE:none"
 fi
 "#;
 
