@@ -56,10 +56,16 @@ This document tracks active development tasks, pending architectural optimizatio
   - Backfill proper types incrementally, starting with session/file-path handling code where a mistyped value has real consequences.
   - **Validation:** `grep -rc ": any\|as any"` count trends down; new PRs can't introduce more once ESLint's `no-explicit-any` is enabled.
 
-- [ ] 🟡 **P2 · S** — **Reconcile `russh` Version Drift**
-  - README advertises `russh` 0.45+ but [`src-tauri/Cargo.toml`](file:///d:/REPO/SubTerm/src-tauri/Cargo.toml) pins `russh = "0.40.2"` / `russh-keys = "0.40.1"`. Either the doc is aspirational or the dependency is behind on releases that may include SSH protocol fixes.
-  - Audit changelog between 0.40.2 and latest, upgrade if safe, and correct whichever side (doc or dependency) is wrong.
-  - **Validation:** `cargo update -p russh` (or doc correction) reviewed; `cargo test` / manual SSH connect still passes.
+- [x] 🟡 **P2 · S** — **Reconcile `russh` Version Drift** — ✅ Done
+  - README's "`russh` 0.45+" was aspirational — [`src-tauri/Cargo.toml`](file:///d:/REPO/SubTerm/src-tauri/Cargo.toml) actually pins `russh = "0.40.2"` / `russh-keys = "0.40.1"`. README corrected to say 0.40.
+  - **Audit turned up something more urgent — see the new P1 item directly below.**
+  - **Validation:** `cargo audit` run (see finding below); README diff is a one-line doc fix, no code change.
+
+- [ ] 🔴 **P1 · L** — **Upgrade `russh` — High-severity RustSec Advisory on the Pinned Version**
+  - `cargo audit` flags the pinned `russh 0.40.2` under **[RUSTSEC-2026-0154](https://rustsec.org/advisories/RUSTSEC-2026-0154)** (Severity 7.5/High — unbounded 32-bit allocation) and `russh-cryptovec 0.7.3` under **[RUSTSEC-2026-0153](https://rustsec.org/advisories/RUSTSEC-2026-0153)** (same class). Both are fixed only in `russh >= 0.60.3`. This is a DoS on SSH packet parsing — i.e. untrusted network input, the exact category flagged above in "Triage `.unwrap()` / `.expect()`".
+  - `0.40.2 → 0.60+` (current latest `0.63.3`) spans ~20 minor versions with likely breaking API changes across `ssh_manager.rs`, `commands/connection.rs`, `commands/sftp.rs`, and the agent-forwarding/auto-reconnect code added since — deliberately **not** attempted alongside unrelated low-effort cleanup; needs its own dedicated pass.
+  - Audit the 0.40→0.60+ changelog/breaking changes, upgrade both `russh` and `russh-keys`/`russh-cryptovec`, fix call sites, then run the full manual SSH/SFTP/agent-forwarding/auto-reconnect validation pass.
+  - **Validation:** `cargo audit` shows no `russh`/`russh-cryptovec` advisories; `cargo build` + all 45 unit tests pass; live SSH connect, SFTP transfer, tunnel, and agent-forwarding all still work.
 
 - [ ] 🟢 **P3 · S** — **Document TOFU Host-Key Verification UX in `SECURITY.md`**
   - `docs/SECURITY.md` covers the vault crypto spec thoroughly but doesn't document the first-connect trust-on-first-use host key flow, which is the control most responsible for actually preventing MITM in practice.
