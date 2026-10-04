@@ -101,6 +101,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Browse through remote directories using the clickable breadcrumb bar or path input.
    - Right-click any file to download, rename, change permissions (`chmod`), or delete.
    - Symbolic links pointing at directories are shown as navigable folders (with a small link badge on the icon) in both the remote and local panes, so you can open them the same way as a real folder.
+   - **Multi-Item Selection**: Click a row to select it, `Ctrl`/`⌘`+click to add/remove individual rows, `Shift`+click to select a range, or use the per-row checkbox (revealed on hover). A floating action bar appears with Download, Upload, Move…, and Delete for every selected item at once.
 3. **Editing Remote Files**:
    - Double-click any text configuration file (e.g. `nginx.conf` or `.env`).
    - The in-app code editor opens with syntax highlighting.
