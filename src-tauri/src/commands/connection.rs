@@ -195,7 +195,7 @@ const RESUME_DETECTOR_THRESHOLD: std::time::Duration = std::time::Duration::from
 /// whatever's left of its backoff — see `system-resume` in SessionView.tsx.
 fn spawn_resume_detector(app: tauri::AppHandle) {
     use tauri::Emitter;
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(RESUME_DETECTOR_TICK);
         let mut last = std::time::Instant::now();
         loop {
@@ -221,7 +221,7 @@ fn spawn_resume_detector(app: tauri::AppHandle) {
 fn spawn_network_watcher(app: tauri::AppHandle) {
     use futures_util::StreamExt;
     use tauri::Emitter;
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut watcher = match if_watch::tokio::IfWatcher::new() {
             Ok(w) => w,
             Err(_) => return, // No usable network-watching backend on this platform; silently skip.
