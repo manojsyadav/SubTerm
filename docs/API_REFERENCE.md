@@ -253,20 +253,21 @@ This document provides a technical reference for all Tauri IPC commands register
 ## 5. Terminal Operations
 
 ### `open_terminal`
-- **Description**: Opens an interactive remote PTY shell over an existing SSH session.
+- **Description**: Opens an interactive remote PTY shell over an existing SSH session. `channel` is a Tauri 2 binary `Channel` — PTY output streams back as raw `ArrayBuffer` messages on it instead of a `terminal-output-{id}` event (see `subscribe_terminal_output` below for multi-viewer fan-out).
 - **Input Arguments**:
   ```typescript
   {
     sessionId: string,
     terminalId: string,
     cols: number,
-    rows: number
+    rows: number,
+    channel: Channel<ArrayBuffer>
   }
   ```
 - **Return Type**: `Result<(), String>`
 
 ### `open_local_terminal`
-- **Description**: Spawns a native local PTY process (PowerShell/CMD on Windows, Bash/Zsh on Unix).
+- **Description**: Spawns a native local PTY process (PowerShell/CMD on Windows, Bash/Zsh on Unix). Same binary `channel` output convention as `open_terminal`.
 - **Input Arguments**:
   ```typescript
   {
@@ -274,8 +275,17 @@ This document provides a technical reference for all Tauri IPC commands register
     cols: number,
     rows: number,
     shellPath?: string,
-    cwd?: string
+    cwd?: string,
+    channel: Channel<ArrayBuffer>
   }
+  ```
+- **Return Type**: `Result<(), String>`
+
+### `subscribe_terminal_output`
+- **Description**: Registers an additional output `Channel` for a `terminal_id` without opening a new PTY — used by attach-only split-pane/Fleet-Wall viewers that watch a terminal another `TerminalView` instance already owns. Deduped by channel id, so a PTY owner re-invoking `open_terminal` on reconnect with the same JS `Channel` instance doesn't need this command.
+- **Input Arguments**:
+  ```typescript
+  { terminalId: string, channel: Channel<ArrayBuffer> }
   ```
 - **Return Type**: `Result<(), String>`
 

@@ -82,9 +82,11 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ⚡ Core Performance & IPC Optimizations
 
-- [ ] 🔴 **P1 · M** — **High-Throughput IPC: Tauri 2 Binary Channels**
-  - Migrate terminal byte stream dispatch from base64 JSON strings over `app.emit` (`emit_terminal_batch`) to zero-copy Tauri 2 `ipc::Channel<bytes>`.
-  - Further reduces CPU overhead and eliminates string serialization latency during saturated terminal outputs (`cat /dev/urandom`, `docker logs -f`).
+- [x] 🔴 **P1 · M** — **High-Throughput IPC: Tauri 2 Binary Channels** — ✅ Done
+  - Migrated terminal byte stream dispatch off base64 JSON strings over `app.emit` (`emit_terminal_batch`) to `tauri::ipc::Channel<InvokeResponseBody>`, sending `InvokeResponseBody::Raw(Vec<u8>)`. Small batches deliver as a zero-copy `ArrayBuffer` via a direct `eval`; larger ones go through Tauri's binary fetch-channel-data path — no base64 (~1.33x overhead), no JSON number-array encoding (~4x), and no `atob`/manual byte-loop decode on the frontend (`TerminalView.tsx` now does `new Uint8Array(arrayBuffer)` directly in the channel's `onmessage`).
+  - The tricky part: the old `terminal-output-{id}` event was a global broadcast, so split-pane "attach-only" viewers of the same `terminal_id` (and the Fleet Wall's tile re-mounts, see `DesktopApp.tsx`) got output for free without opening their own PTY. A Channel only delivers to whoever registers it, so `SshState` gained an `output_channels: HashMap<String, Vec<Channel>>` fan-out registry (`ssh_manager.rs`): the PTY owner's `open_terminal`/`open_local_terminal`/`open_container_terminal` registers its channel directly (deduped by channel id so reconnects reusing the same JS `Channel` instance don't pile up sinks), and a new lightweight `subscribe_terminal_output(terminal_id, channel)` command lets attach-only viewers register an additional sink without creating a second PTY. `close_terminal` clears the whole registry entry; a stale attach-only channel from an unmounted pane that never explicitly unsubscribes just lingers harmlessly (send on a dead channel is ignored) until the owner closes the terminal.
+  - `docker.rs`'s `open_container_terminal` and the Android stub for `open_local_terminal` were updated to match the new signature/registration pattern.
+  - **Validation:** `cargo check`/`cargo test` (45/45) pass; `npm run typecheck`, `npm run lint` (0 errors, 115 pre-existing warnings), and `npm run build` all clean. Live firehose throughput comparison (`cat` of a large file, `docker logs -f`) on a real connection is a recommended manual follow-up — not simulable in this sandbox.
 
 - [ ] 🟡 **P2 · L** — **SFTP Pipelined Transfers & Concurrent Chunking**
   - Implement multi-stream concurrent byte-range chunking for large single-file transfers across parallel SFTP channels.

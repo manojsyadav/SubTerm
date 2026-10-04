@@ -700,6 +700,7 @@ pub async fn open_container_terminal(
     cols: u32,
     rows: u32,
     use_sudo: bool,
+    channel: crate::ssh_manager::OutputChannel,
 ) -> Result<(), String> {
     use crate::ssh_manager::TerminalCommand;
     use russh::ChannelMsg;
@@ -719,18 +720,20 @@ pub async fn open_container_terminal(
     };
 
     use crate::ssh_manager::{PtyChannel, PtyProgram};
-    let PtyChannel { mut channel, commands: mut rx, resizes: mut resize_rx } = state
+    let PtyChannel { channel: mut pty_channel, commands: mut rx, resizes: mut resize_rx } = state
         .open_pty_channel(&session_id, &terminal_id, cols, rows, PtyProgram::Exec(cmd))
         .await?;
+    crate::ssh_manager::register_output_channel(&state.output_channels, &terminal_id, channel).await;
 
     let terminal_id_clone = terminal_id.clone();
     let app_clone = app.clone();
+    let output_channels = state.output_channels.clone();
     tauri::async_runtime::spawn(async move {
         // Same coalescing as the SSH terminal (see open_terminal): batch output
         // and flush on an ~8ms timer or a size cap so a firehose can't flood the
-        // WebView main thread and freeze the tab. emit_terminal_batch base64s
-        // the batch into one compact event.
-        use crate::ssh_manager::emit_terminal_batch;
+        // WebView main thread and freeze the tab. send_terminal_batch delivers
+        // the batch as a raw binary Tauri channel message, not a base64 event.
+        use crate::ssh_manager::send_terminal_batch;
         const FLUSH_CAP: usize = 256 * 1024;
         const FLUSH_WINDOW: std::time::Duration = std::time::Duration::from_millis(8);
         let mut out_buf: Vec<u8> = Vec::new();
@@ -741,13 +744,13 @@ pub async fn open_container_terminal(
         tokio::pin!(flush_timer);
         loop {
             tokio::select! {
-                msg_opt = channel.wait() => {
+                msg_opt = pty_channel.wait() => {
                     match msg_opt {
                         Some(ChannelMsg::Data { ref data }) => {
                             let was_empty = out_buf.is_empty();
                             out_buf.extend_from_slice(data);
                             if out_buf.len() >= FLUSH_CAP {
-                                emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             } else if was_empty {
                                 flush_timer.as_mut().reset(tokio::time::Instant::now() + FLUSH_WINDOW);
                             }
@@ -756,38 +759,38 @@ pub async fn open_container_terminal(
                             let was_empty = out_buf.is_empty();
                             out_buf.extend_from_slice(data);
                             if out_buf.len() >= FLUSH_CAP {
-                                emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             } else if was_empty {
                                 flush_timer.as_mut().reset(tokio::time::Instant::now() + FLUSH_WINDOW);
                             }
                         },
-                        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => { emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf); break; },
+                        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => { send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await; break; },
                         Some(_) => {},
-                        None => { emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf); break; },
+                        None => { send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await; break; },
                     }
                 },
                 _ = &mut flush_timer => {
-                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                     flush_timer.as_mut().reset(park());
                 },
                 opt_cmd = rx.recv() => {
                     match opt_cmd {
                         Some(cmd) => match cmd {
                             TerminalCommand::Data(data) => {
-                                if channel.data(&data[..]).await.is_err() {
+                                if pty_channel.data(&data[..]).await.is_err() {
                                     // Flush the last buffered output before bailing.
-                                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                                     break;
                                 }
                             }
                         },
-                        None => { let _ = channel.close().await; break; }
+                        None => { let _ = pty_channel.close().await; break; }
                     }
                 },
                 changed = resize_rx.changed() => {
                     if changed.is_err() { break; }
                     let size = *resize_rx.borrow();
-                    let _ = channel.window_change(size.cols, size.rows, 0, 0).await;
+                    let _ = pty_channel.window_change(size.cols, size.rows, 0, 0).await;
                 }
             }
         }

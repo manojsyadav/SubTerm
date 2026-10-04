@@ -2,9 +2,31 @@ use russh::client;
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use async_trait::async_trait;
+
+/// Per-terminal fan-out registry: every `TerminalView` instance watching a
+/// given `terminal_id` — the PTY owner plus any attach-only split-pane
+/// viewers — registers its own `Channel` here instead of all of them
+/// sharing one global `app.emit` event. Cleared in `close_terminal`, which
+/// only the owner calls, so a stale channel from an attach-only pane that
+/// unmounted without unsubscribing just lingers (harmlessly, since `send`
+/// on a dead channel is ignored) until the owner closes the whole terminal.
+pub type OutputChannel = Channel<InvokeResponseBody>;
+pub type OutputChannels = Arc<Mutex<HashMap<String, Vec<OutputChannel>>>>;
+
+/// Register `channel` as an output sink for `terminal_id`, deduping by
+/// channel id so the PTY owner re-invoking `open_terminal` on reconnect
+/// (with the same JS `Channel` instance) doesn't pile up duplicate sinks.
+pub async fn register_output_channel(channels: &OutputChannels, terminal_id: &str, channel: OutputChannel) {
+    let mut map = channels.lock().await;
+    let list = map.entry(terminal_id.to_string()).or_default();
+    if !list.iter().any(|c| c.id() == channel.id()) {
+        list.push(channel);
+    }
+}
 
 /// Per-terminal command. We deliberately split data from resize at the
 /// channel level: keystrokes flow through `Data` on an mpsc, while resizes
@@ -37,25 +59,37 @@ pub struct PtyChannel {
     pub resizes: tokio::sync::watch::Receiver<PtySize>,
 }
 
-/// Flush a coalesced batch of PTY output as one `terminal-output-{id}` event.
+/// Flush a coalesced batch of PTY output to every registered output channel
+/// for `terminal_id`.
 ///
 /// The read loops accumulate channel bytes and call this on an ~8ms timer or a
-/// size cap instead of emitting once per SSH packet. Two problems that fixes:
+/// size cap instead of sending once per SSH packet. Two problems that fixes:
 /// a firehose (`cat` of a big file) used to emit thousands of tiny events —
 /// each a Tauri IPC dispatch the WebView main thread had to service — and each
-/// `Vec<u8>` payload serialized as a JSON number array (`[104,105,...]`),
-/// roughly 4x the bytes. Together they saturated the main thread and froze the
-/// whole terminal tab until it was closed. Batching cuts the event count, and
-/// base64 (~1.33x) keeps each payload compact. Bytes are sent (not a decoded
-/// string) so xterm can buffer a multibyte sequence split across batches.
-pub fn emit_terminal_batch(app: &AppHandle, terminal_id: &str, buf: &mut Vec<u8>) {
+/// `Vec<u8>` payload went out as base64-encoded JSON (~1.33x the bytes) over
+/// `app.emit`, which always round-trips through `JSON.stringify`/`atob` on
+/// the frontend. Sending a raw `InvokeResponseBody::Raw` through a Tauri 2
+/// `Channel` instead skips both: small batches are delivered as a zero-copy
+/// `ArrayBuffer` via a direct `eval`, and large ones go through the binary
+/// fetch-channel-data path — no base64, no JSON array, no main-thread
+/// string decoding on the frontend.
+pub async fn send_terminal_batch(channels: &OutputChannels, terminal_id: &str, buf: &mut Vec<u8>) {
     if buf.is_empty() {
         return;
     }
-    use base64::Engine;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&buf);
-    let _ = app.emit(&format!("terminal-output-{}", terminal_id), b64);
-    buf.clear();
+    let data = std::mem::take(buf);
+    let mut map = channels.lock().await;
+    if let Some(list) = map.get_mut(terminal_id) {
+        let mut dead = Vec::new();
+        for (i, ch) in list.iter().enumerate() {
+            if ch.send(InvokeResponseBody::Raw(data.clone())).is_err() {
+                dead.push(i);
+            }
+        }
+        for i in dead.into_iter().rev() {
+            list.remove(i);
+        }
+    }
 }
 
 pub struct SshState {
@@ -116,6 +150,9 @@ pub struct SshState {
     /// `open_pty_channel` so every shell/exec channel opened on the session
     /// requests forwarding, not just the first one.
     pub agent_forward_sessions: Arc<Mutex<HashMap<String, bool>>>,
+    /// Output-channel fan-out registry — see `register_output_channel` /
+    /// `send_terminal_batch`.
+    pub output_channels: OutputChannels,
 }
 
 impl SshState {
@@ -207,6 +244,7 @@ impl SshState {
             session_generation: Arc::new(Mutex::new(HashMap::new())),
             session_passwords: Arc::new(Mutex::new(HashMap::new())),
             agent_forward_sessions: Arc::new(Mutex::new(HashMap::new())),
+            output_channels: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

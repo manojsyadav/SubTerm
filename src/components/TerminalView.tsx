@@ -3,7 +3,7 @@ import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
 import { WebglAddon } from 'xterm-addon-webgl';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
 import 'xterm/css/xterm.css';
@@ -94,6 +94,14 @@ const TerminalView = ({
   useEffect(() => { onTerminalClosedRef.current = onTerminalClosed; }, [onTerminalClosed]);
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
+  // One binary Channel per TerminalView instance, reused across reconnects so
+  // the backend's dedupe-by-id in register_output_channel doesn't pile up
+  // sinks. Created lazily (not via useState) since it's write-only plumbing
+  // that should never trigger a re-render.
+  const outputChannelRef = useRef<Channel<ArrayBuffer> | null>(null);
+  if (!outputChannelRef.current) {
+    outputChannelRef.current = new Channel<ArrayBuffer>();
+  }
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -272,6 +280,7 @@ const TerminalView = ({
         rows: term.rows || 24,
         cwd: localCwd || null,
         shell: localShell || null,
+        channel: outputChannelRef.current,
       }).catch(e => {
         term.writeln(`\x1b[31mRestart local terminal failed: ${e}\x1b[0m`);
       });
@@ -285,6 +294,7 @@ const TerminalView = ({
           cols: term.cols || 80,
           rows: term.rows || 24,
           useSudo: ce.useSudo,
+          channel: outputChannelRef.current,
         }).catch(e => {
           term.writeln(`\x1b[31mReconnect into container failed: ${e}\x1b[0m`);
         });
@@ -294,6 +304,7 @@ const TerminalView = ({
           terminalId,
           cols: term.cols || 80,
           rows: term.rows || 24,
+          channel: outputChannelRef.current,
         }).catch(e => {
           term.writeln(`\x1b[31mReconnect failed: ${e}\x1b[0m`);
         });
@@ -843,6 +854,7 @@ const TerminalView = ({
             rows: term.rows || 24,
             cwd: localCwd || null,
             shell: localShell || null,
+            channel: outputChannelRef.current,
           }).catch(e => {
             term.writeln(`\x1b[31mFailed to open local terminal: ${e}\x1b[0m`);
           });
@@ -854,6 +866,7 @@ const TerminalView = ({
             cols: term.cols || 80,
             rows: term.rows || 24,
             useSudo: containerExec.useSudo,
+            channel: outputChannelRef.current,
           }).catch(e => {
             term.writeln(`\x1b[31mFailed to attach to container: ${e}\x1b[0m`);
           });
@@ -862,7 +875,8 @@ const TerminalView = ({
             sessionId,
             terminalId,
             cols: term.cols || 80,
-            rows: term.rows || 24
+            rows: term.rows || 24,
+            channel: outputChannelRef.current,
           }).catch(e => {
             term.writeln(`\x1b[31mFailed to open terminal: ${e}\x1b[0m`);
           });
@@ -1283,16 +1297,16 @@ const TerminalView = ({
       invoke('resize_terminal', { terminalId, cols, rows }).catch(console.error);
     });
 
-    // Handle Output with proper async cleanup for StrictMode
+    // Handle Output. The backend sends coalesced batches as raw bytes through
+    // a Tauri 2 binary Channel (see outputChannelRef below) instead of a
+    // base64-encoded event payload — small batches arrive as a zero-copy
+    // ArrayBuffer via a direct eval, larger ones via the binary fetch-channel-
+    // data path. Either way `onmessage` hands us an ArrayBuffer directly, no
+    // atob/JSON decode needed.
     let hasReceivedFirstOutput = false;
-    const unlistenPromise = listen(`terminal-output-${terminalId}`, (event: any) => {
-      // The backend now coalesces output and sends it base64-encoded (was a raw
-      // JSON byte array — ~4x larger and one event per SSH packet, which flooded
-      // this main-thread handler and froze the tab on big output). Decode back
-      // to bytes; xterm buffers any multibyte sequence split across batches.
-      const bin = atob(event.payload as string);
-      const data = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i);
+    const outputChannel = outputChannelRef.current!;
+    outputChannel.onmessage = (raw) => {
+      const data = new Uint8Array(raw as ArrayBuffer);
       term.write(data);
       if (!hasReceivedFirstOutput) {
         hasReceivedFirstOutput = true;
@@ -1348,7 +1362,15 @@ const TerminalView = ({
           }
         }, 500);
       }
-    });
+    };
+
+    // If this instance watches a terminal it doesn't own (split-pane attach),
+    // register the channel as an additional output sink now. The owner
+    // passes its channel directly to open_terminal/open_local_terminal/
+    // open_container_terminal below instead, so it isn't double-registered.
+    if (attachOnly) {
+      invoke('subscribe_terminal_output', { terminalId, channel: outputChannelRef.current }).catch(console.error);
+    }
 
     // Handle Terminal Closure (Server exit / EOF / drop)
     const unlistenClosedPromise = listen(`terminal-closed-${terminalId}`, (event: any) => {
@@ -1493,7 +1515,6 @@ const TerminalView = ({
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
       if (commandSettleTimerRef.current) window.clearTimeout(commandSettleTimerRef.current);
       if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
-      unlistenPromise.then(unlisten => unlisten());
       unlistenClosedPromise.then(unlisten => unlisten());
       if (webglAddon) {
         try {

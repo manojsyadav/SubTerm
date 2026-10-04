@@ -161,8 +161,9 @@ When a profile is persisted (`persist_vault`), the in-memory SQLite database is 
 
 ### 4.1 Remote SSH (`russh`)
 - Written on top of asynchronous Tokio networking.
-- Implements interactive PTY allocation (`pty-req`, `shell`), terminal resizing (`window-change`), and streaming stdout/stderr back to the frontend over Tauri events.
-- Output coalescing: Raw terminal byte chunks are buffered (20 ms window) and hex-encoded to minimize IPC serialization overhead across the webview bridge.
+- Implements interactive PTY allocation (`pty-req`, `shell`), terminal resizing (`window-change`), and streaming stdout/stderr back to the frontend over a Tauri 2 binary `ipc::Channel`.
+- Output coalescing: raw terminal byte chunks are buffered (8 ms window, or sooner past a 256 KiB cap) and sent as a single `InvokeResponseBody::Raw` channel message — no base64/JSON encoding, delivered as a zero-copy `ArrayBuffer` on the frontend.
+- Fan-out: `SshState.output_channels` maps each `terminal_id` to every registered `Channel` (the PTY owner plus any attach-only split-pane/Fleet-Wall viewers), so one PTY can feed multiple `TerminalView` instances without re-opening the channel. See `ssh_manager::send_terminal_batch` / `register_output_channel` and `commands::terminal::subscribe_terminal_output`.
 
 ### 4.2 Local Terminal (`portable-pty`)
 - Spawns platform-native shells without requiring SSH:

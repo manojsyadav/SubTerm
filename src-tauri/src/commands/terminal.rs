@@ -1,6 +1,19 @@
 use russh::ChannelMsg;
 use tauri::Emitter;
-use crate::ssh_manager::{emit_terminal_batch, PtySize, SshState, TerminalCommand};
+use crate::ssh_manager::{register_output_channel, send_terminal_batch, OutputChannel, PtySize, SshState, TerminalCommand};
+
+/// Registers a `Channel` as an output sink for `terminal_id` without opening
+/// a PTY — used by attach-only split-pane viewers that watch a terminal
+/// another `TerminalView` instance already owns and opened.
+#[tauri::command]
+pub async fn subscribe_terminal_output(
+    state: tauri::State<'_, SshState>,
+    terminal_id: String,
+    channel: OutputChannel,
+) -> Result<(), String> {
+    register_output_channel(&state.output_channels, &terminal_id, channel).await;
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn open_terminal(
@@ -10,21 +23,25 @@ pub async fn open_terminal(
     terminal_id: String,
     cols: u32,
     rows: u32,
+    channel: OutputChannel,
 ) -> Result<(), String> {
     use crate::ssh_manager::{PtyChannel, PtyProgram};
-    let PtyChannel { mut channel, commands: mut rx, resizes: mut resize_rx } =
+    let PtyChannel { channel: mut pty_channel, commands: mut rx, resizes: mut resize_rx } =
         state.open_pty_channel(&session_id, &terminal_id, cols, rows, PtyProgram::Shell).await?;
+    register_output_channel(&state.output_channels, &terminal_id, channel).await;
 
     let terminal_id_clone = terminal_id.clone();
     let app_clone = app.clone();
+    let output_channels = state.output_channels.clone();
 
     tauri::async_runtime::spawn(async move {
         // Coalesce PTY output: accumulate channel bytes and flush at most every
-        // ~8ms, or sooner once a burst passes FLUSH_CAP. Emitting one event per
-        // SSH packet (each a ~4x-bloated JSON byte array) flooded the WebView
-        // main thread on large output and froze the whole tab; batching + the
-        // base64 payload in emit_terminal_batch keeps the UI responsive under a
-        // firehose. 8ms is imperceptible for interactive echo.
+        // ~8ms, or sooner once a burst passes FLUSH_CAP. Sending one message per
+        // SSH packet (each a ~4x-bloated JSON byte array under the old base64
+        // event path) flooded the WebView main thread on large output and froze
+        // the whole tab; batching + raw binary channel delivery (see
+        // `send_terminal_batch`) keeps the UI responsive under a firehose.
+        // 8ms is imperceptible for interactive echo.
         const FLUSH_CAP: usize = 256 * 1024;
         // Flush at most every 8ms measured FROM THE FIRST buffered byte —
         // imperceptible for interactive echo, but enough to collapse a firehose
@@ -42,13 +59,13 @@ pub async fn open_terminal(
         let mut clean_exit = false;
         loop {
             tokio::select! {
-                msg_opt = channel.wait() => {
+                msg_opt = pty_channel.wait() => {
                     match msg_opt {
                         Some(ChannelMsg::Data { ref data }) => {
                             let was_empty = out_buf.is_empty();
                             out_buf.extend_from_slice(data);
                             if out_buf.len() >= FLUSH_CAP {
-                                emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             } else if was_empty {
                                 flush_timer.as_mut().reset(tokio::time::Instant::now() + FLUSH_WINDOW);
                             }
@@ -57,7 +74,7 @@ pub async fn open_terminal(
                             let was_empty = out_buf.is_empty();
                             out_buf.extend_from_slice(data);
                             if out_buf.len() >= FLUSH_CAP {
-                                emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             } else if was_empty {
                                 flush_timer.as_mut().reset(tokio::time::Instant::now() + FLUSH_WINDOW);
                             }
@@ -66,15 +83,15 @@ pub async fn open_terminal(
                         // so the last screenful isn't lost.
                         Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => {
                             clean_exit = true;
-                            emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                            send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             break;
                         },
                         Some(_) => {},
-                        None => { emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf); break; }, // channel closed (e.g. after disconnect_session)
+                        None => { send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await; break; }, // channel closed (e.g. after disconnect_session)
                     }
                 },
                 _ = &mut flush_timer => {
-                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                     // Park until the next buffered byte re-arms the timer.
                     flush_timer.as_mut().reset(park());
                 },
@@ -82,16 +99,16 @@ pub async fn open_terminal(
                     match opt_cmd {
                         Some(cmd) => match cmd {
                             TerminalCommand::Data(data) => {
-                                if channel.data(&data[..]).await.is_err() {
+                                if pty_channel.data(&data[..]).await.is_err() {
                                     // Flush the last buffered output before bailing on
                                     // a dead transport — the terminal UI is still mounted.
-                                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                                     break;
                                 }
                             }
                         },
                         None => {
-                            let _ = channel.close().await;
+                            let _ = pty_channel.close().await;
                             break;
                         }
                     }
@@ -102,7 +119,7 @@ pub async fn open_terminal(
                 changed = resize_rx.changed() => {
                     if changed.is_err() { break; } // all senders dropped
                     let size = *resize_rx.borrow();
-                    let _ = channel.window_change(size.cols, size.rows, 0, 0).await;
+                    let _ = pty_channel.window_change(size.cols, size.rows, 0, 0).await;
                 }
             }
         }
@@ -179,6 +196,7 @@ pub async fn close_terminal(
 ) -> Result<(), String> {
     state.terminal_txs.lock().await.remove(&terminal_id);
     state.resize_txs.lock().await.remove(&terminal_id);
+    state.output_channels.lock().await.remove(&terminal_id);
     Ok(())
 }
 
@@ -192,6 +210,7 @@ pub async fn open_local_terminal(
     rows: u32,
     cwd: Option<String>,
     shell: Option<String>,
+    channel: OutputChannel,
 ) -> Result<(), String> {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
     use std::io::{Read, Write};
@@ -324,6 +343,8 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
     let (resize_tx, mut resize_rx) = tokio::sync::watch::channel(PtySize { cols, rows });
     state.terminal_txs.lock().await.insert(terminal_id.clone(), tx);
     state.resize_txs.lock().await.insert(terminal_id.clone(), resize_tx);
+    register_output_channel(&state.output_channels, &terminal_id, channel).await;
+    let output_channels = state.output_channels.clone();
 
     let (pty_out_tx, mut pty_out_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
 
@@ -362,20 +383,20 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
                             let was_empty = out_buf.is_empty();
                             out_buf.extend_from_slice(&data);
                             if out_buf.len() >= FLUSH_CAP {
-                                emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             } else if was_empty {
                                 flush_timer.as_mut().reset(tokio::time::Instant::now() + FLUSH_WINDOW);
                             }
                         }
                         None => {
                             clean_exit = true;
-                            emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                            send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                             break;
                         }
                     }
                 }
                 _ = &mut flush_timer => {
-                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                     flush_timer.as_mut().reset(park());
                 }
                 opt_cmd = rx.recv() => {
@@ -383,7 +404,7 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
                         Some(cmd) => match cmd {
                             TerminalCommand::Data(data) => {
                                 if writer.write_all(&data).is_err() {
-                                    emit_terminal_batch(&app_clone, &terminal_id_clone, &mut out_buf);
+                                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                                     break;
                                 }
                                 let _ = writer.flush();
@@ -513,6 +534,7 @@ pub async fn open_local_terminal(
     _rows: u32,
     _cwd: Option<String>,
     _shell: Option<String>,
+    _channel: OutputChannel,
 ) -> Result<(), String> {
     Err("Local terminal is not supported on Android".to_string())
 }

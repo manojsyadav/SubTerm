@@ -49,6 +49,9 @@
 - **`ci` — Test/lint gates wired into CI**:
   Added `.github/workflows/ci.yml`, running on every PR and push to `main`: `cargo check` + `cargo test` for the Rust backend, `npm run typecheck` + `npm run lint` for the frontend. `cargo clippy` runs advisory-only pending a dedicated warning-cleanup pass (~62 pre-existing warnings).
 
+- **`perf(ipc)` — Binary Tauri channels for terminal output**:
+  Terminal byte streams now flow through a Tauri 2 binary `ipc::Channel` instead of base64-encoded `app.emit` events — no base64 (~1.33x overhead) or JSON array encoding, and no `atob`/manual decode loop on the frontend. Split-pane and Fleet Wall multi-viewer support (previously free from the global event broadcast) is preserved via a new per-terminal channel fan-out registry.
+
 ---
 
 ## [v0.4.1] — 2026-10-03
