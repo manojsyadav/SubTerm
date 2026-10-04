@@ -39,10 +39,12 @@ This document tracks active development tasks, pending architectural optimizatio
   - Add a separate `ci.yml` workflow that runs on PRs: `cargo clippy -- -D warnings`, `cargo test`, `npm run typecheck`, and lint.
   - **Validation:** A PR with a deliberate type error or failing test is blocked from merging.
 
-- [ ] 🟡 **P2 · S** — **Add ESLint Configuration**
-  - No `.eslintrc*` and no lint script exist in `package.json`, so there's nothing catching regressions in the frontend.
-  - Add a baseline config (`@typescript-eslint` recommended + React hooks rules) and a `lint` script.
-  - **Validation:** `npm run lint` runs clean on current code or produces a tracked baseline of existing violations.
+- [x] 🟡 **P2 · S** — **Add ESLint Configuration** — ✅ Done
+  - Added [`eslint.config.js`](file:///d:/REPO/SubTerm/eslint.config.js) (flat config, ESLint 9) with `@typescript-eslint` recommended rules, `eslint-plugin-react-hooks`, and `eslint-plugin-react-refresh`. `npm run lint` added to `package.json`.
+  - Two codebase-wide exceptions, not disabled blindly: `no-empty` allows empty `catch {}` (the codebase uses these deliberately for best-effort fallbacks like `localStorage` writes), and `no-control-regex` is off (`TerminalView.tsx` matches raw ANSI escape/bell bytes to parse terminal control sequences — that's the feature).
+  - Fixed the handful of zero-risk pre-existing issues along the way (all verified not to change behavior): 3 `prefer-const` (`FilePanel.tsx`, `Sidebar.tsx` — confirmed never reassigned), a ternary-as-statement in `FilePanel.tsx` rewritten as `if`/`else`, and 6 `no-useless-escape` regex escapes in `TerminalView.tsx`/`TunnelsPanel.tsx` (all inside character classes, where the escaped char was already literal).
+  - **Tracked baseline** (left as-is — out of scope for adding the linter itself): 2 errors in `InfoPanel.tsx` (`react-hooks/rules-of-hooks`, hooks called conditionally — a real pre-existing bug worth its own fix) and 115 warnings (mostly unused imports/vars and `react-hooks/exhaustive-deps` gaps) across the codebase.
+  - **Validation:** `npm run lint` → 117 problems (2 errors, 115 warnings), all pre-existing and tracked above; `npm run typecheck` passes.
 
 - [ ] 🟡 **P2 · L** — **Triage `.unwrap()` / `.expect()` in the Rust Backend**
   - 219 occurrences across `src-tauri/src` (168 in `lib.rs` alone, 23 in `tunnel.rs`, 15 in `identity.rs`). A panic in any of these can crash the whole Tauri process, killing every open SSH session, not just one request.

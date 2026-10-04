@@ -152,12 +152,12 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
         if (!isTcp && !isUdp) continue;
 
         // Extract port and address
-        const portMatch = line.match(/(?:(?:[0-9a-fA-F:\.]+|\*|\[[0-9a-fA-F:]+\])):(\d{2,5})\s+/);
+        const portMatch = line.match(/(?:(?:[0-9a-fA-F:.]+|\*|\[[0-9a-fA-F:]+\])):(\d{2,5})\s+/);
         if (!portMatch) continue;
         const port = parseInt(portMatch[1], 10);
         if (isNaN(port) || port < 1 || port > 65535 || port === 22 || seen.has(port)) continue;
 
-        const addrMatch = line.match(/([0-9a-fA-F:\.]+|\*|\[[0-9a-fA-F:]+\]):(\d{2,5})\s+/);
+        const addrMatch = line.match(/([0-9a-fA-F:.]+|\*|\[[0-9a-fA-F:]+\]):(\d{2,5})\s+/);
         const address = addrMatch ? addrMatch[1] : "0.0.0.0";
 
         let process: string | undefined;
@@ -165,7 +165,7 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
         if (ssProcMatch) {
           process = ssProcMatch[1];
         } else {
-          const netstatProcMatch = line.match(/\d+\/([a-zA-Z0-9_\-\.]+)/);
+          const netstatProcMatch = line.match(/\d+\/([a-zA-Z0-9_.-]+)/);
           if (netstatProcMatch) {
             process = netstatProcMatch[1];
           }

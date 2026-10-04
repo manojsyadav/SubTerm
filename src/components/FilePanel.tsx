@@ -651,7 +651,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     }
     movingRef.current = true;
     let cancelled = false;
-    let waiting = false;
+    const waiting = false;
     let ownsPanel = true;
     cancelPendingMoveRef.current = () => {
       cancelled = true;
@@ -662,7 +662,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     };
     const label = movable.length === 1 ? movable[0].name : `${movable.length} items`;
     const showRow = () => { if (ownsPanel) setPendingMove({ label, targetDir, waiting }); };
-    let rowTimer: number | null = window.setTimeout(showRow, 250);
+    const rowTimer: number | null = window.setTimeout(showRow, 250);
     try {
       if (cancelled) return;
       let taken: Set<string>;
@@ -1145,7 +1145,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     lastSelectedPathRef.current = null;
   };
   const allSelected = sortedEntries.length > 0 && selected.size === sortedEntries.length;
-  const toggleSelectAll = () => { allSelected ? clearSelection() : selectAllVisible(); };
+  const toggleSelectAll = () => { if (allSelected) clearSelection(); else selectAllVisible(); };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

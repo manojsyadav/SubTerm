@@ -45,7 +45,7 @@ export const Sidebar = ({
         }
 
         let hasCritical = false;
-        let hasWarning = false;
+        const hasWarning = false;
         const criticalReasons: string[] = [];
         const warningReasons: string[] = [];
 

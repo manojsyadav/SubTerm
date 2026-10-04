@@ -1299,7 +1299,7 @@ const TerminalView = ({
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
 
         // Best-effort prompt CWD detection (e.g. user@hostname:path$ or user@hostname:path#)
-        const promptMatch = /(?:^|[\r\n])(?:[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+):([/~][^\$#\s\)]*)[\$#]/.exec(txt);
+        const promptMatch = /(?:^|[\r\n])(?:[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+):([/~][^$#\s)]*)[$#]/.exec(txt);
         if (promptMatch && promptMatch[1]) {
           currentCwdRef.current = promptMatch[1];
         }
