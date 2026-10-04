@@ -14,7 +14,6 @@ import { useProfileIcon, getProfileIcon } from "./utils/profileMetadata";
 import MasterUnlockPage from "./components/MasterUnlockPage";
 import WorkspaceSwitcherModal from "./components/WorkspaceSwitcherModal";
 import logoUrl from "./assets/logo.png";
-import PasswordField from "./components/PasswordField";
 import QuickConnectModal, { QuickAuth } from "./components/QuickConnectModal";
 import { useConfirm, useTextPrompt } from "./ui/confirm";
 import { RenameInput } from "./ui/renameInput";
@@ -37,6 +36,7 @@ import { useSessionManager, Session } from "./hooks/useSessionManager";
 import { useWallManager, WallItem, SessionTerm } from "./hooks/useWallManager";
 import { parseSnippetVariables } from "./utils/snippetTemplate";
 import { SnippetParamModal } from "./components/SnippetParamModal";
+import { CommandEditPanel, NoteEditPanel, CredentialEditPanel, KeyEditPanel } from "./components/VaultEditPanels";
 
 const appWindow = getCurrentWindow();
 
@@ -2918,294 +2918,55 @@ function DesktopApp() {
       )}
 
 
-      <div className={`fixed inset-0 z-50 transition-all duration-500 flex justify-end ${isCommandPanelOpen ? 'bg-black/80 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsCommandPanelOpen(false)}>
-        <div className={`w-full max-w-[400px] bg-[#09090b] border-l border-white/5 shadow-2xl transition-all duration-500 h-full flex flex-col ${isCommandPanelOpen ? 'translate-x-0' : 'translate-x-full'}`} onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-6 border-b border-white/5 shrink-0">
-            <h2 className="text-[15px] font-bold text-white tracking-tight flex items-center gap-2">
-              <TerminalSquare size={18} className="text-primary" />
-              {editCommandData.id ? "Edit command" : "New command"}
-            </h2>
-            <button onClick={() => { setIsCommandPanelOpen(false); setFormError(""); }} className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white bg-black border border-white/5 hover:bg-white/10 rounded-full transition-all">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="p-6 flex-1 overflow-y-auto space-y-6">
-            {formError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[12px] font-bold">{formError}</div>}
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Title</label>
-              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="e.g. Update packages" value={editCommandData.title} onChange={e => setEditCommandData({ ...editCommandData, title: e.target.value })} />
-            </div>
-            <div className="space-y-1.5 flex-1 flex flex-col h-64">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Command</label>
-              <textarea className="w-full flex-1 bg-black rounded-lg p-3 text-[13px] text-zinc-300 font-mono border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner custom-scrollbar resize-none" placeholder="sudo apt update && sudo apt upgrade -y" value={editCommandData.content} onChange={e => setEditCommandData({ ...editCommandData, content: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Scope</label>
-              <select
-                className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner"
-                value={editCommandData.serverId ?? ""}
-                onChange={e => setEditCommandData({ ...editCommandData, serverId: e.target.value ? parseInt(e.target.value, 10) : null })}
-              >
-                <option value="">Global (every server)</option>
-                {servers.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.name || s.host}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Tags (comma-separated)</label>
-              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="e.g. maintenance, docker" value={editCommandData.tags} onChange={e => setEditCommandData({ ...editCommandData, tags: e.target.value })} />
-            </div>
-          </div>
-          <div className="p-6 border-t border-white/5 shrink-0">
-            <button 
-              onClick={async () => {
-                if (!editCommandData.title || !editCommandData.content) {
-                  addLog("Title and Content are required.", "error");
-                  return;
-                }
-                try {
-                  const action = editCommandData.id
-                    ? invoke("edit_command", { id: editCommandData.id, title: editCommandData.title, content: editCommandData.content, serverId: editCommandData.serverId, tags: editCommandData.tags })
-                    : invoke("add_command", { title: editCommandData.title, content: editCommandData.content, serverId: editCommandData.serverId, tags: editCommandData.tags });
-                  await action;
-                  setIsCommandPanelOpen(false);
-                  refreshCommands();
-                  bumpSync();
-                  addLog("Command saved.", "success");
-                } catch (e) {
-                  setFormError(`Failed to save command: ${e}`);
-                  addLog(`COMMAND_SAVE_ERROR: ${e}`, "error");
-                }
-              }} 
-              className="w-full h-10 bg-primary text-black font-bold rounded-lg text-[13px] tracking-tight hover:brightness-110 transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(var(--primary),0.2)] flex items-center justify-center gap-2"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
+      <CommandEditPanel
+        isOpen={isCommandPanelOpen}
+        onClose={() => setIsCommandPanelOpen(false)}
+        data={editCommandData}
+        setData={setEditCommandData}
+        servers={servers}
+        formError={formError}
+        setFormError={setFormError}
+        addLog={addLog}
+        refreshCommands={refreshCommands}
+        bumpSync={bumpSync}
+      />
 
-      <div className={`fixed inset-0 z-50 transition-all duration-500 flex justify-end ${isNotePanelOpen ? 'bg-black/80 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsNotePanelOpen(false)}>
-        <div className={`w-full max-w-[480px] bg-[#09090b] border-l border-white/5 shadow-2xl transition-all duration-500 h-full flex flex-col ${isNotePanelOpen ? 'translate-x-0' : 'translate-x-full'}`} onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-6 border-b border-white/5 shrink-0">
-            <h2 className="text-[15px] font-bold text-white tracking-tight flex items-center gap-2">
-              <StickyNote size={18} className="text-primary" />
-              {editNoteData.id ? "Edit note" : "New note"}
-            </h2>
-            <button onClick={() => { setIsNotePanelOpen(false); setFormError(""); }} className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white bg-black border border-white/5 hover:bg-white/10 rounded-full transition-all">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="p-6 flex-1 overflow-y-auto space-y-6 flex flex-col">
-            {formError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[12px] font-bold">{formError}</div>}
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Title</label>
-              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="e.g. Production credentials reminder" value={editNoteData.title} onChange={e => setEditNoteData({ ...editNoteData, title: e.target.value })} />
-            </div>
-            <div className="space-y-1.5 flex-1 flex flex-col min-h-[240px]">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Content</label>
-              <textarea className="w-full flex-1 bg-black rounded-lg p-3 text-[13px] text-zinc-300 border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner custom-scrollbar resize-none leading-relaxed" placeholder="Write anything — markdown, paths, secrets you'd otherwise forget…" value={editNoteData.body} onChange={e => setEditNoteData({ ...editNoteData, body: e.target.value })} />
-            </div>
-          </div>
-          <div className="p-6 border-t border-white/5 shrink-0">
-            <button
-              onClick={async () => {
-                if (!editNoteData.title.trim() && !editNoteData.body.trim()) {
-                  setFormError("Add a title or some content first.");
-                  return;
-                }
-                try {
-                  const action = editNoteData.id
-                    ? invoke("edit_note", { id: editNoteData.id, title: editNoteData.title, body: editNoteData.body })
-                    : invoke("add_note", { title: editNoteData.title, body: editNoteData.body });
-                  await action;
-                  setIsNotePanelOpen(false);
-                  refreshNotes();
-                  bumpSync();
-                  addLog("Note saved.", "success");
-                } catch (e) {
-                  setFormError(`Failed to save note: ${e}`);
-                  addLog(`NOTE_SAVE_ERROR: ${e}`, "error");
-                }
-              }}
-              className="w-full h-10 bg-primary text-black font-bold rounded-lg text-[13px] tracking-tight hover:brightness-110 transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(var(--primary),0.2)] flex items-center justify-center gap-2"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
+      <NoteEditPanel
+        isOpen={isNotePanelOpen}
+        onClose={() => setIsNotePanelOpen(false)}
+        data={editNoteData}
+        setData={setEditNoteData}
+        formError={formError}
+        setFormError={setFormError}
+        addLog={addLog}
+        refreshNotes={refreshNotes}
+        bumpSync={bumpSync}
+      />
 
-      <div className={`fixed inset-0 z-50 transition-all duration-500 flex justify-end ${isCredPanelOpen ? 'bg-black/80 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsCredPanelOpen(false)}>
-        <div className={`w-full max-w-[400px] bg-[#09090b] border-l border-white/5 shadow-2xl transition-all duration-500 h-full flex flex-col ${isCredPanelOpen ? 'translate-x-0' : 'translate-x-full'}`} onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-6 border-b border-white/5 shrink-0">
-            <h2 className="text-[15px] font-bold text-white tracking-tight flex items-center gap-2">
-              <Shield size={18} className="text-primary" />
-              {editCredData.id ? "Edit login" : "New login"}
-            </h2>
-            <button onClick={() => { setIsCredPanelOpen(false); setFormError(""); }} className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white bg-black border border-white/5 hover:bg-white/10 rounded-full transition-all">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="p-6 flex-1 overflow-y-auto space-y-6">
-            {formError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[12px] font-bold">{formError}</div>}
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Name</label>
-              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="e.g. Work server" value={editCredData.name} onChange={e => setEditCredData({ ...editCredData, name: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Username</label>
-              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="root" value={editCredData.username} onChange={e => setEditCredData({ ...editCredData, username: e.target.value })} />
-            </div>
-            <div className="space-y-4 pt-2">
-              <div className="flex justify-between items-center">
-                <label className="text-[12px] font-bold text-zinc-400 ml-1">Sign in with</label>
-                <select
-                  className="bg-transparent text-[12px] font-bold text-primary outline-none cursor-pointer"
-                  value={editCredData.auth_type || "password"}
-                  onChange={e => setEditCredData({ ...editCredData, auth_type: e.target.value })}
-                >
-                  <option value="password" className="bg-[#121215] text-primary">Password</option>
-                  <option value="key" className="bg-[#121215] text-primary">SSH key</option>
-                </select>
-              </div>
-            </div>
-            {editCredData.auth_type === "key" ? (
-              <div className="space-y-1.5 animate-in fade-in">
-                <label className="text-[12px] font-bold text-zinc-400 ml-1">Pick a key</label>
-                <select
-                  className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-zinc-300 border border-white/10 outline-none focus:border-primary/50 transition-all shadow-inner"
-                  value={editCredData.key_id?.toString() || ""}
-                  onChange={e => setEditCredData({ ...editCredData, key_id: e.target.value ? parseInt(e.target.value) : null })}
-                >
-                  <option value="" className="bg-black text-zinc-500">-- Pick a key --</option>
-                  {sshKeys?.map((k: any) => (
-                    <option key={k.id} value={k.id.toString()} className="bg-black text-white">{k.name}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="space-y-1.5 animate-in fade-in">
-                <label className="text-[12px] font-bold text-zinc-400 ml-1">Password</label>
-                <PasswordField
-                  value={editCredData.password || ""}
-                  onChange={(v) => setEditCredData({ ...editCredData, password: v })}
-                  className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner"
-                />
-              </div>
-            )}
-          </div>
-          <div className="p-6 border-t border-white/5 shrink-0">
-            <button 
-              onClick={async () => {
-                if (!editCredData.name) {
-                  setFormError("Name is required.");
-                  addLog("Name is required.", "error");
-                  return;
-                }
-                if (editCredData.auth_type === "key" && !editCredData.key_id) {
-                  setFormError("Please select a linked SSH Private Key.");
-                  addLog("Please select a linked SSH Private Key.", "error");
-                  return;
-                }
-                try {
-                  const payload = {
-                    name: editCredData.name,
-                    authType: editCredData.auth_type || "password",
-                    username: editCredData.username?.trim() ? editCredData.username.trim() : "root",
-                    password: editCredData.auth_type === "key" ? null : (editCredData.password || null),
-                    keyId: editCredData.auth_type === "key" ? (editCredData.key_id ? parseInt(editCredData.key_id.toString()) : null) : null
-                  };
-                  const action = editCredData.id 
-                    ? invoke("edit_credential", { id: editCredData.id, ...payload })
-                    : invoke("add_credential", payload);
-                  await action;
-                  setIsCredPanelOpen(false);
-                  refreshCredentials();
-                  bumpSync();
-                  addLog("Credential saved.", "success");
-                } catch (e) {
-                  setFormError(`Failed to save credential: ${e}`);
-                  addLog(`CRED_SAVE_ERROR: ${e}`, "error");
-                }
-              }} 
-              className="w-full h-10 bg-primary text-black font-bold rounded-lg text-[13px] tracking-tight hover:brightness-110 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
+      <CredentialEditPanel
+        isOpen={isCredPanelOpen}
+        onClose={() => setIsCredPanelOpen(false)}
+        data={editCredData}
+        setData={setEditCredData}
+        sshKeys={sshKeys}
+        formError={formError}
+        setFormError={setFormError}
+        addLog={addLog}
+        refreshCredentials={refreshCredentials}
+        bumpSync={bumpSync}
+      />
 
-      <div className={`fixed inset-0 z-50 transition-all duration-500 flex justify-end ${isKeyPanelOpen ? 'bg-black/80 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsKeyPanelOpen(false)}>
-        <div className={`w-full max-w-[450px] bg-[#09090b] border-l border-white/5 shadow-2xl transition-all duration-500 h-full flex flex-col ${isKeyPanelOpen ? 'translate-x-0' : 'translate-x-full'}`} onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-6 border-b border-white/5 shrink-0">
-            <h2 className="text-[15px] font-bold text-white tracking-tight flex items-center gap-2">
-              <Key size={18} className="text-primary" />
-              {editKeyData.id ? "Edit SSH key" : "New SSH key"}
-            </h2>
-            <button onClick={() => { setIsKeyPanelOpen(false); setFormError(""); }} className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white bg-black border border-white/5 hover:bg-white/10 rounded-full transition-all">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="p-6 flex-1 overflow-y-auto space-y-6">
-            {formError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[12px] font-bold">{formError}</div>}
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Name</label>
-              <input type="text" className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner" placeholder="e.g. My laptop key" value={editKeyData.name} onChange={e => setEditKeyData({ ...editKeyData, name: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Public key</label>
-              <textarea className="w-full h-24 bg-black rounded-lg p-3 text-[13px] text-zinc-400 font-mono border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner custom-scrollbar resize-none" placeholder="ssh-ed25519 ..." value={editKeyData.public_key} onChange={e => setEditKeyData({ ...editKeyData, public_key: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Private key</label>
-              <textarea className="w-full h-32 bg-black rounded-lg p-3 text-[13px] text-zinc-400 font-mono border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner custom-scrollbar resize-none" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" value={editKeyData.private_key} onChange={e => setEditKeyData({ ...editKeyData, private_key: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-zinc-400 ml-1">Passphrase (if any)</label>
-              <PasswordField
-                value={editKeyData.passphrase || ""}
-                onChange={(v) => setEditKeyData({ ...editKeyData, passphrase: v })}
-                className="w-full h-10 bg-black rounded-lg px-3 text-[13px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-zinc-900/50 transition-all shadow-inner"
-              />
-            </div>
-          </div>
-          <div className="p-6 border-t border-white/5 shrink-0">
-            <button 
-              onClick={async () => {
-                if (!editKeyData.name || !editKeyData.private_key) {
-                  addLog("Name and Private Key are required.", "error");
-                  return;
-                }
-                try {
-                  const payload = {
-                    name: editKeyData.name,
-                    publicKey: editKeyData.public_key,
-                    privateKey: editKeyData.private_key,
-                    passphrase: editKeyData.passphrase || null
-                  };
-                  const action = editKeyData.id 
-                    ? invoke("edit_ssh_key", { id: editKeyData.id, ...payload })
-                    : invoke("add_ssh_key", payload);
-                  await action;
-                  setIsKeyPanelOpen(false);
-                  refreshSshKeys();
-                  bumpSync();
-                  addLog("SSH Key saved.", "success");
-                } catch (e) {
-                  setFormError(`Failed to save SSH Key: ${e}`);
-                  addLog(`KEY_SAVE_ERROR: ${e}`, "error");
-                }
-              }} 
-              className="w-full h-10 bg-primary text-black font-bold rounded-lg text-[13px] tracking-tight hover:brightness-110 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
+      <KeyEditPanel
+        isOpen={isKeyPanelOpen}
+        onClose={() => setIsKeyPanelOpen(false)}
+        data={editKeyData}
+        setData={setEditKeyData}
+        formError={formError}
+        setFormError={setFormError}
+        addLog={addLog}
+        refreshSshKeys={refreshSshKeys}
+        bumpSync={bumpSync}
+      />
       {activeSnippetParam && (
         <SnippetParamModal
           isOpen={!!activeSnippetParam}
