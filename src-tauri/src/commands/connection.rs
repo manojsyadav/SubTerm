@@ -214,6 +214,20 @@ const RESUME_DETECTOR_THRESHOLD: std::time::Duration = std::time::Duration::from
 /// several seconds is not. On resume, every open session's auto-reconnect
 /// (if any is pending) gets kicked immediately instead of waiting out
 /// whatever's left of its backoff — see `system-resume` in SessionView.tsx.
+/// Master switch for the `system-resume` / `network-changed` events. Driven by
+/// the "Auto-reconnect" feature toggle; the watchers keep running (cheap) but
+/// stay silent while it's off.
+static AUTO_RECONNECT_EVENTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+#[tauri::command]
+pub fn set_auto_reconnect_events(enabled: bool) {
+    AUTO_RECONNECT_EVENTS.store(enabled, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn auto_reconnect_events_enabled() -> bool {
+    AUTO_RECONNECT_EVENTS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 fn spawn_resume_detector(app: tauri::AppHandle) {
     use tauri::Emitter;
     tauri::async_runtime::spawn(async move {
@@ -223,7 +237,7 @@ fn spawn_resume_detector(app: tauri::AppHandle) {
             interval.tick().await;
             let now = std::time::Instant::now();
             let elapsed = now.duration_since(last);
-            if elapsed > RESUME_DETECTOR_THRESHOLD {
+            if elapsed > RESUME_DETECTOR_THRESHOLD && auto_reconnect_events_enabled() {
                 let _ = app.emit("system-resume", ());
             }
             last = now;
@@ -254,7 +268,7 @@ fn spawn_network_watcher(app: tauri::AppHandle) {
                 continue;
             }
             let now = std::time::Instant::now();
-            if last_emit.map(|t| now.duration_since(t) >= DEBOUNCE).unwrap_or(true) {
+            if auto_reconnect_events_enabled() && last_emit.map(|t| now.duration_since(t) >= DEBOUNCE).unwrap_or(true) {
                 let _ = app.emit("network-changed", ());
                 last_emit = Some(now);
             }
