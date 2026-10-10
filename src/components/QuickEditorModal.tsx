@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   X, Save, FileCode, Check, RefreshCw, SplitSquareHorizontal, 
@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { computeDiff } from "../fs/diff";
+import { CodeEditor } from "../editor/CodeEditor";
 
 interface QuickEditorModalProps {
   isOpen: boolean;
@@ -32,9 +33,6 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   const isDirty = content !== originalContent;
 
@@ -132,13 +130,6 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, content, originalContent, isDirty, saving, entry]);
-
-  // Sync line numbers scrolling with textarea
-  const handleScroll = () => {
-    if (textareaRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  };
 
   const lines = useMemo(() => content.split("\n"), [content]);
   const diffLines = useMemo(() => {
@@ -281,30 +272,9 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
               ))}
             </div>
           ) : (
-            /* Code Editor with Line Numbers */
+            /* Syntax-highlighted code editor (CodeMirror 6) */
             <div className="flex-1 flex overflow-hidden relative">
-              {/* Line Numbers Gutter */}
-              <div
-                ref={lineNumbersRef}
-                className="w-12 py-3 px-2 text-right bg-[#09090c] border-r border-white/5 text-zinc-600 select-none overflow-hidden shrink-0 leading-5"
-              >
-                {lines.map((_, i) => (
-                  <div key={i} className="h-5">
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-
-              {/* Textarea */}
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onScroll={handleScroll}
-                spellCheck={false}
-                className="flex-1 h-full p-3 bg-transparent text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none font-mono leading-5 overflow-auto custom-scrollbar whitespace-pre tab-4"
-                placeholder="File is empty"
-              />
+              <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} />
             </div>
           )}
         </div>
