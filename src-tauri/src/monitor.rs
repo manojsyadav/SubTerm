@@ -521,7 +521,14 @@ async fn run_poller(
         // 4) Poll once. Snapshot enabled + custom lists here so mid-cycle
         // hot-updates from the UI take effect on the NEXT cycle.
         let customs_snap: Vec<CustomMetric> = entry.custom_metrics.lock().await.clone();
-        let h = handle.as_ref().unwrap();
+        let Some(h) = handle.as_ref() else {
+            // Unreachable (step 3 just ensured a handle), but never panic the monitor task.
+            tokio::select! {
+                _ = &mut stop_rx => break,
+                _ = tokio::time::sleep(backoff) => {}
+            }
+            continue;
+        };
         match poll_once(h, &customs_snap, poll_timeout).await {
             Ok(raw) => {
                 let enabled_snap = entry.enabled_metrics.lock().await.clone();
