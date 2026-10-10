@@ -690,6 +690,28 @@ pub async fn sftp_download_file(
 
     emit_progress(0, "progress", None);
 
+    // Large files: several read streams at once (one sequential read is bound by
+    // chunk / round-trip time). Falls through to the single stream below when the
+    // file is small or the server won't give us extra handles.
+    if total >= super::sftp_parallel::PARALLEL_MIN_BYTES {
+        use super::sftp_parallel::{download_parallel, ParallelOutcome};
+        match download_parallel(&sftp, &remote_path, &local_path, total, &cancel, &|b| emit_progress(b, "progress", None)).await {
+            ParallelOutcome::Done => {
+                emit_progress(total, "done", None);
+                return Ok(());
+            }
+            ParallelOutcome::Cancelled(n) => {
+                emit_progress(n, "cancelled", None);
+                return Err("cancelled".into());
+            }
+            ParallelOutcome::Failed(e) => {
+                emit_progress(0, "error", Some(e.clone()));
+                return Err(e);
+            }
+            ParallelOutcome::Unsupported => {}
+        }
+    }
+
     let mut remote_file = sftp
         .open(&remote_path)
         .await

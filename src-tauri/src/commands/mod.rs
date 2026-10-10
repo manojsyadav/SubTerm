@@ -7,5 +7,6 @@ pub mod profile;
 pub mod sync;
 pub mod servers;
 pub mod sftp;
+pub mod sftp_parallel;
 pub mod terminal;
 pub mod tunnels;
