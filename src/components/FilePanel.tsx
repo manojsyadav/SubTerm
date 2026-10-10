@@ -1,3 +1,4 @@
+import { useFeatureFlag } from "../featureFlags";
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
@@ -264,9 +265,11 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const [fuzzyQuery, setFuzzyQuery] = useState("");
   const [gitFileStatuses, setGitFileStatuses] = useState<Record<string, string>>({});
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const bookmarksEnabled = useFeatureFlag("sftpBookmarks");
   const [isCurrentBookmarked, setIsCurrentBookmarked] = useState(false);
 
   useEffect(() => {
+    if (!bookmarksEnabled) return;
     const check = () => {
       const bms = loadSftpBookmarks(sessionId, serverId, profile);
       const norm = currentPath.replace(/\/+$/, "") || "/";
@@ -277,7 +280,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     check();
     window.addEventListener("subterm-bookmarks-updated", check);
     return () => window.removeEventListener("subterm-bookmarks-updated", check);
-  }, [currentPath, provider.id, sessionId, serverId, profile]);
+  }, [currentPath, provider.id, sessionId, serverId, profile, bookmarksEnabled]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -1462,28 +1465,30 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             className={`p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0 ${loading ? "animate-spin" : ""}`}>
             <RefreshCw size={11} />
           </button>
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setBookmarksOpen(!bookmarksOpen)}
-              title="Directory Bookmarks & Quick Jumps"
-              className={`p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0 transition-colors ${
-                isCurrentBookmarked ? "text-amber-400 border-amber-400/40 bg-amber-500/10" : ""
-              }`}
-            >
-              <Bookmark size={11} className={isCurrentBookmarked ? "fill-amber-400 text-amber-400" : ""} />
-            </button>
-            <SftpBookmarksPopover
-              isOpen={bookmarksOpen}
-              onClose={() => setBookmarksOpen(false)}
-              currentPath={currentPath}
-              isRemote={isRemote}
-              onNavigate={(targetPath) => fetch(targetPath)}
-              sessionId={sessionId}
-              serverId={serverId}
-              profile={profile}
-            />
-          </div>
+          {bookmarksEnabled && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setBookmarksOpen(!bookmarksOpen)}
+                title="Directory Bookmarks & Quick Jumps"
+                className={`p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-200 hover:bg-white/10 shrink-0 transition-colors ${
+                  isCurrentBookmarked ? "text-amber-400 border-amber-400/40 bg-amber-500/10" : ""
+                }`}
+              >
+                <Bookmark size={11} className={isCurrentBookmarked ? "fill-amber-400 text-amber-400" : ""} />
+              </button>
+              <SftpBookmarksPopover
+                isOpen={bookmarksOpen}
+                onClose={() => setBookmarksOpen(false)}
+                currentPath={currentPath}
+                isRemote={isRemote}
+                onNavigate={(targetPath) => fetch(targetPath)}
+                sessionId={sessionId}
+                serverId={serverId}
+                profile={profile}
+              />
+            </div>
+          )}
           {isRemote && (
             <>
               <button

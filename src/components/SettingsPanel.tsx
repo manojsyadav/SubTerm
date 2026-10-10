@@ -1,3 +1,4 @@
+import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IS_ANDROID } from "../util/platform";
@@ -8,7 +9,8 @@ import {
   Plus, Terminal, Keyboard, ChevronRight, Lock, ShieldCheck,
   Download, X,
 } from "lucide-react";
-import CloudPanel from "./CloudPanel";
+import { lazy, Suspense } from "react";
+const CloudPanel = lazy(() => import("./CloudPanel"));
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
@@ -152,6 +154,9 @@ const PageAppearance = ({ settings, setSettings }: any) => (
 
 const PageTerminal = ({ settings, setSettings }: any) => {
   const [themesList, setThemesList] = useState<TerminalThemeConfig[]>(getAllTerminalThemes());
+  const [flags, setFlags] = useState<Record<FeatureKey, boolean>>(() =>
+    Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>,
+  );
   const [importThemeModal, setImportThemeModal] = useState(false);
   const [importThemeText, setImportThemeText] = useState("");
   const [importThemeError, setImportThemeError] = useState("");
@@ -374,6 +379,30 @@ const PageTerminal = ({ settings, setSettings }: any) => {
             <option value="none">Disabled (Mute)</option>
           </select>
         </Row>
+      </SectionCard>
+
+      <SectionCard title="Feature Toggles" subtitle="Turn optional features off to skip loading and running their code. Changes apply immediately.">
+        {(["Editor", "Terminal", "Panels", "AI"] as const).map((group) => {
+          const items = FEATURES.filter((f) => f.group === group);
+          if (items.length === 0) return null;
+          return (
+            <div key={group}>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 pt-2 pb-1">{group}</div>
+              {items.map((f) => (
+                <Row key={f.key} label={f.label} desc={f.desc}>
+                  <Toggle
+                    checked={flags[f.key]}
+                    onChange={() => {
+                      const next = !flags[f.key];
+                      setFeatureEnabled(f.key, next);
+                      setFlags((prev) => ({ ...prev, [f.key]: next }));
+                    }}
+                  />
+                </Row>
+              ))}
+            </div>
+          );
+        })}
       </SectionCard>
 
       <SectionCard title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">
@@ -620,7 +649,11 @@ const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: an
   return (
     <div className="space-y-6">
       <SettingsCloudSync settings={settings} setSettings={setSettings} onOpenCloudAccount={() => setCloudOpen(true)} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />
-      <CloudPanel isOpen={cloudOpen} onClose={() => setCloudOpen(false)} onLocalProfilesChanged={() => {}} />
+      {cloudOpen && (
+        <Suspense fallback={null}>
+          <CloudPanel isOpen={cloudOpen} onClose={() => setCloudOpen(false)} onLocalProfilesChanged={() => {}} />
+        </Suspense>
+      )}
     </div>
   );
 };

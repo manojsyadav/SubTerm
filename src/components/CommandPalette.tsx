@@ -1,3 +1,4 @@
+import { useFeatureFlag } from "../featureFlags";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { 
   Search, Server, Terminal, Folder, SplitSquareHorizontal, 
@@ -55,6 +56,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const wallEnabled = useFeatureFlag('fleetWall');
 
   useEffect(() => {
     if (isOpen) {
@@ -193,14 +195,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         action: () => onSelectView("monitor"),
       });
     }
-    list.push({
-      id: "nav-wall",
-      category: "Action",
-      title: "Go to: Session Wall",
-      subtitle: "Multi-session tile pinboard",
-      icon: <Columns size={14} className="text-purple-400" />,
-      action: () => onSelectView("wall"),
-    });
+    if (wallEnabled) {
+      list.push({
+        id: "nav-wall",
+        category: "Action",
+        title: "Go to: Session Wall",
+        subtitle: "Multi-session tile pinboard",
+        icon: <Columns size={14} className="text-purple-400" />,
+        action: () => onSelectView("wall"),
+      });
+    }
     list.push({
       id: "nav-vault",
       category: "Action",
@@ -270,7 +274,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
 
     return list;
-  }, [servers, sessions, activeView, commands, onSelectView, onConnectServer, onOpenQuickConnect, onOpenAddNode, onOpenSettings, onCloseSession, onExecuteCommand]);
+  }, [servers, sessions, activeView, commands, onSelectView, onConnectServer, onOpenQuickConnect, onOpenAddNode, onOpenSettings, onCloseSession, onExecuteCommand, wallEnabled]);
 
   // Filter items
   const filteredItems = useMemo(() => {

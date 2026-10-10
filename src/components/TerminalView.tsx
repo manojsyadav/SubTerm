@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
@@ -11,7 +12,7 @@ import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
 import { useBroadcast } from '../ui/broadcast';
 import HistorySearchOverlay from './HistorySearchOverlay';
-import { AiCopilotModal } from './AiCopilotModal';
+const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ default: m.AiCopilotModal })));
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { getTerminalTheme } from '../terminal/themes';
@@ -180,6 +181,7 @@ const TerminalView = ({
   // terminal's DOM subtree, so multi-tab windows don't fire N overlays.
   const [showHistory, setShowHistory] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
+  const copilotEnabled = useFeatureFlag('aiCopilot');
 
   const isProdServer = isProd || Boolean(serverName && (
     serverName.toLowerCase().includes("prod") ||
@@ -383,7 +385,7 @@ const TerminalView = ({
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         setShowHistory(true);
-      } else if (e.key === 'i' || e.key === 'I') {
+      } else if ((e.key === 'i' || e.key === 'I') && isFeatureEnabled('aiCopilot')) {
         e.preventDefault();
         setShowCopilot(true);
       }
@@ -617,6 +619,7 @@ const TerminalView = ({
     // OSC 133 Shell Integration handler (FinalTerm / iTerm / VS Code spec)
     try {
       term.parser.registerOscHandler(133, (data: string) => {
+        if (!isFeatureEnabled('terminalCommandBlocks')) return true; // swallow the marker, track nothing
         const parts = data.split(';');
         const action = parts[0]?.trim();
         const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
@@ -757,19 +760,54 @@ const TerminalView = ({
             });
           }
 
-          // 2. Absolute or home-relative file paths (/path/to/file or ~/file)
-          const pathRegex = /(?:^|[\s"'`])((?:\/[\w.-]+)+\/?|~\/[\w.-]+(?:\/[\w.-]+)*)/g;
-          while ((match = pathRegex.exec(lineText)) !== null) {
-            const fullPath = match[1];
-            if (fullPath.length >= 3 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
-              const startX = match.index + (match[0].length - fullPath.length) + 1;
-              const endX = startX + fullPath.length - 1;
+          // File-path links are optional (Settings -> Feature Toggles). When off,
+          // none of the path regexes below run on terminal output.
+          if (isFeatureEnabled("terminalFileLinks")) {
+            // 2. Absolute or home-relative file paths (/path/to/file or ~/file)
+            const pathRegex = /(?:^|[\s"'`])((?:\/[\w.-]+)+\/?|~\/[\w.-]+(?:\/[\w.-]+)*)/g;
+            while ((match = pathRegex.exec(lineText)) !== null) {
+              const fullPath = match[1];
+              if (fullPath.length >= 3 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
+                const startX = match.index + (match[0].length - fullPath.length) + 1;
+                const endX = startX + fullPath.length - 1;
+                links.push({
+                  range: {
+                    start: { x: startX, y: bufferLineNumber },
+                    end: { x: endX, y: bufferLineNumber },
+                  },
+                  text: fullPath,
+                  activate: (_ev, pathText) => {
+                    window.dispatchEvent(
+                      new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                        detail: { path: pathText, cwd: currentCwdRef.current },
+                      })
+                    );
+                  },
+                });
+              }
+            }
+
+            // 2b. Relative paths (./x, ../x, dir/file.ext, dir/sub/) with an optional
+            // :line[:col] suffix. Resolved against the shell's cwd (or searched
+            // for) by the editor-open handler, so no cwd is needed here.
+            const relRegex = /(?:^|[\s"'`(])((?:\.{1,2}\/|[\w@.-]+\/)(?:[\w@.-]+\/)*[\w@.-]*(?::\d+(?::\d+)?)?)/g;
+            while ((match = relRegex.exec(lineText)) !== null) {
+              const relPath = match[1];
+              if (relPath.length < 3 || relPath.includes('://')) continue;
+              const startX = match.index + (match[0].length - relPath.length) + 1;
+              const endX = startX + relPath.length - 1;
+              const overlapsAbs = links.some(
+                (l) =>
+                  l.range.start.y === bufferLineNumber &&
+                  !(endX < l.range.start.x || startX > l.range.end.x)
+              );
+              if (overlapsAbs) continue;
               links.push({
                 range: {
                   start: { x: startX, y: bufferLineNumber },
                   end: { x: endX, y: bufferLineNumber },
                 },
-                text: fullPath,
+                text: relPath,
                 activate: (_ev, pathText) => {
                   window.dispatchEvent(
                     new CustomEvent(`submarine-open-editor-${sessionId}`, {
@@ -779,37 +817,38 @@ const TerminalView = ({
                 },
               });
             }
-          }
 
-          // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
-          const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
-          while ((match = fileRegex.exec(lineText)) !== null) {
-            const fileName = match[1];
-            const startX = match.index + (match[0].length - fileName.length) + 1;
-            const endX = startX + fileName.length - 1;
+            // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
+            const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service|timer|crt|cer|pem|csr|key|pub|cnf|j2|tf|tfvars|csv)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
+            while ((match = fileRegex.exec(lineText)) !== null) {
+              const fileName = match[1];
+              const startX = match.index + (match[0].length - fileName.length) + 1;
+              const endX = startX + fileName.length - 1;
 
-            const overlaps = links.some(
-              (l) =>
-                l.range.start.y === bufferLineNumber &&
-                !(endX < l.range.start.x || startX > l.range.end.x)
-            );
+              const overlaps = links.some(
+                (l) =>
+                  l.range.start.y === bufferLineNumber &&
+                  !(endX < l.range.start.x || startX > l.range.end.x)
+              );
 
-            if (!overlaps) {
-              links.push({
-                range: {
-                  start: { x: startX, y: bufferLineNumber },
-                  end: { x: endX, y: bufferLineNumber },
-                },
-                text: fileName,
-                activate: (_ev, pathText) => {
-                  window.dispatchEvent(
-                    new CustomEvent(`submarine-open-editor-${sessionId}`, {
-                      detail: { path: pathText, cwd: currentCwdRef.current },
-                    })
-                  );
-                },
-              });
+              if (!overlaps) {
+                links.push({
+                  range: {
+                    start: { x: startX, y: bufferLineNumber },
+                    end: { x: endX, y: bufferLineNumber },
+                  },
+                  text: fileName,
+                  activate: (_ev, pathText) => {
+                    window.dispatchEvent(
+                      new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                        detail: { path: pathText, cwd: currentCwdRef.current },
+                      })
+                    );
+                  },
+                });
+              }
             }
+
           }
 
           callback(links.length > 0 ? links : undefined);
@@ -976,7 +1015,9 @@ const TerminalView = ({
             setSafetyWarningCmd(line);
             return;
           }
-          if (line.length > 0 && !/^(exit|logout)$/i.test(line)) {
+          if (!isFeatureEnabled('terminalCommandBlocks')) {
+            // command blocks disabled: skip tracking
+          } else if (line.length > 0 && !/^(exit|logout)$/i.test(line)) {
             const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
             const newBlock = {
               command: line,
@@ -995,7 +1036,7 @@ const TerminalView = ({
           // prompt — otherwise sudo/su/mysql -p/gpg secrets land verbatim in
           // searchable history. The onData handler can't see the PTY echo
           // mode, so we infer it from the remote output tail.
-          if (line.length >= 3 && !looksLikePasswordPrompt(recentOutputRef.current)) {
+          if (line.length >= 3 && isFeatureEnabled('commandHistory') && !looksLikePasswordPrompt(recentOutputRef.current)) {
             invoke('cmd_history_add', {
               serverId: serverId > 0 ? serverId : null,
               serverName: serverName || "",
@@ -1270,6 +1311,7 @@ const TerminalView = ({
     };
 
     const handleOpenCopilot = () => {
+      if (!isFeatureEnabled('aiCopilot')) return;
       setShowCopilot(true);
     };
 
@@ -1700,7 +1742,7 @@ const TerminalView = ({
       )}
 
       {/* Floating Command Output Quick Actions & OSC 133 Status */}
-      {lastCommand && (
+      {lastCommand && isFeatureEnabled('terminalCommandBlocks') && (
         <div
           className={`absolute ${showSearch ? 'top-12' : 'top-2'} right-2 z-20 flex items-center gap-1.5 p-1 bg-[#121217]/95 backdrop-blur-md border border-white/10 rounded-lg shadow-xl text-xs font-mono select-none animate-in fade-in slide-in-from-top-1 duration-150`}
         >
@@ -1737,7 +1779,7 @@ const TerminalView = ({
             <span>Copy Output</span>
           </button>
 
-          {lastCommand.exitCode !== undefined && lastCommand.exitCode !== 0 && (
+          {copilotEnabled && lastCommand.exitCode !== undefined && lastCommand.exitCode !== 0 && (
             <button
               type="button"
               onClick={() => setShowCopilot(true)}
@@ -1800,20 +1842,24 @@ const TerminalView = ({
           if (!execute) commandBufRef.current = command;
         }}
       />
-      <AiCopilotModal
-        isOpen={showCopilot}
-        onClose={() => {
-          setShowCopilot(false);
-          xtermRef.current?.focus();
-        }}
-        onInsertCommand={(command, execute) => {
-          if (disabledRef.current) return;
-          const payload = execute ? command + "\r" : command;
-          const bytes = Array.from(new TextEncoder().encode(payload));
-          invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
-          if (!execute) commandBufRef.current = command;
-        }}
-      />
+      {copilotEnabled && showCopilot && (
+        <Suspense fallback={null}>
+          <AiCopilotModal
+            isOpen={showCopilot}
+            onClose={() => {
+              setShowCopilot(false);
+              xtermRef.current?.focus();
+            }}
+            onInsertCommand={(command, execute) => {
+              if (disabledRef.current) return;
+              const payload = execute ? command + "\r" : command;
+              const bytes = Array.from(new TextEncoder().encode(payload));
+              invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
+              if (!execute) commandBufRef.current = command;
+            }}
+          />
+        </Suspense>
+      )}
       {/* Disabled badge */}
       {disabled && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">

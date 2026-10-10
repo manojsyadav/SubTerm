@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(settings)` — Feature Toggles**:
+  **Settings → Feature Toggles** switches optional features on or off, grouped Editor / Terminal / Panels / AI. A disabled feature is not loaded or run: panels, the AI Copilot, Network Tools, SFTP Mirror / compare, the Session Wall and the code editor's syntax highlighting are lazy-loaded chunks that are only fetched when enabled and used, and per-output terminal features (clickable file paths, command blocks, command-history capture) skip their work entirely. Also: syntax highlighting in the Quick Editor (CodeMirror 6), and clicking a relative path or bare file name (including `.crt`/`.pem`) in terminal output now resolves it on the server. All toggles default to on and apply immediately.
+
 - **`feat(ssh)` — SSH Agent Forwarding (`-A`)**:
   New **Forward SSH Agent** toggle in the Add/Edit Server panel. When enabled, the remote server can use your local SSH agent (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) to authenticate onward — `ssh` to a further host, `git` over SSH — without SubTerm ever touching those keys itself. Works with any agent speaking the standard ssh-agent protocol out of the box, since forwarding is implemented as a raw byte proxy rather than protocol-specific integration. See `docs/SECURITY.md` §7 for the trust model before enabling it on a server.
 
