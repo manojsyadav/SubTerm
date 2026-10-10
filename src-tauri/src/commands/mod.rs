@@ -8,5 +8,6 @@ pub mod sync;
 pub mod servers;
 pub mod sftp;
 pub mod sftp_parallel;
+pub mod sftp_remote_copy;
 pub mod terminal;
 pub mod tunnels;

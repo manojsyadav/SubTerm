@@ -44,6 +44,7 @@ import { LibraryView } from "./components/LibraryView";
 import { LoginsView } from "./components/LoginsView";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
+import { publishOpenSessions } from "./fs/sessionRegistry";
 
 const appWindow = getCurrentWindow();
 
@@ -268,6 +269,18 @@ function DesktopApp() {
   }, []);
 
   vaultRef.current = vault;
+
+  // Tell the file views which sessions exist (for server-to-server SFTP copy).
+  useEffect(() => {
+    publishOpenSessions(
+      sessions.map((s) => ({
+        id: s.id,
+        name: s.serverName,
+        connected: sessionStatuses[s.id] === "connected",
+        isLocal: !!s.isLocal,
+      })),
+    );
+  }, [sessions, sessionStatuses]);
 
   // Leave the Wall if it gets switched off in Settings while open.
   useEffect(() => { if (!wallEnabled && activeView === 'wall') setActiveView('nodes'); }, [wallEnabled, activeView]);

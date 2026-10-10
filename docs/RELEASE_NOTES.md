@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(sftp)` — Server-to-server copy (dual remote panes)**:
+  A new **Server to server** tab in the SFTP panel shows two open servers side by side. Pick a server for each side, select files or folders, and use **Copy to <server>** (selection bar or right-click) or drag from one side to the other. The data goes straight from one SSH connection to the other, in memory — nothing is saved on this computer. Large files use up to four streams at once, progress and Cancel appear in the usual transfers bar, existing items ask before being replaced, and a cancelled or failed copy removes the partial file. Folder copies skip symbolic links. Needs two connected servers; has its own toggle in Settings → Feature Toggles.
+
 - **`fix(terminal)` — Saving recordings and exported buffers**:
   **Stop and save recording** and **Export Buffer to .log** now open a native **Save as** dialog so you choose the folder and name. Before, they relied on a browser-style download that did nothing inside the app. If you cancel the dialog the recording keeps running, so nothing is lost.
 

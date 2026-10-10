@@ -435,7 +435,7 @@ fn removable_dir_path(path: &str) -> Result<&str, String> {
     Ok(trimmed)
 }
 
-fn is_child_name(name: &str) -> bool {
+pub(crate) fn is_child_name(name: &str) -> bool {
     !name.is_empty() && !name.contains('/') && !name.split('\\').any(|step| step == "..")
 }
 
@@ -1561,7 +1561,7 @@ pub async fn sftp_cancel_transfer(
 
 // Monotonically-increasing per-transfer id. The frontend uses it to group
 // progress events into one updatable card per transfer.
-fn transfer_id() -> String {
+pub(crate) fn transfer_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);

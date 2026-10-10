@@ -1,9 +1,9 @@
 import type { ComponentProps } from "react";
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, lazy, Suspense } from "react";
+import { useEffect, useCallback, useMemo, useRef, useState, forwardRef, useImperativeHandle, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { File as FileIcon, Folder, FolderUp, Rows, LayoutPanelTop } from "lucide-react";
+import { File as FileIcon, Folder, FolderUp, Rows, LayoutPanelTop, ArrowLeftRight } from "lucide-react";
 import FilePanel, { ActiveDrag, FilePanelHandle } from "./FilePanel";
 import type { DiffFileRef } from "./FileDiffModal";
 import { useFeatureFlag } from "../featureFlags";
@@ -51,7 +51,7 @@ interface SftpWorkspaceProps {
 // Profile names hold only [A-Za-z0-9_-], so ":" keeps the parts apart.
 export const bookmarksKeyPrefix = (profile = "default") => `submarine-sftp-bookmarks:${profile}:`;
 
-type SftpView = "files" | "mirror";
+type SftpView = "files" | "mirror" | "dual";
 type FilesLayout = "tabs" | "split";
 type FilesSide = "local" | "remote";
 
@@ -94,13 +94,20 @@ const DragGhost = forwardRef<DragGhostHandle>((_props, ref) => {
 });
 DragGhost.displayName = "DragGhost";
 
+const RemoteDualView = lazy(() => import("./RemoteDualView"));
+
 const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [], terminalId, onRevealTerminal, profile }: SftpWorkspaceProps) => {
   // Active sub-tab. Files is the default (the common workflow); Mirror is
   // for the per-server one-way replication setup.
   const [view, setView] = useState<SftpView>("files");
   const mirrorsEnabled = useFeatureFlag("sftpMirrors");
   const compareEnabled = useFeatureFlag("sftpCompare");
+  const dualEnabled = useFeatureFlag("sftpRemoteToRemote");
   useEffect(() => { if (!mirrorsEnabled && view === "mirror") setView("files"); }, [mirrorsEnabled, view]);
+  useEffect(() => { if (!dualEnabled && view === "dual") setView("files"); }, [dualEnabled, view]);
+  // Opened once, then kept mounted (CSS hidden) so both panes keep their folders and selections.
+  const [dualOpened, setDualOpened] = useState(false);
+  useEffect(() => { if (view === "dual") setDualOpened(true); }, [view]);
   // Files layout: "tabs" (one side full height) is the default because the
   // side panel is narrow on most desktop setups and "split" squeezed each
   // FilePanel into 5-6 rows. "split" stays available for users who want
@@ -136,6 +143,13 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
 
   const localRef = useRef<FilePanelHandle | null>(null);
   const remoteRef = useRef<FilePanelHandle | null>(null);
+  // Panes mounted by the dual-remote view register here so the shared
+  // drag-and-drop dispatch below can reach them.
+  const extraPanesRef = useRef(new Map<string, FilePanelHandle>());
+  const registerExtraPane = useCallback((id: string, handle: FilePanelHandle | null) => {
+    if (handle) extraPanesRef.current.set(id, handle);
+    else extraPanesRef.current.delete(id);
+  }, []);
 
   // Cross-pane file diff — see FileDiffModal. Compares `entry` (from
   // whichever pane the user right-clicked) against a same-named file in the
@@ -337,8 +351,10 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
         || pane.getAttribute("data-fs-current-path") || "";
       if (!targetDir) return;
 
-      const sourceRef = active.paneId === "local" ? localRef : remoteRef;
-      const run = sourceRef.current?.sendItems(active.items, targetDir) ?? Promise.resolve();
+      const source = active.paneId === "local" ? localRef.current
+        : active.paneId === "remote" ? remoteRef.current
+        : extraPanesRef.current.get(active.paneId) ?? null;
+      const run = source?.sendItems(active.items, targetDir) ?? Promise.resolve();
       run
         .catch((err) => {
           notify(`Transfer failed: ${err}`, "error");
@@ -347,6 +363,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
         .finally(() => {
           localRef.current?.refresh();
           remoteRef.current?.refresh();
+          extraPanesRef.current.forEach((h) => { void h.refresh(); });
         });
     };
     window.addEventListener("mouseup", onMouseUp);
@@ -361,8 +378,14 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           mounted-but-invisible pattern the parent SessionView used before)
           so the live worker's counters and rolling log survive a switch back
           to Files. */}
-      {mirrorsEnabled && (
-        <div role="tablist" aria-label="SFTP views" onKeyDown={(e) => onRovingKeyDown(e)} className="shrink-0 grid grid-cols-2 border-b border-white/5 bg-black/20">
+      {(mirrorsEnabled || dualEnabled) && (
+        <div
+          role="tablist"
+          aria-label="SFTP views"
+          onKeyDown={(e) => onRovingKeyDown(e)}
+          style={{ gridTemplateColumns: `repeat(${1 + Number(mirrorsEnabled) + Number(dualEnabled)}, minmax(0, 1fr))` }}
+          className="shrink-0 grid border-b border-white/5 bg-black/20"
+        >
           <button
             role="tab"
             aria-selected={view === "files"}
@@ -376,7 +399,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           >
             <Folder size={12} /> Files
           </button>
-          <button
+          {mirrorsEnabled && (<button
             role="tab"
             aria-selected={view === "mirror"}
             tabIndex={view === "mirror" ? 0 : -1}
@@ -390,7 +413,23 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             }`}
           >
             <FolderUp size={12} /> Mirror
-          </button>
+          </button>)}
+          {dualEnabled && (
+            <button
+              role="tab"
+              aria-selected={view === "dual"}
+              tabIndex={view === "dual" ? 0 : -1}
+              onClick={() => setView("dual")}
+              title="Copy files directly between two servers"
+              className={`h-9 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
+                view === "dual"
+                  ? "text-primary bg-primary/5 border-b border-primary"
+                  : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-b border-transparent"
+              }`}
+            >
+              <ArrowLeftRight size={12} /> Server to server
+            </button>
+          )}
         </div>
       )}
 
@@ -500,6 +539,20 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           />
         </div>
       </div>
+
+      {dualEnabled && dualOpened && (
+        <div className={`${view === "dual" ? "flex-1 flex flex-col min-h-0" : "hidden"}`}>
+          <Suspense fallback={null}>
+            <RemoteDualView
+              hostSessionId={sessionId}
+              profile={profile}
+              disabled={disabled}
+              onDragMove={handleDragMove}
+              registerPane={registerExtraPane}
+            />
+          </Suspense>
+        </div>
+      )}
 
       {/* Mirror view — kept MOUNTED (CSS hidden) so the live worker's logs
           and progress counters survive when the user pops back to Files. */}
