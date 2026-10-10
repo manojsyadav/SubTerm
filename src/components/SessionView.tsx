@@ -514,6 +514,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     mirrors: true,
   };
   const gitEnabled = useFeatureFlag('panelGit');
+  const copilotEnabled = useFeatureFlag('aiCopilot');
   // A tool panel is mounted the first time it is opened and then kept mounted (its state and
   // polling are preserved across tab switches); panels never opened cost nothing.
   const [openedTools, setOpenedTools] = useState<ReadonlySet<string>>(() => new Set());
@@ -1713,16 +1714,18 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               {gitInfo?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
             </button>
           )}
-          <button
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
-            }}
-            title="Open AI Shell Copilot (Ctrl+I)"
-            className="h-5 px-2 rounded bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary transition-all shrink-0 flex items-center gap-1 font-semibold text-[10px]"
-          >
-            <Sparkles size={10} />
-            <span>Copilot</span>
-          </button>
+          {copilotEnabled && (
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
+              }}
+              title="Open AI Shell Copilot (Ctrl+I)"
+              className="h-5 px-2 rounded bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary transition-all shrink-0 flex items-center gap-1 font-semibold text-[10px]"
+            >
+              <Sparkles size={10} />
+              <span>Copilot</span>
+            </button>
+          )}
           <div className="h-3 w-px bg-white/10 shrink-0" />
 
           {/* Detected OS Badge Pill */}

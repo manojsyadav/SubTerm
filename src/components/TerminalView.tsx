@@ -1,5 +1,5 @@
-import { isFeatureEnabled } from "../featureFlags";
-import { useEffect, useRef, useState } from 'react';
+import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
@@ -12,7 +12,7 @@ import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
 import { useBroadcast } from '../ui/broadcast';
 import HistorySearchOverlay from './HistorySearchOverlay';
-import { AiCopilotModal } from './AiCopilotModal';
+const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ default: m.AiCopilotModal })));
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { getTerminalTheme } from '../terminal/themes';
@@ -181,6 +181,7 @@ const TerminalView = ({
   // terminal's DOM subtree, so multi-tab windows don't fire N overlays.
   const [showHistory, setShowHistory] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
+  const copilotEnabled = useFeatureFlag('aiCopilot');
 
   const isProdServer = isProd || Boolean(serverName && (
     serverName.toLowerCase().includes("prod") ||
@@ -384,7 +385,7 @@ const TerminalView = ({
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         setShowHistory(true);
-      } else if (e.key === 'i' || e.key === 'I') {
+      } else if ((e.key === 'i' || e.key === 'I') && isFeatureEnabled('aiCopilot')) {
         e.preventDefault();
         setShowCopilot(true);
       }
@@ -1307,6 +1308,7 @@ const TerminalView = ({
     };
 
     const handleOpenCopilot = () => {
+      if (!isFeatureEnabled('aiCopilot')) return;
       setShowCopilot(true);
     };
 
@@ -1774,7 +1776,7 @@ const TerminalView = ({
             <span>Copy Output</span>
           </button>
 
-          {lastCommand.exitCode !== undefined && lastCommand.exitCode !== 0 && (
+          {copilotEnabled && lastCommand.exitCode !== undefined && lastCommand.exitCode !== 0 && (
             <button
               type="button"
               onClick={() => setShowCopilot(true)}
@@ -1837,20 +1839,24 @@ const TerminalView = ({
           if (!execute) commandBufRef.current = command;
         }}
       />
-      <AiCopilotModal
-        isOpen={showCopilot}
-        onClose={() => {
-          setShowCopilot(false);
-          xtermRef.current?.focus();
-        }}
-        onInsertCommand={(command, execute) => {
-          if (disabledRef.current) return;
-          const payload = execute ? command + "\r" : command;
-          const bytes = Array.from(new TextEncoder().encode(payload));
-          invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
-          if (!execute) commandBufRef.current = command;
-        }}
-      />
+      {copilotEnabled && showCopilot && (
+        <Suspense fallback={null}>
+          <AiCopilotModal
+            isOpen={showCopilot}
+            onClose={() => {
+              setShowCopilot(false);
+              xtermRef.current?.focus();
+            }}
+            onInsertCommand={(command, execute) => {
+              if (disabledRef.current) return;
+              const payload = execute ? command + "\r" : command;
+              const bytes = Array.from(new TextEncoder().encode(payload));
+              invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
+              if (!execute) commandBufRef.current = command;
+            }}
+          />
+        </Suspense>
+      )}
       {/* Disabled badge */}
       {disabled && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
