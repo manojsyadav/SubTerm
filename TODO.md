@@ -43,10 +43,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🌐 Network, Protocols & Multi-Platform
 
-- [ ] 🟡 **P2 · XL** — **Native Tailscale / Tailcat Mesh Support**
-  - Direct userspace Tailscale mesh network transport to seamlessly discover and connect to Tailscale nodes by MagicDNS name without manual local proxy configurations.
-  - _Note: Evaluated in PR #44; deferred due to binary footprint, CGo toolchain requirements, and the fact that OS-level Tailscale already routes transparently through standard SSH. Revisit if embedded Go build pipeline becomes viable._
-
 - [ ] 🟢 **P3 · XL** — **RDP Functionality (Remote Desktop Protocol)**
   - Native Remote Desktop Protocol (RDP) session tabs alongside SSH, SFTP, and Docker for managing Windows infrastructure.
 
