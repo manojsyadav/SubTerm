@@ -22,13 +22,8 @@ export const FEATURES = [
   },
   {
     key: "terminalFileLinks",
-    label: "Open files on click in terminal",
-    desc: "Make file paths and file names in terminal output clickable to open them in the editor. When off, no path scanning runs on terminal output.",
-  },
-  {
-    key: "smartPathResolve",
-    label: "Smart relative-path lookup",
-    desc: "Resolve relative paths against the shell's folder, your home folder, or a search on the server. When off, clicked relative paths are joined to the last known folder only.",
+    label: "Open file in editor on click",
+    desc: "Click a file path or file name in terminal output to open it in the editor, including relative paths (looked up in the shell's folder, your home folder, or by search on the server). When off, no path scanning or lookup runs.",
   },
 ] as const satisfies readonly FeatureDef[];
 
