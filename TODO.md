@@ -43,10 +43,6 @@ This document tracks active development tasks, pending architectural optimizatio
 ## ✏️ Editor & Terminal UX
 
 
-- [ ] 🟡 **P2 · M** — **Split-pane polish**
-  - Persist split layout (members, orientation, ratios) per session across restarts.
-  - Keyboard shortcuts for focus next/previous pane and for split right/down, registered in `src/shortcuts/defaults.ts`.
-
 ---
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)

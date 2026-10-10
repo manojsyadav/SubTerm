@@ -128,6 +128,16 @@ export function useGlobalShortcuts({
           return;
         }
 
+        // Focus next / previous split pane
+        for (const [id, dir] of [["focusNextPane", 1], ["focusPrevPane", -1]] as const) {
+          if (matchesKeyCombo(e, getActiveShortcut(id))) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent(`submarine-focus-pane-${activeView}`, { detail: { dir } }));
+            return;
+          }
+        }
+
         // New terminal tab
         if (matchesKeyCombo(e, getActiveShortcut("newTerminal"))) {
           e.preventDefault();

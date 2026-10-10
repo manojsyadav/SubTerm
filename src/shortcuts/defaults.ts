@@ -95,6 +95,23 @@ export const DEFAULT_SHORTCUTS: ShortcutAction[] = [
     scope: "session",
   },
 
+  {
+    id: "focusNextPane",
+    name: "Focus Next Pane",
+    category: "Terminal",
+    description: "Move keyboard focus to the next split pane (or next terminal tab when not split)",
+    defaultKey: "Alt+Shift+ArrowRight",
+    scope: "session",
+  },
+  {
+    id: "focusPrevPane",
+    name: "Focus Previous Pane",
+    category: "Terminal",
+    description: "Move keyboard focus to the previous split pane (or previous terminal tab when not split)",
+    defaultKey: "Alt+Shift+ArrowLeft",
+    scope: "session",
+  },
+
   // Session & Navigation
   {
     id: "closeSession",

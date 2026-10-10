@@ -714,6 +714,8 @@ const TerminalView = ({
         matchesKeyCombo(e, getActiveShortcut("newTerminal")) ||
         matchesKeyCombo(e, getActiveShortcut("splitHorizontal")) ||
         matchesKeyCombo(e, getActiveShortcut("splitVertical")) ||
+        matchesKeyCombo(e, getActiveShortcut("focusNextPane")) ||
+        matchesKeyCombo(e, getActiveShortcut("focusPrevPane")) ||
         matchesKeyCombo(e, getActiveShortcut("toggleSftp")) ||
         matchesKeyCombo(e, getActiveShortcut("toggleDocker")) ||
         matchesKeyCombo(e, getActiveShortcut("toggleProcesses")) ||

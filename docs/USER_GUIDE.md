@@ -39,9 +39,10 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Verify the host key fingerprint on the first connection prompt.
    - An interactive `xterm.js` terminal tab opens immediately.
 5. **Split Panes & Multiplexing**:
-   - **Split Right (Columns)**: Click the Columns icon in the tab strip or press `Ctrl+Shift+D` to spawn a side-by-side terminal pane.
-   - **Split Down (Rows)**: Click the Rows icon or press `Ctrl+Shift+E` to split the terminal vertically.
-   - **Resize Panes**: Drag the divider line between adjacent panes to adjust flex ratios.
+   - **Split Right (Columns)**: Click the Columns icon in the tab strip or press `Ctrl+\` to spawn a side-by-side terminal pane.
+   - **Split Down (Rows)**: Click the Rows icon or press `Ctrl+Shift+D` to split the terminal into stacked rows.
+   - **Move Between Panes**: Press `Alt+Shift+→` / `Alt+Shift+←` to focus the next / previous pane (or terminal tab when not split); it wraps around. All shortcuts can be rebound in **Settings > Keyboard Shortcuts**.
+   - **Resize Panes**: Drag the divider line between adjacent panes to adjust flex ratios. SubTerm remembers your orientation (columns/rows) and the pane sizes you last used for each pane count, so the next split starts the same way; double-click a divider to reset to equal sizes.
    - **Unsplit**: Click the `Unsplit` button in the active split pill or click the `X` button on any pane's top-right corner to detach it.
    - **Multi-Session Splits**: Select multiple sessions from the top bar or session menu to tile multiple servers side-by-side or stacked in a unified canvas.
 6. **Hardware Acceleration (WebGL)**:
