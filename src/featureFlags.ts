@@ -41,6 +41,18 @@ export const FEATURES = [
     desc: "Record the commands you type (per server) for Ctrl+R history search. When off, nothing you type is saved. The production-server destructive-command warning still works.",
   },
   {
+    key: "fleetWall",
+    group: "Panels",
+    label: "Session Wall",
+    desc: "Multi-terminal pinboard view. When off, the Wall tab, its command-palette entry and its terminal tiles are not created.",
+  },
+  {
+    key: "networkTools",
+    group: "Panels",
+    label: "Network Tools",
+    desc: "Ping / DNS / port-check tools modal on the server list. When off, the tool code is not loaded.",
+  },
+  {
     key: "panelTunnels",
     group: "Panels",
     label: "Ports panel",

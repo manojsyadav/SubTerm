@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import {
@@ -24,7 +24,8 @@ import AddNodePanel from "./components/AddNodePanel";
 import { renderServerIcon } from "./components/ServerIcon";
 import TerminalView from "./components/TerminalView";
 import SettingsPanel from "./components/SettingsPanel";
-import { NetworkToolsModal } from "./components/NetworkToolsModal";
+import { useFeatureFlag } from "./featureFlags";
+const NetworkToolsModal = lazy(() => import("./components/NetworkToolsModal").then((m) => ({ default: m.NetworkToolsModal })));
 import { SessionView } from "./components/SessionView";
 import MonitoringPanel from "./components/MonitoringPanel";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
@@ -82,6 +83,8 @@ function LockedVaultNotice({ onUnlock, onOpenLocal }: { onUnlock: () => void; on
 
 function DesktopApp() {
   const broadcast = useBroadcast();
+  const wallEnabled = useFeatureFlag('fleetWall');
+  const networkToolsEnabled = useFeatureFlag('networkTools');
   const [broadcastMenuOpen, setBroadcastMenuOpen] = useState(false);
 
   const confirm = useConfirm();
@@ -258,6 +261,9 @@ function DesktopApp() {
   }, []);
 
   vaultRef.current = vault;
+
+  // Leave the Wall if it gets switched off in Settings while open.
+  useEffect(() => { if (!wallEnabled && activeView === 'wall') setActiveView('nodes'); }, [wallEnabled, activeView]);
 
   const handleLogout = () => vaultLogout(sessions, confirm, () => {
     setSessions([]);
@@ -1048,6 +1054,7 @@ function DesktopApp() {
                       tab. Same pinboard, same state; just a different
                       entry point since the horizontal tab strip is
                       replaced by this dropdown on phone. */}
+                  {wallEnabled && (<>
                   <div className="border-t border-white/5 my-1" />
                   <button
                     onClick={() => {
@@ -1069,6 +1076,7 @@ function DesktopApp() {
                       </span>
                     )}
                   </button>
+                  </>)}
                 </div>
               </>
             )}
@@ -1251,7 +1259,7 @@ function DesktopApp() {
           legible without text. Visible whenever there's at least one
           open session — the Wall itself only becomes useful with pins
           but the button is the discoverability entry point. */}
-      {sessions.length >= 1 && (
+      {wallEnabled && sessions.length >= 1 && (
         <div className="relative no-drag shrink-0 mx-1">
           <button
             type="button"
@@ -1793,7 +1801,7 @@ function DesktopApp() {
                   setIsImportModalRequested(true);
                   setIsPanelOpen(true);
                 }}
-                onOpenNetworkTools={() => setIsNetworkToolsOpen(true)}
+                onOpenNetworkTools={networkToolsEnabled ? () => setIsNetworkToolsOpen(true) : undefined}
                 onQuickConnect={() => setIsQuickConnectOpen(true)}
                 onOpenLocalTerminal={openLocalTerminal}
                 onRemoveServer={removeServer}
@@ -2087,7 +2095,7 @@ function DesktopApp() {
                 TerminalView in attach-only mode so xterm scrollback +
                 PTY ownership stay with the primary xterm in the
                 session tab. */}
-            {activeView === "wall" && (
+            {wallEnabled && activeView === "wall" && (
               <div className="absolute inset-0 flex flex-col overflow-hidden bg-[#0a0a0d]">
                 {/* Toolbar: cols selector + Add + Clear. Rows are
                     derived automatically from tile count so users only
@@ -2508,11 +2516,15 @@ function DesktopApp() {
         onConnect={openQuickConnect}
       />
 
-      <NetworkToolsModal
-        isOpen={isNetworkToolsOpen}
-        onClose={() => setIsNetworkToolsOpen(false)}
-        servers={servers}
-      />
+      {networkToolsEnabled && isNetworkToolsOpen && (
+        <Suspense fallback={null}>
+          <NetworkToolsModal
+            isOpen={isNetworkToolsOpen}
+            onClose={() => setIsNetworkToolsOpen(false)}
+            servers={servers}
+          />
+        </Suspense>
+      )}
 
       <WorkspaceSwitcherModal
         isOpen={isWorkspaceSwitcherOpen}
