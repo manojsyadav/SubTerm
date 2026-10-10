@@ -31,7 +31,7 @@ interface QuickFilePickerModalProps {
 
 const isTextOrCodeFile = (name: string) => {
   return (
-    /\.(ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|zsh|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service)$/i.test(
+    /\.(ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|zsh|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service|timer|crt|cer|pem|csr|key|pub|cnf|j2|tf|tfvars|csv)$/i.test(
       name
     ) ||
     /^(Dockerfile|Makefile|docker-compose|README|LICENSE|\.env|\.gitignore|\.bashrc|\.zshrc)$/i.test(
