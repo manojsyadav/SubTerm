@@ -42,8 +42,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
-- [ ] 🟡 **P2 · S** — **Regression test: splitting a terminal keeps scrollback**
-  - Guards the fix in `fd99aeb` (terminals share one flat id-keyed list so split/unsplit never remounts a `TerminalView`). The repo has no component tests yet; add a minimal one (or a documented manual check in `docs/`) so the layout isn't re-split into separate trees later.
 
 - [ ] 🟡 **P2 · M** — **Split-pane polish**
   - Persist split layout (members, orientation, ratios) per session across restarts.
