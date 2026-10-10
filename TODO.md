@@ -35,10 +35,6 @@ This document tracks active development tasks, pending architectural optimizatio
 - [ ] 🟢 **P3 · S/M** — **Cloud Sync: keyboard-shortcut sync**
   - Per-device "what to sync" selection and the read-only conflict diff are shipped. Still open: keyboard shortcuts (`src/shortcuts/useShortcutsStore.ts`) live entirely in `localStorage`, outside the vault/sync system; syncing them needs a new table + triggers + `SYNCED_TABLES`/`ENTITIES` entry + a vault schema migration and a one-time import from `localStorage`. Decide first whether per-OS key differences (Cmd vs Ctrl) make cross-device sync desirable at all.
 
-- [ ] 🟢 **P3 · XL** — **Dual-Pane Remote-to-Remote SFTP Sync**
-  - Side-by-side split SFTP view (Commander / WinSCP style) allowing direct transfers between two distinct remote SSH servers.
-  - Stream data directly from Server A to Server B in memory without staging unencrypted files onto the local host disk.
-
 ---
 
 ## 🌐 Network, Protocols & Multi-Platform

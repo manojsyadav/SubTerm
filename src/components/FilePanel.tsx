@@ -87,7 +87,8 @@ const listFailures = (failures: string[]) =>
     : failures.join(", ");
 
 export interface ActiveDrag {
-  paneId: "local" | "remote";
+  /** "local" / "remote" in the normal view; custom ids (see FilePanelProps.paneId) in the dual-remote view. */
+  paneId: string;
   entry: FileEntry;
   items: FileEntry[];
   x: number;
@@ -133,6 +134,20 @@ export interface FilePanelProps {
    * desktop file browsing with no SFTP session).
    */
   onCompareWithOpposite?: (entry: FileEntry) => void;
+  /**
+   * Identity used to tell panes apart for drag-and-drop. Defaults to the
+   * provider id; the dual-remote view mounts two "remote" panes and gives each
+   * its own id.
+   */
+  paneId?: string;
+  /**
+   * When set, this pane copies to the OTHER pane's folder through `send`
+   * (server to server) instead of downloading to / uploading from the local disk.
+   */
+  peerTransfer?: {
+    label: string;
+    send: (items: FileEntry[], destDir: string) => Promise<void>;
+  };
 }
 
 export interface FilePanelHandle {
@@ -155,7 +170,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   terminalId,
   onRevealTerminal,
   onCompareWithOpposite,
+  paneId,
+  peerTransfer,
 }, ref) => {
+  const paneKey = paneId ?? provider.id;
   const [currentPath, setCurrentPath] = useState("");
   // Last five distinct directories visited in this panel, MRU first. Lives
   // in component state (cleared per session) — persistence didn't seem
@@ -648,7 +666,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   const dropTargetAt = (x: number, y: number, items: FileEntry[]): string | null => {
     const hit = document.elementFromPoint(x, y) as HTMLElement | null;
-    if (!hit || hit.closest("[data-fs-pane]")?.getAttribute("data-fs-pane") !== provider.id) return null;
+    if (!hit || hit.closest("[data-fs-pane]")?.getAttribute("data-fs-pane") !== paneKey) return null;
     const target = hit.closest("[data-fs-drop-path]")?.getAttribute("data-fs-drop-path");
     const rules = moveRules();
     if (!target || !items.some((it) => canMoveInto(it, target, rules))) return null;
@@ -757,7 +775,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         dragStarted = true;
       }
       onDragMove({
-        paneId: provider.id as "local" | "remote",
+        paneId: paneKey,
         entry,
         items,
         x: ev.clientX,
@@ -1059,7 +1077,15 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     }
   };
 
-  sendItemsRef.current = provider.id === "remote" ? downloadItems : uploadItems;
+  // Server-to-server copy: send to whatever folder the other pane is showing.
+  const copyToPeer = async (items: FileEntry[], destDir?: string) => {
+    if (!peerTransfer || items.length === 0) return;
+    const dest = destDir || getOppositeDir?.();
+    if (!dest) { notify("Open a folder in the other pane first.", "error"); return; }
+    await peerTransfer.send(items, dest);
+  };
+
+  sendItemsRef.current = peerTransfer ? copyToPeer : provider.id === "remote" ? downloadItems : uploadItems;
 
   const openingPathsRef = useRef<Set<string>>(new Set());
 
@@ -1248,7 +1274,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   return (
     <div
-      data-fs-pane={provider.id}
+      data-fs-pane={paneKey}
       data-fs-current-path={currentPath}
       className="flex-1 flex flex-col h-full bg-[#09090b] p-1.5 gap-1.5 overflow-hidden relative select-none"
     >
@@ -1678,7 +1704,17 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             {selected.size} selected
           </span>
           <div className="flex-1" />
-          {isRemote && (
+          {peerTransfer && (
+            <button
+              onClick={() => copyToPeer(sortedEntries.filter(e => selected.has(e.path)))}
+              title={getOppositeDir?.() ? `Copy to ${peerTransfer.label}: ${getOppositeDir!()}` : "Open a folder in the other pane first"}
+              disabled={!getOppositeDir?.()}
+              className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Copy size={10} /> Copy to {peerTransfer.label}
+            </button>
+          )}
+          {isRemote && !peerTransfer && (
             <button
               onClick={() => downloadItems(sortedEntries.filter(e => selected.has(e.path)))}
               title={getOppositeDir?.()
@@ -1950,11 +1986,19 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             </button>
           ) : isRemote ? (
             <>
-              <button onClick={() => { setContextMenu(null); downloadItems(acting); }}
-                className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
-                <Download size={11} className="text-emerald-400" />
-                <span>Download{multi ? ` (${selectedFileCount})` : "…"}</span>
-              </button>
+              {peerTransfer ? (
+                <button onClick={() => { setContextMenu(null); void copyToPeer(acting); }}
+                  className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+                  <Copy size={11} className="text-emerald-400" />
+                  <span>Copy to {peerTransfer.label}</span>
+                </button>
+              ) : (
+                <button onClick={() => { setContextMenu(null); downloadItems(acting); }}
+                  className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+                  <Download size={11} className="text-emerald-400" />
+                  <span>Download{multi ? ` (${selectedFileCount})` : "…"}</span>
+                </button>
+              )}
               {/* Live-edit needs a local temp file + a native OS editor + a
                   filesystem watcher. Android has none of those in a form we
                   can bridge, so the backend command returns an error there

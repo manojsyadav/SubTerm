@@ -10,7 +10,7 @@
 //! logic is unit-tested against in-memory readers rather than a live server.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, AsyncWrite, AsyncWriteExt, SeekFrom};
 
 /// Below this size a single stream is used: the extra handles aren't worth it.
 pub(crate) const PARALLEL_MIN_BYTES: u64 = 16 * 1024 * 1024;
@@ -50,7 +50,7 @@ pub(crate) enum CopyError {
 /// the same offsets. Adds each written chunk to `transferred`. Stops early with
 /// `Cancelled` when `cancel` is set; errors if the reader ends before `end`.
 pub(crate) async fn copy_range<R>(
-    mut reader: R,
+    reader: R,
     start: u64,
     end: u64,
     local_path: &str,
@@ -58,15 +58,34 @@ pub(crate) async fn copy_range<R>(
     cancel: &AtomicBool,
 ) -> Result<(), CopyError>
 where
-    R: tokio::io::AsyncRead + tokio::io::AsyncSeek + Unpin,
+    R: AsyncRead + AsyncSeek + Unpin,
 {
-    let mut out = tokio::fs::OpenOptions::new()
+    let out = tokio::fs::OpenOptions::new()
         .write(true)
         .open(local_path)
         .await
         .map_err(|e| CopyError::Failed(format!("open local: {e}")))?;
-    out.seek(SeekFrom::Start(start)).await.map_err(|e| CopyError::Failed(format!("local seek: {e}")))?;
-    reader.seek(SeekFrom::Start(start)).await.map_err(|e| CopyError::Failed(format!("remote seek: {e}")))?;
+    copy_stream(reader, out, start, end, transferred, cancel).await
+}
+
+/// Copy bytes `[start, end)` from `reader` to the SAME offsets in `writer`
+/// (both are seeked to `start` first). The writer is flushed and shut down at
+/// the end, which for an SFTP file waits for every pipelined write to be
+/// acknowledged - so a failed write surfaces here rather than being lost.
+pub(crate) async fn copy_stream<R, W>(
+    mut reader: R,
+    mut out: W,
+    start: u64,
+    end: u64,
+    transferred: &AtomicU64,
+    cancel: &AtomicBool,
+) -> Result<(), CopyError>
+where
+    R: AsyncRead + AsyncSeek + Unpin,
+    W: AsyncWrite + AsyncSeek + Unpin,
+{
+    out.seek(SeekFrom::Start(start)).await.map_err(|e| CopyError::Failed(format!("destination seek: {e}")))?;
+    reader.seek(SeekFrom::Start(start)).await.map_err(|e| CopyError::Failed(format!("source seek: {e}")))?;
 
     let mut buf = vec![0u8; CHUNK];
     let mut pos = start;
@@ -84,7 +103,44 @@ where
         transferred.fetch_add(n as u64, Ordering::Relaxed);
     }
     out.flush().await.map_err(|e| CopyError::Failed(format!("flush: {e}")))?;
+    out.shutdown().await.map_err(|e| CopyError::Failed(format!("close: {e}")))?;
     Ok(())
+}
+
+/// How a set of segment tasks ended.
+pub(crate) enum DriveEnd {
+    Done,
+    Cancelled,
+    Failed(String),
+}
+
+/// Wait for every spawned segment task, reporting progress about every 100 ms.
+/// The first failure or cancellation aborts the rest.
+pub(crate) async fn drive_tasks(
+    mut set: tokio::task::JoinSet<Result<(), CopyError>>,
+    transferred: &AtomicU64,
+    report: &(dyn Fn(u64) + Sync),
+) -> DriveEnd {
+    let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
+    let mut failure: Option<String> = None;
+    let mut cancelled = false;
+    while !set.is_empty() {
+        tokio::select! {
+            joined = set.join_next() => match joined {
+                Some(Ok(Ok(()))) => {}
+                Some(Ok(Err(CopyError::Cancelled))) => { cancelled = true; set.abort_all(); }
+                Some(Ok(Err(CopyError::Failed(m)))) => { failure.get_or_insert(m); set.abort_all(); }
+                Some(Err(e)) if !e.is_cancelled() => { failure.get_or_insert(format!("transfer task failed: {e}")); set.abort_all(); }
+                _ => {}
+            },
+            _ = tick.tick() => report(transferred.load(Ordering::Relaxed)),
+        }
+    }
+    match failure {
+        Some(m) => DriveEnd::Failed(m),
+        None if cancelled => DriveEnd::Cancelled,
+        None => DriveEnd::Done,
+    }
 }
 
 pub(crate) enum ParallelOutcome {
@@ -137,30 +193,18 @@ pub(crate) async fn download_parallel(
         set.spawn(async move { copy_range(reader, start, end, &path, &t, &c).await });
     }
 
-    let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
-    let mut failure: Option<String> = None;
-    let mut cancelled = false;
-    while !set.is_empty() {
-        tokio::select! {
-            joined = set.join_next() => match joined {
-                Some(Ok(Ok(()))) => {}
-                Some(Ok(Err(CopyError::Cancelled))) => { cancelled = true; set.abort_all(); }
-                Some(Ok(Err(CopyError::Failed(m)))) => { failure.get_or_insert(m); set.abort_all(); }
-                Some(Err(e)) if !e.is_cancelled() => { failure.get_or_insert(format!("transfer task failed: {e}")); set.abort_all(); }
-                _ => {}
-            },
-            _ = tick.tick() => report(transferred.load(Ordering::Relaxed)),
-        }
-    }
-
+    let end = drive_tasks(set, &transferred, report).await;
     let done = transferred.load(Ordering::Relaxed);
-    if let Some(m) = failure {
-        let _ = tokio::fs::remove_file(local_path).await;
-        return ParallelOutcome::Failed(m);
-    }
-    if cancelled {
-        let _ = tokio::fs::remove_file(local_path).await;
-        return ParallelOutcome::Cancelled(done);
+    match end {
+        DriveEnd::Failed(m) => {
+            let _ = tokio::fs::remove_file(local_path).await;
+            return ParallelOutcome::Failed(m);
+        }
+        DriveEnd::Cancelled => {
+            let _ = tokio::fs::remove_file(local_path).await;
+            return ParallelOutcome::Cancelled(done);
+        }
+        DriveEnd::Done => {}
     }
     if done != total {
         let _ = tokio::fs::remove_file(local_path).await;
@@ -228,6 +272,40 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), src);
         assert_eq!(transferred.load(Ordering::Relaxed), src.len() as u64);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn copy_stream_lands_each_segment_at_its_own_offset_in_the_destination() {
+        let src = data(2 * CHUNK + 999);
+        let path = temp_file("stream", src.len() as u64);
+        let transferred = AtomicU64::new(0);
+        let cancel = AtomicBool::new(false);
+        let mid = (CHUNK + 17) as u64;
+        for (s, e) in [(mid, src.len() as u64), (0, mid)] {
+            let out = tokio::fs::OpenOptions::new().write(true).open(&path).await.unwrap();
+            copy_stream(Cursor::new(src.clone()), out, s, e, &transferred, &cancel).await.ok().unwrap();
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), src);
+        assert_eq!(transferred.load(Ordering::Relaxed), src.len() as u64);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn drive_tasks_reports_first_failure_and_cancels_the_rest() {
+        let t = AtomicU64::new(0);
+        let mut set = tokio::task::JoinSet::new();
+        set.spawn(async { Err(CopyError::Failed("boom".into())) });
+        set.spawn(async { tokio::time::sleep(std::time::Duration::from_secs(30)).await; Ok(()) });
+        assert!(matches!(drive_tasks(set, &t, &|_| {}).await, DriveEnd::Failed(m) if m == "boom"));
+
+        let mut ok = tokio::task::JoinSet::new();
+        ok.spawn(async { Ok(()) });
+        ok.spawn(async { Ok(()) });
+        assert!(matches!(drive_tasks(ok, &t, &|_| {}).await, DriveEnd::Done));
+
+        let mut c = tokio::task::JoinSet::new();
+        c.spawn(async { Err(CopyError::Cancelled) });
+        assert!(matches!(drive_tasks(c, &t, &|_| {}).await, DriveEnd::Cancelled));
     }
 
     #[tokio::test]

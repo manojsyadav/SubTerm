@@ -71,6 +71,12 @@ export const FEATURES = [
     desc: "The Mirror tab in the file browser (live folder sync). When off, the tab is hidden and the mirror code is not loaded.",
   },
   {
+    key: "sftpRemoteToRemote",
+    group: "Panels",
+    label: "Server-to-server SFTP",
+    desc: "A \"Server to server\" tab in the SFTP panel that shows two servers side by side and copies files or folders directly between them without saving them on this computer. When off, the tab and its code are not loaded.",
+  },
+  {
     key: "sftpCompare",
     group: "Panels",
     label: "SFTP file compare (diff)",
