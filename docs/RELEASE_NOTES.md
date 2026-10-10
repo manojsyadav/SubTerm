@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(editor)` — Hide comments**:
+  A **Hide comments** button in the Quick Editor collapses runs of comment-only lines into a single `⋯ N comment lines hidden — click to show` marker (click it to expand just that block). View only: the file is never modified, so saving always writes the full contents, and the status bar shows how many lines are hidden. Supports shell/YAML/TOML/Python/nginx/INI (`#`, `;`), C-style languages (`//`, `/* */`), SQL, HTML/XML and CSS; trailing comments after code and a shebang line stay visible. Needs syntax highlighting; has its own toggle in Settings → Feature Toggles.
+
 - **`feat(settings)` — Feature Toggles**:
   **Settings → Feature Toggles** switches optional features on or off, grouped Editor / Terminal / Panels / AI. A disabled feature is not loaded or run: panels, the AI Copilot, Network Tools, SFTP Mirror / compare, the Session Wall and the code editor's syntax highlighting are lazy-loaded chunks that are only fetched when enabled and used, and per-output terminal features (clickable file paths, command blocks, command-history capture) skip their work entirely. Also: syntax highlighting in the Quick Editor (CodeMirror 6), and clicking a relative path or bare file name (including `.crt`/`.pem`) in terminal output now resolves it on the server. All toggles default to on and apply immediately.
 

@@ -8,6 +8,7 @@ import { HighlightStyle, syntaxHighlighting, bracketMatching, indentOnInput } fr
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { tags as t } from "@lezer/highlight";
 import { detectLanguage, loadLanguage } from "./language";
+import { hideCommentsExtension, setHideComments } from "./hideComments";
 
 const theme = EditorView.theme(
   {
@@ -46,10 +47,12 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   fileName: string;
   filePath?: string;
+  /** View-only: collapse comment lines into a marker. The document is never changed. */
+  hideComments?: boolean;
 }
 
 /** Thin CodeMirror 6 wrapper. The doc is owned by CM; `value` only seeds it (and re-syncs on external changes such as a reload). */
-export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileName, filePath }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileName, filePath, hideComments = false }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langRef = useRef(new Compartment());
@@ -65,7 +68,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileNam
         extensions: [
           lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(),
           history(), indentOnInput(), bracketMatching(), highlightSelectionMatches(),
-          syntaxHighlighting(highlight), theme, langRef.current.of([]),
+          syntaxHighlighting(highlight), theme, langRef.current.of([]), hideCommentsExtension,
           EditorState.tabSize.of(4),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           EditorView.updateListener.of((u) => { if (u.docChanged) onChangeRef.current(u.state.doc.toString()); }),
@@ -85,6 +88,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileNam
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
     }
   }, [value]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: setHideComments.of({ hide: hideComments, lang: detectLanguage(fileName, filePath) }) });
+  }, [hideComments, fileName, filePath]);
 
   useEffect(() => {
     let cancelled = false;
