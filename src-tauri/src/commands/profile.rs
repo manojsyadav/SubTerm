@@ -639,6 +639,38 @@ pub(crate) async fn save_audit_log(
     }
 }
 
+/// Native "Save as" dialog + write for text the UI generated (terminal
+/// recordings, buffer exports). The webview's blob-download trick doesn't
+/// reliably save anything inside Tauri, so saving goes through the OS dialog.
+/// `extension` is without the dot (e.g. "cast"). Returns the chosen path, or
+/// `None` when the user cancels.
+#[tauri::command]
+pub(crate) async fn save_text_file(
+    content: String,
+    filename: String,
+    extension: String,
+) -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        let _ = (content, filename, extension);
+        return Err("Saving files from here is not available on Android.".into());
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let ext = extension.trim_start_matches('.').to_string();
+        let mut dialog = rfd::FileDialog::new().set_title("Save").set_file_name(&filename);
+        if !ext.is_empty() {
+            dialog = dialog.add_filter(format!("*.{ext}"), &[ext.as_str()]);
+        }
+        let dst = match dialog.save_file() {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+        std::fs::write(&dst, content).map_err(|e| format!("Failed to write {:?}: {}", dst, e))?;
+        Ok(Some(dst.to_string_lossy().to_string()))
+    }
+}
+
 /// Open a file picker and verify the chosen file looks like a Submarine
 /// vault (right header bytes). We do NOT decrypt — that requires the
 /// profile password, which the user enters after import via the regular
