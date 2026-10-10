@@ -42,10 +42,8 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- [ ] 🟡 **P2 · L** — **Terminal Session Recording & Export (.cast / Asciinema)**
-  - Native timed session recorder capturing stdout, stdin, and resize events according to the Asciinema v2 (`.cast`) standard.
-  - Export to `.cast` files, raw terminal log dumps, or animated SVG/GIF for runbooks, documentation, and compliance audit trails.
-  - In-app playback preview modal with play/pause, scrub slider, and playback speed controls.
+- [ ] 🟢 **P3 · M** — **Session Recording: remaining export formats**
+  - Recording to `.cast`/text and the in-app player are done. Still open: animated SVG/GIF export for runbooks, and an optional "always record this server" setting for audit trails.
 
 - [ ] 🟡 **P2 · M** — **Cloud Sync Enhancements & Conflict Resolution** (first slice shipped)
   - **Done**: read-only visual diffing for concurrent edits. `profile_sync_stats`'s out-of-sync list now carries each entity's uuid and push/pull direction; a new `sync_conflict_diff(uuid)` command decrypts and pretty-prints the local vs. cloud copy (secrets redacted) for a one-click diff view in **Settings → Cloud Sync**, reusing the existing `computeDiff` line-diff algorithm via a new `SyncConflictDiffModal.tsx`. This is visibility only — the underlying merge is still deterministic Last-Write-Wins by HLC stamp; nothing about the merge rule changed.

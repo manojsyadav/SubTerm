@@ -25,6 +25,7 @@ import { renderServerIcon } from "./components/ServerIcon";
 import TerminalView from "./components/TerminalView";
 import SettingsPanel from "./components/SettingsPanel";
 import { useFeatureFlag } from "./featureFlags";
+const RecordingPlayerModal = lazy(() => import("./components/RecordingPlayerModal").then((m) => ({ default: m.RecordingPlayerModal })));
 const NetworkToolsModal = lazy(() => import("./components/NetworkToolsModal").then((m) => ({ default: m.NetworkToolsModal })));
 import { SessionView } from "./components/SessionView";
 import MonitoringPanel from "./components/MonitoringPanel";
@@ -85,6 +86,7 @@ function DesktopApp() {
   const broadcast = useBroadcast();
   const wallEnabled = useFeatureFlag('fleetWall');
   const networkToolsEnabled = useFeatureFlag('networkTools');
+  const recordingEnabled = useFeatureFlag('sessionRecording');
   const autoReconnectEnabled = useFeatureFlag('autoReconnect');
   // Tell the backend so it stops emitting resume / network-change events while the feature is off.
   useEffect(() => { invoke('set_auto_reconnect_events', { enabled: autoReconnectEnabled }).catch(() => {}); }, [autoReconnectEnabled]);
@@ -403,6 +405,7 @@ function DesktopApp() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isImportModalRequested, setIsImportModalRequested] = useState(false);
   const [isNetworkToolsOpen, setIsNetworkToolsOpen] = useState(false);
+  const [isRecordingPlayerOpen, setIsRecordingPlayerOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
@@ -2519,6 +2522,12 @@ function DesktopApp() {
         onConnect={openQuickConnect}
       />
 
+      {recordingEnabled && isRecordingPlayerOpen && (
+        <Suspense fallback={null}>
+          <RecordingPlayerModal onClose={() => setIsRecordingPlayerOpen(false)} />
+        </Suspense>
+      )}
+
       {networkToolsEnabled && isNetworkToolsOpen && (
         <Suspense fallback={null}>
           <NetworkToolsModal
@@ -2581,6 +2590,10 @@ function DesktopApp() {
           setIsCommandPaletteOpen(false);
           openLocalTerminal();
         }}
+        onOpenRecordingPlayer={recordingEnabled ? () => {
+          setIsCommandPaletteOpen(false);
+          setIsRecordingPlayerOpen(true);
+        } : undefined}
         onOpenAddNode={() => {
           setIsCommandPaletteOpen(false);
           setNewNode(defaultNode);
