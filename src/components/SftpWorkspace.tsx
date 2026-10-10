@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { File as FileIcon, Folder, FolderUp, Rows, LayoutPanelTop } from "lucide-react";
 import FilePanel, { ActiveDrag, FilePanelHandle } from "./FilePanel";
-import { FileDiffModal, DiffFileRef } from "./FileDiffModal";
+import type { DiffFileRef } from "./FileDiffModal";
+import { useFeatureFlag } from "../featureFlags";
+
+// Optional features: their code is only fetched when the matching toggle is on and the feature is used.
+const FileDiffModal = lazy(() => import("./FileDiffModal").then((m) => ({ default: m.FileDiffModal })));
+const MirrorsPanel = lazy(() => import("./MirrorsPanel"));
 import { FileEntry } from "../fs/types";
-import MirrorsPanel from "./MirrorsPanel";
 import TransfersBar, { Transfer } from "./TransfersBar";
 import { onRovingKeyDown } from "../ui/rovingKeys";
 import { createLocalProvider } from "../fs/localProvider";
@@ -93,6 +97,9 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
   // Active sub-tab. Files is the default (the common workflow); Mirror is
   // for the per-server one-way replication setup.
   const [view, setView] = useState<SftpView>("files");
+  const mirrorsEnabled = useFeatureFlag("sftpMirrors");
+  const compareEnabled = useFeatureFlag("sftpCompare");
+  useEffect(() => { if (!mirrorsEnabled && view === "mirror") setView("files"); }, [mirrorsEnabled, view]);
   // Files layout: "tabs" (one side full height) is the default because the
   // side panel is narrow on most desktop setups and "split" squeezed each
   // FilePanel into 5-6 rows. "split" stays available for users who want
@@ -353,36 +360,38 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           mounted-but-invisible pattern the parent SessionView used before)
           so the live worker's counters and rolling log survive a switch back
           to Files. */}
-      <div role="tablist" aria-label="SFTP views" onKeyDown={(e) => onRovingKeyDown(e)} className="shrink-0 grid grid-cols-2 border-b border-white/5 bg-black/20">
-        <button
-          role="tab"
-          aria-selected={view === "files"}
-          tabIndex={view === "files" ? 0 : -1}
-          onClick={() => setView("files")}
-          className={`h-9 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
-            view === "files"
-              ? "text-primary bg-primary/5 border-b border-primary"
-              : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-b border-transparent"
-          }`}
-        >
-          <Folder size={12} /> Files
-        </button>
-        <button
-          role="tab"
-          aria-selected={view === "mirror"}
-          tabIndex={view === "mirror" ? 0 : -1}
-          onClick={() => setView("mirror")}
-          disabled={!serverId}
-          title={!serverId ? "Mirror needs a saved server" : undefined}
-          className={`h-9 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-            view === "mirror"
-              ? "text-primary bg-primary/5 border-b border-primary"
-              : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-b border-transparent"
-          }`}
-        >
-          <FolderUp size={12} /> Mirror
-        </button>
-      </div>
+      {mirrorsEnabled && (
+        <div role="tablist" aria-label="SFTP views" onKeyDown={(e) => onRovingKeyDown(e)} className="shrink-0 grid grid-cols-2 border-b border-white/5 bg-black/20">
+          <button
+            role="tab"
+            aria-selected={view === "files"}
+            tabIndex={view === "files" ? 0 : -1}
+            onClick={() => setView("files")}
+            className={`h-9 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
+              view === "files"
+                ? "text-primary bg-primary/5 border-b border-primary"
+                : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-b border-transparent"
+            }`}
+          >
+            <Folder size={12} /> Files
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "mirror"}
+            tabIndex={view === "mirror" ? 0 : -1}
+            onClick={() => setView("mirror")}
+            disabled={!serverId}
+            title={!serverId ? "Mirror needs a saved server" : undefined}
+            className={`h-9 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              view === "mirror"
+                ? "text-primary bg-primary/5 border-b border-primary"
+                : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-b border-transparent"
+            }`}
+          >
+            <FolderUp size={12} /> Mirror
+          </button>
+        </div>
+      )}
 
       {/* Files view — dual-pane browser. Stays mounted when Mirror is on top
           so directory state and selection don't reset across tab toggles.
@@ -465,7 +474,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             initialPath={savedDirsRef.current.local}
             onPathChange={(p) => saveDir("local", p)}
             getOppositeDir={() => remoteRef.current?.currentDir()}
-            onCompareWithOpposite={compareFromLocal}
+            onCompareWithOpposite={compareEnabled ? compareFromLocal : undefined}
           />
         </div>
         <div className={
@@ -486,21 +495,23 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             getOppositeDir={() => localRef.current?.currentDir()}
             terminalId={terminalId}
             onRevealTerminal={onRevealTerminal}
-            onCompareWithOpposite={compareFromRemote}
+            onCompareWithOpposite={compareEnabled ? compareFromRemote : undefined}
           />
         </div>
       </div>
 
       {/* Mirror view — kept MOUNTED (CSS hidden) so the live worker's logs
           and progress counters survive when the user pops back to Files. */}
-      {!!serverId && (
+      {mirrorsEnabled && !!serverId && (
         <div className={`${view === "mirror" ? "flex-1 flex flex-col min-h-0" : "hidden"}`}>
-          <MirrorsPanel
-            sessionId={sessionId}
-            serverId={serverId}
-            configuredMirrors={mirrorsConfig}
-            disabled={disabled}
-          />
+          <Suspense fallback={null}>
+            <MirrorsPanel
+              sessionId={sessionId}
+              serverId={serverId}
+              configuredMirrors={mirrorsConfig}
+              disabled={disabled}
+            />
+          </Suspense>
         </div>
       )}
 
@@ -522,13 +533,17 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           position updates don't re-render this workspace or the FilePanels. */}
       <DragGhost ref={ghostRef} />
 
-      <FileDiffModal
-        isOpen={diffPair !== null}
-        onClose={() => setDiffPair(null)}
-        left={diffPair?.left ?? null}
-        right={diffPair?.right ?? null}
-        onOverwritten={() => { localRef.current?.refresh(); remoteRef.current?.refresh(); }}
-      />
+      {compareEnabled && diffPair !== null && (
+        <Suspense fallback={null}>
+          <FileDiffModal
+            isOpen={diffPair !== null}
+            onClose={() => setDiffPair(null)}
+            left={diffPair?.left ?? null}
+            right={diffPair?.right ?? null}
+            onOverwritten={() => { localRef.current?.refresh(); remoteRef.current?.refresh(); }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

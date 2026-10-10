@@ -53,6 +53,24 @@ export const FEATURES = [
     desc: "Ping / DNS / port-check tools modal on the server list. When off, the tool code is not loaded.",
   },
   {
+    key: "sftpMirrors",
+    group: "Panels",
+    label: "SFTP Mirror sync",
+    desc: "The Mirror tab in the file browser (live folder sync). When off, the tab is hidden and the mirror code is not loaded.",
+  },
+  {
+    key: "sftpCompare",
+    group: "Panels",
+    label: "SFTP file compare (diff)",
+    desc: "\"Compare with Other Pane\" in the file browser. When off, the diff viewer is not loaded.",
+  },
+  {
+    key: "sftpBookmarks",
+    group: "Panels",
+    label: "SFTP directory bookmarks",
+    desc: "Bookmark button and quick-jump list in the file browser.",
+  },
+  {
     key: "panelTunnels",
     group: "Panels",
     label: "Ports panel",
