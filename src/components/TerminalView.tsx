@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from "../featureFlags";
 import { useEffect, useRef, useState } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -757,19 +758,54 @@ const TerminalView = ({
             });
           }
 
-          // 2. Absolute or home-relative file paths (/path/to/file or ~/file)
-          const pathRegex = /(?:^|[\s"'`])((?:\/[\w.-]+)+\/?|~\/[\w.-]+(?:\/[\w.-]+)*)/g;
-          while ((match = pathRegex.exec(lineText)) !== null) {
-            const fullPath = match[1];
-            if (fullPath.length >= 3 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
-              const startX = match.index + (match[0].length - fullPath.length) + 1;
-              const endX = startX + fullPath.length - 1;
+          // File-path links are optional (Settings -> Feature Toggles). When off,
+          // none of the path regexes below run on terminal output.
+          if (isFeatureEnabled("terminalFileLinks")) {
+            // 2. Absolute or home-relative file paths (/path/to/file or ~/file)
+            const pathRegex = /(?:^|[\s"'`])((?:\/[\w.-]+)+\/?|~\/[\w.-]+(?:\/[\w.-]+)*)/g;
+            while ((match = pathRegex.exec(lineText)) !== null) {
+              const fullPath = match[1];
+              if (fullPath.length >= 3 && !fullPath.startsWith('//') && !fullPath.includes('://')) {
+                const startX = match.index + (match[0].length - fullPath.length) + 1;
+                const endX = startX + fullPath.length - 1;
+                links.push({
+                  range: {
+                    start: { x: startX, y: bufferLineNumber },
+                    end: { x: endX, y: bufferLineNumber },
+                  },
+                  text: fullPath,
+                  activate: (_ev, pathText) => {
+                    window.dispatchEvent(
+                      new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                        detail: { path: pathText, cwd: currentCwdRef.current },
+                      })
+                    );
+                  },
+                });
+              }
+            }
+
+            // 2b. Relative paths (./x, ../x, dir/file.ext, dir/sub/) with an optional
+            // :line[:col] suffix. Resolved against the shell's cwd (or searched
+            // for) by the editor-open handler, so no cwd is needed here.
+            const relRegex = /(?:^|[\s"'`(])((?:\.{1,2}\/|[\w@.-]+\/)(?:[\w@.-]+\/)*[\w@.-]*(?::\d+(?::\d+)?)?)/g;
+            while ((match = relRegex.exec(lineText)) !== null) {
+              const relPath = match[1];
+              if (relPath.length < 3 || relPath.includes('://')) continue;
+              const startX = match.index + (match[0].length - relPath.length) + 1;
+              const endX = startX + relPath.length - 1;
+              const overlapsAbs = links.some(
+                (l) =>
+                  l.range.start.y === bufferLineNumber &&
+                  !(endX < l.range.start.x || startX > l.range.end.x)
+              );
+              if (overlapsAbs) continue;
               links.push({
                 range: {
                   start: { x: startX, y: bufferLineNumber },
                   end: { x: endX, y: bufferLineNumber },
                 },
-                text: fullPath,
+                text: relPath,
                 activate: (_ev, pathText) => {
                   window.dispatchEvent(
                     new CustomEvent(`submarine-open-editor-${sessionId}`, {
@@ -779,68 +815,38 @@ const TerminalView = ({
                 },
               });
             }
-          }
 
-          // 2b. Relative paths (./x, ../x, dir/file.ext, dir/sub/) with an optional
-          // :line[:col] suffix. Resolved against the shell's cwd (or searched
-          // for) by the editor-open handler, so no cwd is needed here.
-          const relRegex = /(?:^|[\s"'`(])((?:\.{1,2}\/|[\w@.-]+\/)(?:[\w@.-]+\/)*[\w@.-]*(?::\d+(?::\d+)?)?)/g;
-          while ((match = relRegex.exec(lineText)) !== null) {
-            const relPath = match[1];
-            if (relPath.length < 3 || relPath.includes('://')) continue;
-            const startX = match.index + (match[0].length - relPath.length) + 1;
-            const endX = startX + relPath.length - 1;
-            const overlapsAbs = links.some(
-              (l) =>
-                l.range.start.y === bufferLineNumber &&
-                !(endX < l.range.start.x || startX > l.range.end.x)
-            );
-            if (overlapsAbs) continue;
-            links.push({
-              range: {
-                start: { x: startX, y: bufferLineNumber },
-                end: { x: endX, y: bufferLineNumber },
-              },
-              text: relPath,
-              activate: (_ev, pathText) => {
-                window.dispatchEvent(
-                  new CustomEvent(`submarine-open-editor-${sessionId}`, {
-                    detail: { path: pathText, cwd: currentCwdRef.current },
-                  })
-                );
-              },
-            });
-          }
+            // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
+            const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service|timer|crt|cer|pem|csr|key|pub|cnf|j2|tf|tfvars|csv)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
+            while ((match = fileRegex.exec(lineText)) !== null) {
+              const fileName = match[1];
+              const startX = match.index + (match[0].length - fileName.length) + 1;
+              const endX = startX + fileName.length - 1;
 
-          // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
-          const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service|timer|crt|cer|pem|csr|key|pub|cnf|j2|tf|tfvars|csv)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
-          while ((match = fileRegex.exec(lineText)) !== null) {
-            const fileName = match[1];
-            const startX = match.index + (match[0].length - fileName.length) + 1;
-            const endX = startX + fileName.length - 1;
+              const overlaps = links.some(
+                (l) =>
+                  l.range.start.y === bufferLineNumber &&
+                  !(endX < l.range.start.x || startX > l.range.end.x)
+              );
 
-            const overlaps = links.some(
-              (l) =>
-                l.range.start.y === bufferLineNumber &&
-                !(endX < l.range.start.x || startX > l.range.end.x)
-            );
-
-            if (!overlaps) {
-              links.push({
-                range: {
-                  start: { x: startX, y: bufferLineNumber },
-                  end: { x: endX, y: bufferLineNumber },
-                },
-                text: fileName,
-                activate: (_ev, pathText) => {
-                  window.dispatchEvent(
-                    new CustomEvent(`submarine-open-editor-${sessionId}`, {
-                      detail: { path: pathText, cwd: currentCwdRef.current },
-                    })
-                  );
-                },
-              });
+              if (!overlaps) {
+                links.push({
+                  range: {
+                    start: { x: startX, y: bufferLineNumber },
+                    end: { x: endX, y: bufferLineNumber },
+                  },
+                  text: fileName,
+                  activate: (_ev, pathText) => {
+                    window.dispatchEvent(
+                      new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                        detail: { path: pathText, cwd: currentCwdRef.current },
+                      })
+                    );
+                  },
+                });
+              }
             }
+
           }
 
           callback(links.length > 0 ? links : undefined);

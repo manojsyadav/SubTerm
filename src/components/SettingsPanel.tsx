@@ -1,3 +1,4 @@
+import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IS_ANDROID } from "../util/platform";
@@ -152,6 +153,9 @@ const PageAppearance = ({ settings, setSettings }: any) => (
 
 const PageTerminal = ({ settings, setSettings }: any) => {
   const [themesList, setThemesList] = useState<TerminalThemeConfig[]>(getAllTerminalThemes());
+  const [flags, setFlags] = useState<Record<FeatureKey, boolean>>(() =>
+    Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>,
+  );
   const [importThemeModal, setImportThemeModal] = useState(false);
   const [importThemeText, setImportThemeText] = useState("");
   const [importThemeError, setImportThemeError] = useState("");
@@ -374,6 +378,21 @@ const PageTerminal = ({ settings, setSettings }: any) => {
             <option value="none">Disabled (Mute)</option>
           </select>
         </Row>
+      </SectionCard>
+
+      <SectionCard title="Feature Toggles" subtitle="Turn optional features off to skip loading and running their code. Changes apply immediately.">
+        {FEATURES.map((f) => (
+          <Row key={f.key} label={f.label} desc={f.desc}>
+            <Toggle
+              checked={flags[f.key]}
+              onChange={() => {
+                const next = !flags[f.key];
+                setFeatureEnabled(f.key, next);
+                setFlags((prev) => ({ ...prev, [f.key]: next }));
+              }}
+            />
+          </Row>
+        ))}
       </SectionCard>
 
       <SectionCard title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">

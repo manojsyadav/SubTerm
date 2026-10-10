@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   X, Save, FileCode, Check, RefreshCw, SplitSquareHorizontal, 
@@ -6,7 +6,10 @@ import {
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { computeDiff } from "../fs/diff";
-import { CodeEditor } from "../editor/CodeEditor";
+import { useFeatureFlag } from "../featureFlags";
+
+// Lazy so the CodeMirror bundle is only downloaded/evaluated when highlighting is enabled and a file is opened.
+const CodeEditor = lazy(() => import("../editor/CodeEditor").then((m) => ({ default: m.CodeEditor })));
 
 interface QuickEditorModalProps {
   isOpen: boolean;
@@ -33,6 +36,8 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const highlightEnabled = useFeatureFlag("editorSyntaxHighlight");
 
   const isDirty = content !== originalContent;
 
@@ -274,7 +279,19 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
           ) : (
             /* Syntax-highlighted code editor (CodeMirror 6) */
             <div className="flex-1 flex overflow-hidden relative">
-              <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} />
+              {highlightEnabled ? (
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading editor…</div>}>
+                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} />
+                </Suspense>
+              ) : (
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  spellCheck={false}
+                  className="flex-1 h-full p-3 bg-transparent text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none font-mono leading-5 overflow-auto custom-scrollbar whitespace-pre tab-4"
+                  placeholder="File is empty"
+                />
+              )}
             </div>
           )}
         </div>

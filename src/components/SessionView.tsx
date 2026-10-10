@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from "../featureFlags";
 import { useState, useEffect, useRef, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -597,7 +598,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
       // Strip trailing punctuation and a grep/compiler-style `:line[:col]` suffix.
       let cleanPath = p.trim().replace(/[:,\s"'`]+$/, '').replace(/:\d+(:\d+)?$/, '').replace(/^["'`]+/, '');
-      if (!cleanPath.startsWith('/')) {
+      if (!cleanPath.startsWith('/') && isFeatureEnabled('smartPathResolve')) {
         // SFTP resolves relative paths against its start dir (~), not the
         // shell's cwd, so resolve on the server: cwd (if tracked) -> $HOME ->
         // bounded name search. That last step is what makes clicks work even
@@ -632,6 +633,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             cleanPath = cwd.endsWith('/') ? `${cwd}${cleanPath}` : `${cwd}/${cleanPath}`;
           }
         }
+      }
+
+      // Smart lookup disabled: only join onto the last known shell folder.
+      if (!cleanPath.startsWith('/') && !cleanPath.startsWith('~') && cwd && !isFeatureEnabled('smartPathResolve')) {
+        cleanPath = cwd.endsWith('/') ? `${cwd}${cleanPath}` : `${cwd}/${cleanPath}`;
       }
 
       // If clicked path ends with slash, it is a directory — open in SFTP
