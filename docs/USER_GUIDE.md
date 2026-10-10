@@ -112,6 +112,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 4. **File Transfers**:
    - Drag and drop files from your local file explorer into the SubTerm SFTP panel to start transfers.
    - Monitor real-time transfer progress and transfer speed in the progress widget.
+   - **Remote Desktop (RDP) servers**: In the server form choose **Connection type > Remote Desktop (RDP)**, enter the host (port 3389 by default) and an optional username, and save. Clicking the server then opens your system's Remote Desktop client (Windows `mstsc`, Microsoft Remote Desktop on macOS, `xfreerdp` on Linux), which asks for the password; SubTerm does not store it. Switch the feature off under Settings > Feature Toggles.
    - **Copy between two servers**: Open the **Server to server** tab in the SFTP panel, choose a connected server for the left and right side, select items and click **Copy to <server>** (or right-click > Copy, or drag across). Files go directly from one server to the other without being saved on your computer. You need two connected sessions; switch the feature off under Settings > Feature Toggles.
 5. **Directory Bookmarks & Quick Navigation (Starred Folders)**:
    - **Quick Access Jumps**: Click the **Bookmark / Star** icon in the SFTP toolbar to access standard paths including `/` (Root), `~` (Home), `/var/log` (Logs), `/etc` (Configuration), `/var/www` (Web Root), `/opt`, and `/tmp`.

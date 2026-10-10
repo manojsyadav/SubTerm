@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { QuickAuth } from "../components/QuickConnectModal";
 import type { Server } from "../types";
+import { isFeatureEnabled } from "../featureFlags";
 
 export type Session = {
   id: string;
@@ -102,8 +103,24 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     [closeSession]
   );
 
+  // RDP servers have no in-app session: they open the system's Remote Desktop client.
+  const launchRdp = useCallback((server: Server) => {
+    if (!isFeatureEnabled("rdpServers")) {
+      options?.onAddLog?.("RDP servers are turned off in Settings > Feature Toggles.", "error");
+      return;
+    }
+    invoke("launch_rdp", { id: server.id })
+      .then(() => options?.onAddLog?.(`Opened Remote Desktop for ${server.name}`, "info"))
+      .catch((e) => options?.onAddLog?.(`RDP_LAUNCH_FAILED (${server.name}): ${e}`, "error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openServer = useCallback(
     (server: Server, initialTool?: Session["initialTool"]) => {
+      if (server.protocol === "rdp") {
+        launchRdp(server);
+        return;
+      }
       const sessionId = `session-${server.id}`;
       setSessions((prev) => {
         const existing = prev.find((s) => s.id === sessionId);
@@ -129,12 +146,15 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
       });
       setActiveView(sessionId);
     },
-    []
+    [launchRdp]
   );
 
   const openMultipleServers = useCallback(
-    (serversToOpen: Server[], onFleetBroadcast?: (ids: string[]) => void) => {
-      if (!serversToOpen || !serversToOpen.length) return;
+    (allServers: Server[], onFleetBroadcast?: (ids: string[]) => void) => {
+      if (!allServers || !allServers.length) return;
+      allServers.filter((s) => s.protocol === "rdp").forEach(launchRdp);
+      const serversToOpen = allServers.filter((s) => s.protocol !== "rdp");
+      if (!serversToOpen.length) return;
       const newSessions: Session[] = [];
       const newIds: string[] = [];
       serversToOpen.forEach((srv) => {

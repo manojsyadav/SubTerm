@@ -34,6 +34,8 @@ export interface Server {
   icon: string;
   os_info: string;
   forward_agent: boolean;
+  /** "ssh" or "rdp". */
+  protocol: string;
 }
 
 export interface Folder {

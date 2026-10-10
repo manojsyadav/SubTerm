@@ -283,7 +283,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
       try {
         const list = await invoke<Server[]>("get_servers");
-        const toStart = list.filter((s) => s.autostart);
+        const toStart = list.filter((s) => s.autostart && s.protocol !== "rdp");
         if (toStart.length > 0) {
           options.onAutostartSessions?.(toStart);
           addLog(`Autostart: opened ${toStart.length} node${toStart.length === 1 ? "" : "s"}.`, "info");

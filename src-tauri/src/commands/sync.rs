@@ -577,7 +577,7 @@ const ENTITIES: &[EntitySpec] = &[
     EntitySpec { table: "credentials", cols: &["name", "auth_type", "username", "password", "edited_by"], fks: &[Fk { key: "key_uuid", col: "key_id", ref_table: "ssh_keys", required: false }] },
     EntitySpec {
         table: "servers",
-        cols: &["name", "host", "port", "username", "password", "proxy_type", "proxy_host", "proxy_port", "tunnels", "auth_type", "autostart", "mirrors", "color", "notes", "run_on_connect", "position", "edited_by"],
+        cols: &["name", "host", "port", "username", "password", "proxy_type", "proxy_host", "proxy_port", "tunnels", "auth_type", "autostart", "mirrors", "color", "notes", "run_on_connect", "position", "protocol", "edited_by"],
         fks: &[
             Fk { key: "credential_uuid", col: "credential_id", ref_table: "credentials", required: false },
             Fk { key: "folder_uuid", col: "folder_id", ref_table: "folders", required: false },
@@ -2233,7 +2233,7 @@ mod sync_engine_tests {
             "CREATE TABLE folders(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, parent_id INTEGER, color TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE ssh_keys(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, public_key TEXT, private_key TEXT, passphrase TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE credentials(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, auth_type TEXT, username TEXT, password TEXT, key_id INTEGER, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
-             CREATE TABLE servers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT, proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT, key_id INTEGER, autostart INTEGER, mirrors TEXT, color TEXT, notes TEXT, run_on_connect TEXT, jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', os_info TEXT DEFAULT '', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
+             CREATE TABLE servers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT, proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT, key_id INTEGER, autostart INTEGER, mirrors TEXT, color TEXT, notes TEXT, run_on_connect TEXT, jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', os_info TEXT DEFAULT '', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, protocol TEXT DEFAULT 'ssh');
              CREATE TABLE commands(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE notes(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE monitor_configs(node_id INTEGER PRIMARY KEY, enabled_metrics TEXT, custom_metrics TEXT, paused INTEGER, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);",
@@ -2494,6 +2494,34 @@ mod sync_engine_tests {
         assert_eq!(folder, "f", "server.folder_id must resolve to the right folder on B");
         let key_name: String = b.query_row("SELECT (SELECT name FROM ssh_keys k WHERE k.id=c.key_id) FROM credentials c WHERE c.name='c'", [], |r| r.get(0)).unwrap();
         assert_eq!(key_name, "k", "credential.key_id must resolve to the right ssh_key on B");
+    }
+
+    // `protocol` marks an RDP server. It has to travel with the row, and a record
+    // from a peer that predates the column (no `protocol` key) must still land,
+    // reading back as plain SSH instead of being skipped.
+    #[test]
+    fn rdp_protocol_syncs_and_an_older_peer_record_without_it_still_merges() {
+        let (a, _ha) = device("A");
+        a.execute("INSERT INTO servers(name, host, port, protocol) VALUES('win','10.0.0.9',3389,'rdp')", []).unwrap();
+        let recs = collect_local_records(&a, &KEY, "").unwrap();
+        let (b, hb) = device("B");
+        apply_remote_records(&b, &KEY, &recs, &hb).unwrap();
+        let p: String = b.query_row("SELECT protocol FROM servers WHERE name='win'", [], |r| r.get(0)).unwrap();
+        assert_eq!(p, "rdp");
+
+        // Same server as an older app would send it: payload without the `protocol` key.
+        let mut rec = recs.iter().find(|r| r.entity_type == "servers").unwrap().clone();
+        let mut payload: serde_json::Value =
+            serde_json::from_slice(&decrypt_entity(rec.blob.as_deref().unwrap(), &KEY).unwrap()).unwrap();
+        payload.as_object_mut().unwrap().remove("protocol");
+        rec.uuid = "fixed-old-peer-uuid".into();
+        rec.blob = Some(encrypt_entity(payload.to_string().as_bytes(), &KEY).unwrap());
+        let (c, hc) = device("C");
+        apply_remote_records(&c, &KEY, std::slice::from_ref(&rec), &hc).unwrap();
+        let n: i64 = c.query_row("SELECT COUNT(*) FROM servers WHERE name='win'", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1, "the record from an older peer must not be skipped");
+        let p: Option<String> = c.query_row("SELECT protocol FROM servers WHERE name='win'", [], |r| r.get(0)).unwrap();
+        assert!(p.is_none() || p.as_deref() == Some("ssh"));
     }
 
     // Regression: `position` (NOT NULL) was added to servers' synced cols in

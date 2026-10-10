@@ -410,6 +410,14 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 min-w-0">
             <h3 className="font-bold text-zinc-100 text-[13px] truncate tracking-tight leading-tight">{s.name}</h3>
+            {s.protocol === "rdp" && (
+              <span
+                className="px-1.5 py-0.5 rounded text-[8.5px] font-bold tracking-wider uppercase bg-sky-500/15 border border-sky-500/30 text-sky-300 shrink-0"
+                title="Remote Desktop (RDP) - opens your system's Remote Desktop client"
+              >
+                RDP
+              </span>
+            )}
             {isProd && (
               <span
                 className="px-1.5 py-0.5 rounded text-[8.5px] font-bold tracking-wider uppercase bg-rose-500/15 border border-rose-500/30 text-rose-300 flex items-center gap-1 shrink-0"

@@ -71,6 +71,12 @@ export const FEATURES = [
     desc: "The Mirror tab in the file browser (live folder sync). When off, the tab is hidden and the mirror code is not loaded.",
   },
   {
+    key: "rdpServers",
+    group: "Panels",
+    label: "RDP servers",
+    desc: "Lets you save Remote Desktop (RDP) servers and open them in your system's Remote Desktop client. When off, the connection-type choice is hidden in the server form.",
+  },
+  {
     key: "sftpRemoteToRemote",
     group: "Panels",
     label: "Server-to-server SFTP",
