@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(terminal)` — Split-pane polish**:
+  New **Focus Next Pane** / **Focus Previous Pane** shortcuts (`Alt+Shift+→` / `Alt+Shift+←`, rebindable) cycle keyboard focus through the split panes — or through the terminal tabs when nothing is split — wrapping around at the ends. SubTerm now also remembers how you like to split: the columns/rows orientation, and the pane sizes you last dragged to for each pane count, are restored for the next split (including after a restart). Which terminals were split is not restored, since sessions themselves aren't restored on launch.
+
 - **`feat(editor)` — Hide comments**:
   A **Hide comments** button in the Quick Editor collapses runs of comment-only lines into a single `⋯ N comment lines hidden — click to show` marker (click it to expand just that block). View only: the file is never modified, so saving always writes the full contents, and the status bar shows how many lines are hidden. Supports shell/YAML/TOML/Python/nginx/INI (`#`, `;`), C-style languages (`//`, `/* */`), SQL, HTML/XML and CSS; trailing comments after code and a shebang line stay visible. Needs syntax highlighting; has its own toggle in Settings → Feature Toggles.
 

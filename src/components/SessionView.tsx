@@ -20,6 +20,9 @@ const GitDrawer = lazy(() => import("./GitDrawer").then((m) => ({ default: m.Git
 const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
 import { PathChoiceModal } from "./PathChoiceModal";
+import {
+  loadSplitOrientation, saveSplitOrientation, loadSplitRatios, saveSplitRatios, initialSplitRatios, cyclePaneId,
+} from "../splitLayoutPrefs";
 import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
@@ -552,7 +555,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // Horizontal (row) vs vertical (column). The trigger button next to
   // "+" hosts the orientation swap; the same right-click on any divider
   // also flips it.
-  const [splitOrientation, setSplitOrientation] = useState<"h" | "v">("h");
+  const [splitOrientation, setSplitOrientation] = useState<"h" | "v">(loadSplitOrientation);
+  useEffect(() => { saveSplitOrientation(splitOrientation); }, [splitOrientation]);
   // Per-pane flex ratio, length always equal to `splitTerminals.length`.
   // Sum is arbitrary (we hand it directly to flex-grow so relative
   // proportions are what matters). Add-to-split appends `1` so the new
@@ -560,6 +564,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // panes redistributes those two panes' share and leaves the rest
   // alone. Reset (double-click a divider) flattens back to all-equal.
   const [splitRatios, setSplitRatios] = useState<number[]>([]);
+  // Remember pane sizes (per pane count) so the next split of that size starts the way the user left it.
+  useEffect(() => { saveSplitRatios(splitRatios); }, [splitRatios]);
 
   const splitWithNewPane = (orientation?: "h" | "v") => {
     if (orientation) setSplitOrientation(orientation);
@@ -567,10 +573,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
     if (splitTerminals.length >= 2) {
       setSplitTerminals(prev => [...prev, newId]);
-      setSplitRatios(prev => [...prev, 1]);
+      // Prefer the sizes last used for this many panes; otherwise keep existing sizes and give the newcomer an equal share.
+      setSplitRatios(prev => loadSplitRatios(prev.length + 1) ?? [...prev, 1]);
     } else {
       setSplitTerminals([activeTab, newId]);
-      setSplitRatios([1, 1]);
+      setSplitRatios(initialSplitRatios(2));
     }
     setActiveTab(newId);
   };
@@ -588,6 +595,12 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     };
     const handleNewTerm = () => {
       addNewTerminal();
+    };
+    // Focus the next/previous split pane (or terminal tab when not split), wrapping around.
+    const handleFocusPane = (e: any) => {
+      const ids = splitTerminals.length >= 2 ? splitTerminals : terminals.map(t => t.id);
+      const next = cyclePaneId(ids, activeTab, e.detail?.dir === -1 ? -1 : 1);
+      if (next) setActiveTab(next);
     };
     const handleToggleSftp = () => {
       setActiveTool(prev => prev === 'sftp' ? null : 'sftp');
@@ -731,6 +744,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     };
 
     window.addEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
+    window.addEventListener(`submarine-focus-pane-${session.id}`, handleFocusPane);
     window.addEventListener(`submarine-new-terminal-${session.id}`, handleNewTerm);
     window.addEventListener(`submarine-toggle-sftp-${session.id}`, handleToggleSftp);
     window.addEventListener(`subterm-toggle-tool-${session.id}`, handleToggleTool);
@@ -743,6 +757,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
     return () => {
       window.removeEventListener(`submarine-split-terminal-${session.id}`, handleSplit);
+      window.removeEventListener(`submarine-focus-pane-${session.id}`, handleFocusPane);
       window.removeEventListener(`submarine-new-terminal-${session.id}`, handleNewTerm);
       window.removeEventListener(`submarine-toggle-sftp-${session.id}`, handleToggleSftp);
       window.removeEventListener(`subterm-toggle-tool-${session.id}`, handleToggleTool);
@@ -753,7 +768,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       window.removeEventListener(`submarine-quick-open-file-session-${session.id}`, handleQuickOpenFile);
       window.removeEventListener("keydown", handleEditorKey, { capture: true });
     };
-  }, [session?.id, activeTab, splitTerminals]);
+  }, [session?.id, activeTab, splitTerminals, terminals]);
 
   // "+" button's secondary menu — surfaced via right-click / long-press
   // so the primary click stays a fast "new tab" without stealing the
@@ -1814,16 +1829,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 <button
                   onClick={() => {
                     setPlusMenu(null);
-                    const newId = `${session.id}-term-${Date.now()}`;
-                    setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
-                    if (splitTerminals.length >= 2) {
-                      setSplitTerminals(prev => [...prev, newId]);
-                      setSplitRatios(prev => [...prev, 1]);
-                    } else {
-                      setSplitTerminals([activeTab, newId]);
-                      setSplitRatios([1, 1]);
-                    }
-                    setActiveTab(newId);
+                    splitWithNewPane();
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/[0.06] text-zinc-200 hover:text-white text-left"
                 >
