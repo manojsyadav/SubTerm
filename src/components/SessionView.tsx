@@ -17,9 +17,15 @@ const TunnelsPanel = lazy(() => import("./TunnelsPanel"));
 const InfoPanel = lazy(() => import("./InfoPanel"));
 const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.CmdsPanel })));
 const GitDrawer = lazy(() => import("./GitDrawer").then((m) => ({ default: m.GitDrawer })));
+// Probes the git repo in the folder passed as $1 (supports "~" and "~/x"); prints nothing outside a repo.
+const GIT_PROBE_SCRIPT =
+  'D="$1"; case "$D" in "~") D="$HOME";; "~/"*) D="$HOME/${D#\\~/}";; esac; [ -n "$D" ] && cd "$D" 2>/dev/null; ' +
+  'b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); ' +
+  'if [ -n "$b" ]; then d=$(git status --porcelain 2>/dev/null | wc -l); echo "SUBTERM_GIT:$b:$d"; git status -s 2>/dev/null; fi';
 const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
 import { PathChoiceModal } from "./PathChoiceModal";
+import { getTerminalCwd, onTerminalCwdChange, shellQuote } from "../terminal/cwd";
 import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
@@ -207,13 +213,17 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   const [gitDrawerMounted, setGitDrawerMounted] = useState(false);
   useEffect(() => { if (gitDrawerOpen) setGitDrawerMounted(true); }, [gitDrawerOpen]);
 
+  const activeTabRef = useRef<string>("");
+
   const refreshGitInfo = async () => {
     if (!isFeatureEnabled('panelGit')) return;
     if (statusRef.current !== 'connected' || !session?.id) return;
     try {
       const out = await invoke<string>("sftp_exec_command", {
         sessionId: session.id,
-        command: 'sh -c \'b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ -n "$b" ]; then d=$(git status --porcelain 2>/dev/null | wc -l); echo "SUBTERM_GIT:$b:$d"; git status -s 2>/dev/null; fi\'',
+        // This runs on its own exec channel, which starts in $HOME, so cd into the shell's folder first
+        // (passed as $1 so it needs no escaping inside the script).
+        command: `sh -c ${shellQuote(GIT_PROBE_SCRIPT)} sh ${shellQuote(getTerminalCwd(activeTabRef.current) ?? "")}`,
       });
       if (out.includes("SUBTERM_GIT:")) {
         const line = out.split("\n").find(l => l.startsWith("SUBTERM_GIT:")) || "";
@@ -447,6 +457,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   };
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
+  activeTabRef.current = activeTab;
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; termId: string } | null>(null);
   const [termRename, setTermRename] = useState<{ termId: string; value: string } | null>(null);
   const terminalsRef = useRef(terminals);
@@ -521,6 +532,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     mirrors: true,
   };
   const gitEnabled = useFeatureFlag('panelGit');
+  // Keep the Git pill in step with the shell: refresh when you cd (prompt/OSC 7 report) or switch panes.
+  useEffect(() => {
+    if (!gitEnabled) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = (ms: number) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { refreshGitInfo(); }, ms);
+    };
+    schedule(300);
+    const off = onTerminalCwdChange((terminalId) => {
+      if (terminalId === activeTabRef.current) schedule(600);
+    });
+    return () => { off(); if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, gitEnabled]);
   const copilotEnabled = useFeatureFlag('aiCopilot');
   // A tool panel is mounted the first time it is opened and then kept mounted (its state and
   // polling are preserved across tab switches); panels never opened cost nothing.

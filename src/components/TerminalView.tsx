@@ -1,3 +1,4 @@
+import { parseOsc7, parsePromptCwd, setTerminalCwd, forgetTerminalCwd } from "../terminal/cwd";
 import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
@@ -226,6 +227,7 @@ const TerminalView = ({
   const recentOutputRef = useRef<string>("");
   // Track terminal's current working directory (via OSC 7 or shell prompt parsing)
   const currentCwdRef = useRef<string>("");
+  useEffect(() => () => forgetTerminalCwd(terminalId), [terminalId]);
 
   const toggleModifier = (m: ModKey) => {
     setModifiers(prev => ({ ...prev, [m]: cycleMod(prev[m]) }));
@@ -682,14 +684,11 @@ const TerminalView = ({
     // OSC 7 (Current Working Directory)
     try {
       term.parser.registerOscHandler(7, (data: string) => {
-        let p = data.trim();
-        if (p.startsWith("file://")) {
-          try {
-            const url = new URL(p);
-            p = decodeURIComponent(url.pathname);
-          } catch {}
+        const p = parseOsc7(data);
+        if (p) {
+          currentCwdRef.current = p;
+          setTerminalCwd(terminalId, p);
         }
-        if (p) currentCwdRef.current = p;
         return true;
       });
     } catch (e) {
@@ -1377,9 +1376,11 @@ const TerminalView = ({
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
 
         // Best-effort prompt CWD detection (e.g. user@hostname:path$ or user@hostname:path#)
-        const promptMatch = /(?:^|[\r\n])(?:[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+):([/~][^$#\s)]*)[$#]/.exec(txt);
-        if (promptMatch && promptMatch[1]) {
-          currentCwdRef.current = promptMatch[1];
+        // ANSI colours are stripped first: stock Debian/Ubuntu prompts are coloured, which hid the path.
+        const promptCwd = parsePromptCwd(txt);
+        if (promptCwd) {
+          currentCwdRef.current = promptCwd;
+          setTerminalCwd(terminalId, promptCwd);
         }
 
         // Terminal Triggers & Alert Keywords — scanned against just this
