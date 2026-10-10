@@ -85,6 +85,9 @@ function DesktopApp() {
   const broadcast = useBroadcast();
   const wallEnabled = useFeatureFlag('fleetWall');
   const networkToolsEnabled = useFeatureFlag('networkTools');
+  const autoReconnectEnabled = useFeatureFlag('autoReconnect');
+  // Tell the backend so it stops emitting resume / network-change events while the feature is off.
+  useEffect(() => { invoke('set_auto_reconnect_events', { enabled: autoReconnectEnabled }).catch(() => {}); }, [autoReconnectEnabled]);
   const [broadcastMenuOpen, setBroadcastMenuOpen] = useState(false);
 
   const confirm = useConfirm();

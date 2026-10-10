@@ -2356,6 +2356,91 @@ find "${{C:-$HOME}}" "$HOME" -maxdepth 5 \( -name node_modules -o -name .git \) 
     })
 }
 
+/// Local twin of `sftp_resolve_path`, for local-shell sessions: resolves a path
+/// clicked in the terminal against the shell's cwd, then the home folder, then a
+/// bounded name search. Pure (no Tauri state) so it can be unit tested.
+fn resolve_local_path(path: &str, cwd: Option<&str>, home: Option<&std::path::Path>) -> ResolvedPath {
+    use std::path::{Path, PathBuf};
+    let notfound = || ResolvedPath { kind: "notfound".into(), path: String::new(), candidates: vec![] };
+    // Strip Windows' verbatim `\\?\` prefix so paths round-trip through the UI.
+    let display = |p: &Path| -> String {
+        let shown = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        let text = shown.to_string_lossy().to_string();
+        text.strip_prefix(r"\\?\").map(String::from).unwrap_or(text)
+    };
+    let hit = |p: &Path| -> ResolvedPath {
+        let kind = if p.is_dir() { "dir" } else { "file" };
+        ResolvedPath { kind: kind.into(), path: display(p), candidates: vec![] }
+    };
+    let expand = |raw: &str| -> PathBuf {
+        let rest = if raw == "~" { Some("") } else { raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\")) };
+        match (rest, home) {
+            (Some(rest), Some(h)) => h.join(rest),
+            _ => PathBuf::from(raw),
+        }
+    };
+
+    let p = expand(path.trim());
+    if p.is_absolute() {
+        return if p.exists() { hit(&p) } else { notfound() };
+    }
+    let cwd_path = cwd.map(|c| expand(c.trim())).filter(|c| c.is_dir());
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Some(c) = &cwd_path { roots.push(c.clone()); }
+    if let Some(h) = home { roots.push(h.to_path_buf()); }
+    for r in &roots {
+        let joined = r.join(&p);
+        if joined.exists() { return hit(&joined); }
+    }
+
+    // Bounded name search (depth 5, capped visits) under cwd, then home.
+    let Some(base) = p.file_name().map(|n| n.to_os_string()) else { return notfound() };
+    let rel = path.trim().trim_start_matches("./").replace('\\', "/");
+    let mut found: Vec<PathBuf> = Vec::new();
+    let mut visited = 0usize;
+    for root in &roots {
+        let mut stack = vec![(root.clone(), 0usize)];
+        while let Some((dir, depth)) = stack.pop() {
+            let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+            for entry in rd.flatten() {
+                visited += 1;
+                if visited > 20_000 || found.len() >= 50 { break; }
+                let name = entry.file_name();
+                let Ok(ft) = entry.file_type() else { continue };
+                if ft.is_dir() {
+                    let n = name.to_string_lossy();
+                    if depth < 5 && n != "node_modules" && n != ".git" && n != "target" {
+                        stack.push((entry.path(), depth + 1));
+                    }
+                } else if name == base {
+                    let full = entry.path();
+                    let norm = full.to_string_lossy().replace('\\', "/");
+                    if (!rel.contains('/') || norm.ends_with(&format!("/{}", rel))) && !found.contains(&full) {
+                        found.push(full);
+                    }
+                }
+            }
+        }
+    }
+    match found.len() {
+        0 => notfound(),
+        1 => hit(&found[0]),
+        _ => ResolvedPath {
+            kind: "ambiguous".into(),
+            path: String::new(),
+            candidates: found.iter().map(|f| display(f)).collect(),
+        },
+    }
+}
+
+#[tauri::command]
+pub async fn local_resolve_path(path: String, cwd: Option<String>) -> Result<ResolvedPath, String> {
+    let home = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf());
+    tauri::async_runtime::spawn_blocking(move || resolve_local_path(&path, cwd.as_deref(), home.as_deref()))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[derive(serde::Serialize)]
 pub struct LocalFileEntry {
     pub name: String,
@@ -3295,6 +3380,43 @@ mod path_safety_tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn resolve_local_path_uses_cwd_then_home_then_search() {
+        let root = unique_scratch_dir("resolve");
+        let cwd = root.join("proj");
+        let home = root.join("home");
+        std::fs::create_dir_all(cwd.join("src")).unwrap();
+        std::fs::create_dir_all(home.join("deep/a")).unwrap();
+        std::fs::write(cwd.join("src/main.rs"), b"x").unwrap();
+        std::fs::write(home.join("deep/a/cfg.yaml"), b"y").unwrap();
+
+        let in_cwd = resolve_local_path("src/main.rs", cwd.to_str(), Some(&home));
+        assert_eq!(in_cwd.kind, "file");
+        assert!(in_cwd.path.replace('\\', "/").ends_with("proj/src/main.rs"));
+
+        // no cwd known: found by searching under home
+        let by_search = resolve_local_path("cfg.yaml", None, Some(&home));
+        assert_eq!(by_search.kind, "file");
+        assert!(by_search.path.replace('\\', "/").ends_with("deep/a/cfg.yaml"));
+
+        assert_eq!(resolve_local_path("deep", None, Some(&home)).kind, "dir");
+        assert_eq!(resolve_local_path("nope.txt", cwd.to_str(), Some(&home)).kind, "notfound");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_local_path_reports_ambiguous_matches() {
+        let root = unique_scratch_dir("resolve-ambig");
+        std::fs::create_dir_all(root.join("a")).unwrap();
+        std::fs::create_dir_all(root.join("b")).unwrap();
+        std::fs::write(root.join("a/same.txt"), b"1").unwrap();
+        std::fs::write(root.join("b/same.txt"), b"2").unwrap();
+        let r = resolve_local_path("same.txt", root.to_str(), None);
+        assert_eq!(r.kind, "ambiguous");
+        assert_eq!(r.candidates.len(), 2);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

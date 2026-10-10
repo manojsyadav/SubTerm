@@ -199,6 +199,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   const [gitInfo, setGitInfo] = useState<GitRepoInfo | null>(null);
   const [gitDrawerOpen, setGitDrawerOpen] = useState(false);
+  // Mount the drawer on first open and keep it mounted so its internal state survives close/reopen.
+  const [gitDrawerMounted, setGitDrawerMounted] = useState(false);
+  useEffect(() => { if (gitDrawerOpen) setGitDrawerMounted(true); }, [gitDrawerOpen]);
 
   const refreshGitInfo = async () => {
     if (!isFeatureEnabled('panelGit')) return;
@@ -623,6 +626,20 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
       // Strip trailing punctuation and a grep/compiler-style `:line[:col]` suffix.
       let cleanPath = p.trim().replace(/[:,\s"'`]+$/, '').replace(/:\d+(:\d+)?$/, '').replace(/^["'`]+/, '');
+      // Local-shell sessions have no SSH/SFTP connection: resolve against the local disk instead.
+      if (session?.isLocal) {
+        const r = await invoke<{ kind: string; path: string; candidates: string[] }>('local_resolve_path', {
+          path: cleanPath, cwd: cwd || null,
+        }).catch(() => null);
+        const hit = r?.kind === 'file'
+          ? r.path
+          : r?.kind === 'ambiguous'
+            ? [...r.candidates].sort((a, b) => a.length - b.length)[0] // nearest/shortest match
+            : null;
+        if (hit) setEditorFile({ path: hit, name: hit.split(/[\\/]/).filter(Boolean).pop() || hit });
+        return;
+      }
+
       if (!cleanPath.startsWith('/')) {
         // SFTP resolves relative paths against its start dir (~), not the
         // shell's cwd, so resolve on the server: cwd (if tracked) -> $HOME ->
@@ -2388,7 +2405,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         </div>
       </div>
       {/* Git Drawer */}
-      {gitEnabled && gitDrawerOpen && (
+      {gitEnabled && gitDrawerMounted && (
         <Suspense fallback={null}>
           <GitDrawer
             isOpen={gitDrawerOpen}
@@ -2419,8 +2436,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             isDir: false,
             size: 0,
           }}
-          provider={{ id: "remote", label: "Remote SFTP" }}
-          sessionId={session.id}
+          provider={session.isLocal ? { id: "local", label: "Local" } : { id: "remote", label: "Remote SFTP" }}
+          sessionId={session.isLocal ? undefined : session.id}
         />
       )}
     </div>
