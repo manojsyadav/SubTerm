@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   X, Save, FileCode, Check, RefreshCw, SplitSquareHorizontal, 
-  Copy
+  Copy, MessageSquareOff
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { computeDiff } from "../fs/diff";
 import { useFeatureFlag } from "../featureFlags";
+import { detectLanguage } from "../editor/language";
+import { hiddenCommentLineCount, supportsCommentHiding } from "../editor/comments";
 
 // Lazy so the CodeMirror bundle is only downloaded/evaluated when highlighting is enabled and a file is opened.
 const CodeEditor = lazy(() => import("../editor/CodeEditor").then((m) => ({ default: m.CodeEditor })));
@@ -38,6 +40,12 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
   const [copied, setCopied] = useState(false);
 
   const highlightEnabled = useFeatureFlag("editorSyntaxHighlight");
+  const hideCommentsAvailable = useFeatureFlag("editorHideComments") && highlightEnabled;
+  const [hideComments, setHideComments] = useState(() => localStorage.getItem("subterm-editor-hide-comments") === "true");
+  const toggleHideComments = () => setHideComments((p) => {
+    localStorage.setItem("subterm-editor-hide-comments", String(!p));
+    return !p;
+  });
 
   const isDirty = content !== originalContent;
 
@@ -165,6 +173,23 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Hide comments (view only) */}
+            {hideCommentsAvailable && !showDiff && supportsCommentHiding(detectLanguage(entry.name, entry.path)) && (
+              <button
+                onClick={toggleHideComments}
+                disabled={loading}
+                className={`h-7 px-2.5 rounded-lg border text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+                  hideComments
+                    ? "bg-indigo-600/20 border-indigo-500/50 text-indigo-300"
+                    : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                }`}
+                title="Hide comment lines (view only — the saved file is unchanged)"
+              >
+                <MessageSquareOff size={13} />
+                <span className="hidden sm:inline">{hideComments ? "Comments hidden" : "Hide comments"}</span>
+              </button>
+            )}
+
             {/* Diff Toggle */}
             <button
               onClick={() => setShowDiff((p) => !p)}
@@ -281,7 +306,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
             <div className="flex-1 flex overflow-hidden relative">
               {highlightEnabled ? (
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading editor…</div>}>
-                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} />
+                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} hideComments={hideCommentsAvailable && hideComments} />
                 </Suspense>
               ) : (
                 <textarea
@@ -300,6 +325,9 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
         <div className="h-7 px-4 bg-[#09090c] border-t border-white/10 flex items-center justify-between text-[10px] font-mono text-zinc-500 shrink-0">
           <div className="flex items-center gap-3">
             <span>Lines: {lines.length}</span>
+            {hideCommentsAvailable && hideComments && (
+              <span className="text-indigo-300">{hiddenCommentLineCount(content, detectLanguage(entry.name, entry.path))} comment lines hidden</span>
+            )}
             <span>Length: {content.length} chars</span>
             <span>Provider: {provider.label}</span>
           </div>
