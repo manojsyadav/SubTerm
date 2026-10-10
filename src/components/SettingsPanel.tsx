@@ -381,18 +381,27 @@ const PageTerminal = ({ settings, setSettings }: any) => {
       </SectionCard>
 
       <SectionCard title="Feature Toggles" subtitle="Turn optional features off to skip loading and running their code. Changes apply immediately.">
-        {FEATURES.map((f) => (
-          <Row key={f.key} label={f.label} desc={f.desc}>
-            <Toggle
-              checked={flags[f.key]}
-              onChange={() => {
-                const next = !flags[f.key];
-                setFeatureEnabled(f.key, next);
-                setFlags((prev) => ({ ...prev, [f.key]: next }));
-              }}
-            />
-          </Row>
-        ))}
+        {(["Editor", "Terminal", "Panels", "AI"] as const).map((group) => {
+          const items = FEATURES.filter((f) => f.group === group);
+          if (items.length === 0) return null;
+          return (
+            <div key={group}>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 pt-2 pb-1">{group}</div>
+              {items.map((f) => (
+                <Row key={f.key} label={f.label} desc={f.desc}>
+                  <Toggle
+                    checked={flags[f.key]}
+                    onChange={() => {
+                      const next = !flags[f.key];
+                      setFeatureEnabled(f.key, next);
+                      setFlags((prev) => ({ ...prev, [f.key]: next }));
+                    }}
+                  />
+                </Row>
+              ))}
+            </div>
+          );
+        })}
       </SectionCard>
 
       <SectionCard title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">

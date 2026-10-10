@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, useMemo } from "react";
+import { useState, useEffect, useRef, memo, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -7,10 +7,16 @@ import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, 
 import { useBroadcast } from "../ui/broadcast";
 import TerminalView from "./TerminalView";
 import SftpWorkspace from "./SftpWorkspace";
-import TunnelsPanel from "./TunnelsPanel";
-import InfoPanel from "./InfoPanel";
-import { CmdsPanel } from "./CmdsPanel";
-import { GitDrawer, GitRepoInfo } from "./GitDrawer";
+import type { GitRepoInfo } from "./GitDrawer";
+import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
+
+// Tool panels are lazy: their code is only fetched the first time the panel is opened,
+// and never when the matching feature toggle is off.
+const TunnelsPanel = lazy(() => import("./TunnelsPanel"));
+const InfoPanel = lazy(() => import("./InfoPanel"));
+const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.CmdsPanel })));
+const GitDrawer = lazy(() => import("./GitDrawer").then((m) => ({ default: m.GitDrawer })));
+const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
 import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
@@ -195,6 +201,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   const [gitDrawerOpen, setGitDrawerOpen] = useState(false);
 
   const refreshGitInfo = async () => {
+    if (!isFeatureEnabled('panelGit')) return;
     if (statusRef.current !== 'connected' || !session?.id) return;
     try {
       const out = await invoke<string>("sftp_exec_command", {
@@ -496,6 +503,24 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     }
   }, [session?.id, terminals, activeTab, onTerminalsChange]);
   const [activeTool, setActiveTool] = useState<'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'mirrors' | 'cmds' | 'info' | null>(() => session?.initialTool || null);
+  const toolEnabled: Record<string, boolean> = {
+    sftp: true,
+    tunnels: useFeatureFlag('panelTunnels'),
+    docker: useFeatureFlag('panelDocker'),
+    processes: useFeatureFlag('panelProcesses'),
+    services: useFeatureFlag('panelServices'),
+    info: useFeatureFlag('panelSystem'),
+    cmds: useFeatureFlag('panelLibrary'),
+    mirrors: true,
+  };
+  const gitEnabled = useFeatureFlag('panelGit');
+  // A tool panel is mounted the first time it is opened and then kept mounted (its state and
+  // polling are preserved across tab switches); panels never opened cost nothing.
+  const [openedTools, setOpenedTools] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    if (activeTool && !toolEnabled[activeTool]) { setActiveTool(null); return; }
+    if (activeTool) setOpenedTools((prev) => (prev.has(activeTool) ? prev : new Set(prev).add(activeTool)));
+  }, [activeTool, ...Object.values(toolEnabled)]);
   useEffect(() => {
     if (!session?.id) return;
     const handleSetTool = (e: any) => {
@@ -1640,7 +1665,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
               ]
-          ).map(({ id, icon: Icon, label, hint }) => {
+          ).filter((t) => toolEnabled[t.id]).map(({ id, icon: Icon, label, hint }) => {
             const on = activeTool === id;
             return (
               <button
@@ -1668,24 +1693,26 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       {!chromeless && !activeTool && (
         <div className="h-7 px-2 sm:px-4 bg-[#0d0d10] border-b border-white/[0.04] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 text-[10.5px] font-mono text-zinc-400">
           {/* Git Branch & Status Pill */}
-          <button
-            onClick={() => {
-              refreshGitInfo();
-              setGitDrawerOpen(true);
-            }}
-            title={gitInfo ? `Git: ${gitInfo.branch} (${gitInfo.isDirty ? `${gitInfo.dirtyCount} modified` : "clean"})` : "Inspect Git Status"}
-            className={`h-5 px-2 rounded border flex items-center gap-1.5 shrink-0 transition-all font-mono text-[10px] ${
-              gitInfo?.branch
-                ? gitInfo.isDirty
-                  ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
-                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
-                : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <GitBranch size={10} className={gitInfo?.branch ? (gitInfo.isDirty ? "text-amber-400" : "text-emerald-400") : "text-zinc-500"} />
-            <span>{gitInfo?.branch || "Git"}</span>
-            {gitInfo?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
-          </button>
+          {gitEnabled && (
+            <button
+              onClick={() => {
+                refreshGitInfo();
+                setGitDrawerOpen(true);
+              }}
+              title={gitInfo ? `Git: ${gitInfo.branch} (${gitInfo.isDirty ? `${gitInfo.dirtyCount} modified` : "clean"})` : "Inspect Git Status"}
+              className={`h-5 px-2 rounded border flex items-center gap-1.5 shrink-0 transition-all font-mono text-[10px] ${
+                gitInfo?.branch
+                  ? gitInfo.isDirty
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+                  : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <GitBranch size={10} className={gitInfo?.branch ? (gitInfo.isDirty ? "text-amber-400" : "text-emerald-400") : "text-zinc-500"} />
+              <span>{gitInfo?.branch || "Git"}</span>
+              {gitInfo?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+            </button>
+          )}
           <button
             onClick={() => {
               window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
@@ -2260,21 +2287,22 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 </button>
               </div>
               <div className="flex-1 overflow-hidden relative">
-                <TunnelsPanel sessionId={session.id} serverId={session.serverId} disabled={status !== 'connected'} />
+                <Suspense fallback={<PanelFallback />}><TunnelsPanel sessionId={session.id} serverId={session.serverId} disabled={status !== 'connected'} /></Suspense>
               </div>
             </div>
           )}
 
           {activeTool === 'cmds' && (
-            <CmdsPanel
+            <Suspense fallback={<PanelFallback />}><CmdsPanel
               activeTab={activeTab}
               onClose={() => setActiveTool(null)}
               serverId={session.serverId}
               serverName={session.serverName}
-            />
+            /></Suspense>
           )}
 
           {/* Docker Panel */}
+          {toolEnabled.docker && openedTools.has('docker') && (
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'docker' ? '' : 'hidden'}`}>
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Docker Containers & Images</span>
@@ -2282,6 +2310,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 <X size={14} />
               </button>
             </div>
+            <Suspense fallback={<PanelFallback />}>
             <InfoPanel
               sessionId={session.id}
               disabled={status !== 'connected'}
@@ -2289,9 +2318,12 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               mode="docker"
               onOpenContainerTerminal={openContainerTerminal}
             />
+            </Suspense>
           </div>
+          )}
 
           {/* Processes Panel */}
+          {toolEnabled.processes && openedTools.has('processes') && (
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'processes' ? '' : 'hidden'}`}>
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Process Manager</span>
@@ -2299,15 +2331,19 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 <X size={14} />
               </button>
             </div>
+            <Suspense fallback={<PanelFallback />}>
             <InfoPanel
               sessionId={session.id}
               disabled={status !== 'connected'}
               visible={activeTool === 'processes'}
               mode="processes"
             />
+            </Suspense>
           </div>
+          )}
 
           {/* Services Panel */}
+          {toolEnabled.services && openedTools.has('services') && (
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'services' ? '' : 'hidden'}`}>
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">System Services</span>
@@ -2315,15 +2351,19 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 <X size={14} />
               </button>
             </div>
+            <Suspense fallback={<PanelFallback />}>
             <InfoPanel
               sessionId={session.id}
               disabled={status !== 'connected'}
               visible={activeTool === 'services'}
               mode="services"
             />
+            </Suspense>
           </div>
+          )}
 
           {/* InfoPanel (System, Network, Ports) */}
+          {toolEnabled.info && openedTools.has('info') && (
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'info' ? '' : 'hidden'}`}>
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">System & Network Info</span>
@@ -2331,6 +2371,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 <X size={14} />
               </button>
             </div>
+            <Suspense fallback={<PanelFallback />}>
             <InfoPanel
               sessionId={session.id}
               disabled={status !== 'connected'}
@@ -2338,18 +2379,24 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               mode="info"
               onOpenContainerTerminal={openContainerTerminal}
             />
+            </Suspense>
           </div>
+          )}
         </div>
       </div>
       {/* Git Drawer */}
-      <GitDrawer
-        isOpen={gitDrawerOpen}
-        onClose={() => setGitDrawerOpen(false)}
-        sessionId={session.id}
-        terminalId={activeTab}
-        gitInfo={gitInfo}
-        onRefresh={refreshGitInfo}
-      />
+      {gitEnabled && gitDrawerOpen && (
+        <Suspense fallback={null}>
+          <GitDrawer
+            isOpen={gitDrawerOpen}
+            onClose={() => setGitDrawerOpen(false)}
+            sessionId={session.id}
+            terminalId={activeTab}
+            gitInfo={gitInfo}
+            onRefresh={refreshGitInfo}
+          />
+        </Suspense>
+      )}
       {/* Quick File Picker Modal */}
       <QuickFilePickerModal
         isOpen={filePickerOpen}

@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
  */
 export interface FeatureDef {
   key: string;
+  group: "Editor" | "Terminal" | "Panels" | "AI";
   label: string;
   desc: string;
 }
@@ -17,13 +18,57 @@ export interface FeatureDef {
 export const FEATURES = [
   {
     key: "editorSyntaxHighlight",
+    group: "Editor",
     label: "Editor syntax highlighting",
     desc: "Colour code in the Quick Editor (CodeMirror). When off, a plain text editor is used and the highlighting engine is never downloaded or started.",
   },
   {
     key: "terminalFileLinks",
+    group: "Terminal",
     label: "Open file in editor on click",
     desc: "Click a file path or file name in terminal output to open it in the editor, including relative paths (looked up in the shell's folder, your home folder, or by search on the server). When off, no path scanning or lookup runs.",
+  },
+  {
+    key: "panelTunnels",
+    group: "Panels",
+    label: "Ports panel",
+    desc: "Port-forwarding tab in the session toolbar.",
+  },
+  {
+    key: "panelDocker",
+    group: "Panels",
+    label: "Docker panel",
+    desc: "Containers and images tab. When off, the panel code is not loaded and nothing polls Docker.",
+  },
+  {
+    key: "panelProcesses",
+    group: "Panels",
+    label: "Processes panel",
+    desc: "Task-manager tab. When off, the panel code is not loaded and no process polling runs.",
+  },
+  {
+    key: "panelServices",
+    group: "Panels",
+    label: "Services panel",
+    desc: "System-services tab. When off, the panel code is not loaded.",
+  },
+  {
+    key: "panelSystem",
+    group: "Panels",
+    label: "System panel",
+    desc: "Hardware, network and OS info tab. When off, the panel code is not loaded.",
+  },
+  {
+    key: "panelLibrary",
+    group: "Panels",
+    label: "Library panel",
+    desc: "Saved commands and notes tab in the session toolbar.",
+  },
+  {
+    key: "panelGit",
+    group: "Panels",
+    label: "Git status pill and drawer",
+    desc: "Git branch pill and drawer. When off, no git status command is run on the server after connecting.",
   },
 ] as const satisfies readonly FeatureDef[];
 
