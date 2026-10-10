@@ -1,6 +1,7 @@
 import { parseOsc7, parsePromptCwd, setTerminalCwd, forgetTerminalCwd } from "../terminal/cwd";
 import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
 import { getFileLinkRegex } from "../terminal/fileLinkTypes";
+import { startRecording, stopRecording, getRecorder, isRecording, onRecordingChange, castToPlainText } from "../terminal/recorder";
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -184,6 +185,14 @@ const TerminalView = ({
   const [showHistory, setShowHistory] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
   const copilotEnabled = useFeatureFlag('aiCopilot');
+  const recordingEnabled = useFeatureFlag('sessionRecording');
+  const [recording, setRecording] = useState(() => isRecording(terminalId));
+  useEffect(() => {
+    setRecording(isRecording(terminalId));
+    const off = onRecordingChange(() => setRecording(isRecording(terminalId)));
+    // A recording lives only as long as its terminal; closing the tab discards it.
+    return () => { off(); stopRecording(terminalId); };
+  }, [terminalId]);
 
   const isProdServer = isProd || Boolean(serverName && (
     serverName.toLowerCase().includes("prod") ||
@@ -452,6 +461,30 @@ const TerminalView = ({
   };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const handleStartRecording = (withInput: boolean) => {
+    const term = xtermRef.current;
+    if (!term) return;
+    startRecording(terminalId, { cols: term.cols, rows: term.rows, title: serverName || undefined, captureInput: withInput });
+    notify(withInput ? 'Recording output and keystrokes' : 'Recording output');
+  };
+
+  const handleStopRecording = (format: 'cast' | 'text') => {
+    const rec = stopRecording(terminalId);
+    if (!rec) return;
+    const body = format === 'cast' ? rec.toCast() : castToPlainText(rec.events);
+    const blob = new Blob([body], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `session-${serverName || 'terminal'}-${stamp}.${format === 'cast' ? 'cast' : 'log'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify(rec.truncated ? 'Recording saved (size limit reached, end cut off)' : `Recording saved (${rec.durationSeconds.toFixed(0)}s)`);
+  };
   const handlePasteRef = useRef<(text: string) => void>(() => {});
 
   const handleContextCopy = async () => {
@@ -970,6 +1003,7 @@ const TerminalView = ({
       } else {
         bytes = Array.from(new TextEncoder().encode(data));
       }
+      getRecorder(terminalId)?.input(data);
       invoke('write_terminal_data', {
         terminalId,
         data: bytes,
@@ -1348,6 +1382,7 @@ const TerminalView = ({
 
     // Handle Resize
     const onResizeDisposable = term.onResize(({ cols, rows }) => {
+      getRecorder(terminalId)?.resize(cols, rows);
       invoke('resize_terminal', { terminalId, cols, rows }).catch(console.error);
     });
 
@@ -1362,6 +1397,7 @@ const TerminalView = ({
     outputChannel.onmessage = (raw) => {
       const data = new Uint8Array(raw as ArrayBuffer);
       term.write(data);
+      getRecorder(terminalId)?.output(data);
       if (!hasReceivedFirstOutput) {
         hasReceivedFirstOutput = true;
         if (isActiveRef.current && !disabledRef.current) {
@@ -1746,6 +1782,18 @@ const TerminalView = ({
         </div>
       )}
 
+      {recording && recordingEnabled && (
+        <button
+          type="button"
+          onClick={() => handleStopRecording('cast')}
+          title="Recording - click to stop and save (.cast)"
+          className="absolute bottom-2 right-3 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/40 text-[10px] font-bold text-red-300 hover:bg-red-500/25 transition-colors select-none"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          REC
+        </button>
+      )}
+
       {/* Floating Command Output Quick Actions & OSC 133 Status */}
       {lastCommand && isFeatureEnabled('terminalCommandBlocks') && (
         <div
@@ -2023,6 +2071,9 @@ const TerminalView = ({
           onClear={handleContextClear}
           onReset={handleContextReset}
           onExport={handleContextExport}
+          recording={recordingEnabled ? recording : null}
+          onStartRecording={handleStartRecording}
+          onStopRecording={handleStopRecording}
           onPasteSavedPassword={handlePasteSavedPassword}
         />
       )}

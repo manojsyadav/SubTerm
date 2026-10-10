@@ -33,6 +33,7 @@ interface CommandPaletteProps {
   onExecuteCommand?: (cmd: string) => void;
   enableMonitoring?: boolean;
   onOpenLocalTerminal?: () => void;
+  onOpenRecordingPlayer?: () => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -51,6 +52,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onExecuteCommand,
   enableMonitoring = true,
   onOpenLocalTerminal,
+  onOpenRecordingPlayer,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -150,6 +152,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         icon: <Terminal size={14} className="text-teal-400" />,
         shortcut: getActiveShortcut("openLocalTerminal"),
         action: onOpenLocalTerminal,
+      });
+    }
+    if (onOpenRecordingPlayer) {
+      list.push({
+        id: "act-play-recording",
+        category: "Action",
+        title: "Play Session Recording",
+        subtitle: "Open an asciinema .cast file and replay it",
+        icon: <Terminal size={14} className="text-red-400" />,
+        action: onOpenRecordingPlayer,
       });
     }
     list.push({

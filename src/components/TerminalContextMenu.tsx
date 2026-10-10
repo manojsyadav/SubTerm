@@ -8,6 +8,8 @@ import {
   RotateCw,
   Download,
   KeyRound,
+  Circle,
+  Square,
 } from "lucide-react";
 
 export interface ContextMenuState {
@@ -27,6 +29,10 @@ interface TerminalContextMenuProps {
   onClear: () => void;
   onReset: () => void;
   onExport: () => void;
+  /** null = recording feature off; otherwise whether a recording is running. */
+  recording: boolean | null;
+  onStartRecording: (withInput: boolean) => void;
+  onStopRecording: (format: "cast" | "text") => void;
   onPasteSavedPassword: () => void;
 }
 
@@ -40,6 +46,9 @@ export function TerminalContextMenu({
   onClear,
   onReset,
   onExport,
+  recording,
+  onStartRecording,
+  onStopRecording,
   onPasteSavedPassword,
 }: TerminalContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -67,7 +76,7 @@ export function TerminalContextMenu({
 
   // Ensure menu stays within window bounds
   const x = Math.min(menu.x, window.innerWidth - 225);
-  const y = Math.min(menu.y, window.innerHeight - 280);
+  const y = Math.min(menu.y, window.innerHeight - 360);
 
   return (
     <>
@@ -218,6 +227,52 @@ export function TerminalContextMenu({
             <span>Export Buffer to .log</span>
           </div>
         </button>
+
+        {recording !== null && (
+          <>
+            <div className="my-1 border-t border-white/5" />
+            {recording ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { onStopRecording("cast"); onClose(); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-zinc-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+                >
+                  <Square size={13} className="text-red-400" />
+                  <span>Stop and save recording (.cast)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onStopRecording("text"); onClose(); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-zinc-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+                >
+                  <Square size={13} className="text-red-400" />
+                  <span>Stop and save as text (.log)</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { onStartRecording(false); onClose(); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-zinc-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+                >
+                  <Circle size={13} className="text-red-400" />
+                  <span>Start recording</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onStartRecording(true); onClose(); }}
+                  title="Also records what you type, including passwords typed at prompts"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-zinc-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+                >
+                  <Circle size={13} className="text-red-400" />
+                  <span>Start recording with keystrokes</span>
+                </button>
+              </>
+            )}
+          </>
+        )}
       </div>
     </>
   );
