@@ -4,6 +4,11 @@ $ErrorActionPreference = 'Stop'
 
 Write-Host "Building SubTerm release binary (skipping installers)..." -ForegroundColor Cyan
 npx tauri build --no-bundle
+# Native commands don't trip $ErrorActionPreference; without this a failed build
+# would silently zip whatever stale exe is already in target/.
+if ($LASTEXITCODE -ne 0) {
+    throw "tauri build failed (exit code $LASTEXITCODE); not packaging."
+}
 
 $targetExe = "src-tauri/target/release/subterm.exe"
 if (-not (Test-Path $targetExe)) {
