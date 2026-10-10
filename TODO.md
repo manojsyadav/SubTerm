@@ -19,12 +19,6 @@ This document tracks active development tasks, pending architectural optimizatio
 ---
 
 ## 🏗️ Engineering Health: Architecture, Testing & CI
-
-- [ ] 🟡 **P2 · L** — **Triage `.unwrap()` / `.expect()` in the Rust Backend**
-  - 219 occurrences across `src-tauri/src` (168 in `lib.rs` alone, 23 in `tunnel.rs`, 15 in `identity.rs`). A panic in any of these can crash the whole Tauri process, killing every open SSH session, not just one request.
-  - Prioritize paths touching untrusted network input (SSH packet/channel handling) and on-disk vault/config parsing — replace with `Result` propagation and surfaced errors.
-  - **Validation:** `grep -rc unwrap\|expect` count trends down in connection/vault-handling modules; fuzzed/malformed inputs no longer crash the app.
-
 - [ ] 🟢 **P3 · L** — **Reduce `any` / `as any` in the TypeScript Frontend**
   - 239 occurrences across `src/**/*.tsx`/`*.ts` with no lint rule currently flagging new ones.
   - Backfill proper types incrementally, starting with session/file-path handling code where a mistyped value has real consequences.

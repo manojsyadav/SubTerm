@@ -337,7 +337,7 @@ pub async fn start_tunnel(
             ("local".into(), addr.to_string(), format!("{}:{}", host, port))
         }
         "R" => {
-            let (addr, port) = r_bind.as_ref().unwrap();
+            let (addr, port) = r_bind.as_ref().ok_or_else(|| "Missing server bind address".to_string())?;
             // Validate local target now so we don't register a server-side
             // listener that maps to nowhere.
             let (lh, lp) = parse_target(&spec.remote)?;
@@ -395,31 +395,40 @@ pub async fn start_tunnel(
     let _ = listen_for_task; // listener already bound; addr unused inside task
     let join = tauri::async_runtime::spawn(async move {
         let result = match kind_for_task.as_str() {
-            "dynamic" => {
-                run_dynamic_forward(
-                    app_for_task.clone(),
-                    session_for_task.clone(),
-                    handle,
-                    listener_for_task.expect("dynamic kind always has a listener"),
-                    Arc::clone(&status_for_task),
-                    stop_rx,
-                )
-                .await
-            }
-            "local" => {
-                run_local_forward(
-                    app_for_task.clone(),
-                    session_for_task.clone(),
-                    handle,
-                    listener_for_task.expect("local kind always has a listener"),
-                    target_for_task.clone(),
-                    Arc::clone(&status_for_task),
-                    stop_rx,
-                )
-                .await
+            "dynamic" => match listener_for_task {
+                Some(listener) => {
+                    run_dynamic_forward(
+                        app_for_task.clone(),
+                        session_for_task.clone(),
+                        handle,
+                        listener,
+                        Arc::clone(&status_for_task),
+                        stop_rx,
+                    )
+                    .await
+                }
+                None => Err("Internal error: dynamic tunnel has no listener".to_string()),
+            },
+            "local" => match listener_for_task {
+                Some(listener) => {
+                    run_local_forward(
+                        app_for_task.clone(),
+                        session_for_task.clone(),
+                        handle,
+                        listener,
+                        target_for_task.clone(),
+                        Arc::clone(&status_for_task),
+                        stop_rx,
+                    )
+                    .await
+                }
+                None => Err("Internal error: local tunnel has no listener".to_string()),
+            },
+            "remote" if r_bind_for_task.is_none() => {
+                Err("Internal error: remote tunnel has no bind address".to_string())
             }
             "remote" => {
-                let (addr, port) = r_bind_for_task.unwrap();
+                let (addr, port) = r_bind_for_task.unwrap_or_default();
                 run_remote_forward(
                     app_for_task.clone(),
                     handle,

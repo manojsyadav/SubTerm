@@ -139,8 +139,9 @@ pub async fn get_sftp_session(
     let (transport_key, session_arc) = {
         let connections = state.connections.lock().await;
         let dedicated_key = format!("{}::sftp", session_id);
-        if !session_id.contains("::") && connections.contains_key(&dedicated_key) {
-            (dedicated_key.clone(), Arc::clone(connections.get(&dedicated_key).unwrap()))
+        let dedicated = if session_id.contains("::") { None } else { connections.get(&dedicated_key) };
+        if let Some(sess) = dedicated {
+            (dedicated_key.clone(), Arc::clone(sess))
         } else if let Some(sess) = connections.get(session_id) {
             (session_id.to_string(), Arc::clone(sess))
         } else {
@@ -531,16 +532,12 @@ pub async fn sftp_rename(
             .parent()
             .map(|p| p.to_string_lossy().replace('\\', "/"))
             .filter(|s| !s.is_empty() && s != "/");
-        let needs_mkdir = match &parent_str {
-            Some(p) => sftp.metadata(p.as_str()).await.is_err(),
-            None => false,
+        let p = match &parent_str {
+            Some(p) if sftp.metadata(p.as_str()).await.is_err() => p.clone(),
+            _ => return Err(format!("rename '{}' -> '{}': {}", oldpath, newpath, first_err)),
         };
-        if !needs_mkdir {
-            return Err(format!("rename '{}' -> '{}': {}", oldpath, newpath, first_err));
-        }
         // mkdir -p the missing chain. AlreadyExists is treated as success
         // so a parallel rename racing into the same tree doesn't break us.
-        let p = parent_str.unwrap();
         let parts: Vec<&str> = p.trim_start_matches('/').split('/').filter(|s| !s.is_empty()).collect();
         let mut cur = String::from("/");
         for part in parts {
