@@ -19,6 +19,7 @@ const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.Cmd
 const GitDrawer = lazy(() => import("./GitDrawer").then((m) => ({ default: m.GitDrawer })));
 const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
+import { PathChoiceModal } from "./PathChoiceModal";
 import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
@@ -149,6 +150,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   const textPrompt = useTextPrompt();
   const [editorFile, setEditorFile] = useState<{ path: string; name: string } | null>(null);
+  // Several files share the clicked name: let the user pick instead of guessing.
+  const [pathChoices, setPathChoices] = useState<{ name: string; paths: string[] } | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [filePickerPath, setFilePickerPath] = useState<string>("");
 
@@ -632,12 +635,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         const r = await invoke<{ kind: string; path: string; candidates: string[] }>('local_resolve_path', {
           path: cleanPath, cwd: cwd || null,
         }).catch(() => null);
-        const hit = r?.kind === 'file'
-          ? r.path
-          : r?.kind === 'ambiguous'
-            ? [...r.candidates].sort((a, b) => a.length - b.length)[0] // nearest/shortest match
-            : null;
-        if (hit) setEditorFile({ path: hit, name: hit.split(/[\\/]/).filter(Boolean).pop() || hit });
+        if (r?.kind === 'file') {
+          setEditorFile({ path: r.path, name: r.path.split(/[\\/]/).filter(Boolean).pop() || r.path });
+        } else if (r?.kind === 'ambiguous') {
+          setPathChoices({ name: cleanPath, paths: [...r.candidates].sort((a, b) => a.length - b.length) });
+        }
         return;
       }
 
@@ -660,10 +662,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             return;
           }
           if (r.kind === 'ambiguous') {
-            // Several matches: let the user choose, starting in the shallowest hit's folder.
-            const best = [...r.candidates].sort((a, b) => a.split('/').length - b.split('/').length)[0];
-            setFilePickerPath(best.slice(0, best.lastIndexOf('/')) || '/');
-            setFilePickerOpen(true);
+            // Several files share this name (e.g. docker-compose.yml in every project): list them.
+            setPathChoices({
+              name: cleanPath,
+              paths: [...r.candidates].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b)),
+            });
             return;
           }
           // notfound: fall back to the picker at the shell's cwd.
@@ -2393,6 +2396,17 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             onRefresh={refreshGitInfo}
           />
         </Suspense>
+      )}
+      {pathChoices && (
+        <PathChoiceModal
+          name={pathChoices.name}
+          paths={pathChoices.paths}
+          onClose={() => setPathChoices(null)}
+          onChoose={(p) => {
+            setPathChoices(null);
+            setEditorFile({ path: p, name: p.split(/[\\/]/).filter(Boolean).pop() || p });
+          }}
+        />
       )}
       {/* Quick File Picker Modal */}
       <QuickFilePickerModal
