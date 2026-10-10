@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(sync)` — Choose what to sync**:
+  **Settings → Cloud Sync → What to sync on this device** lets you leave out whole groups of data — Servers and folders, Credentials and SSH keys, Saved commands, Notes. Unchecked data is neither uploaded nor downloaded by this device, and its deletions are held back too, so you can, for example, keep credentials on your laptop only. The choice is per device and does not affect other devices. Sync Health counts ignore the excluded groups.
+
 - **`feat(terminal)` — Session recording and playback**:
   Right-click a terminal and choose **Start recording** to capture its output to an [asciinema v2](https://docs.asciinema.org/manual/asciicast/v2/) recording, then **Stop and save recording (.cast)** — or save just the text as a `.log` — from the same menu; a red **REC** badge shows while recording and clicking it stops and saves. **Start recording with keystrokes** also captures what you type, so it is a separate choice (passwords typed at prompts would be included). Resizes are recorded, and a recording is capped at about 50 MB of text. Replay any `.cast` file (ours or from asciinema) with **Play Session Recording** in the command palette: play/pause, a scrub slider, 0.5x–8x speed and a **Skip idle** option that caps long pauses. Closing a terminal discards an unsaved recording. Has its own toggle in Settings → Feature Toggles.
 
