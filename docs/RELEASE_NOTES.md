@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`fix(terminal)` — Saving recordings and exported buffers**:
+  **Stop and save recording** and **Export Buffer to .log** now open a native **Save as** dialog so you choose the folder and name. Before, they relied on a browser-style download that did nothing inside the app. If you cancel the dialog the recording keeps running, so nothing is lost.
+
 - **`perf(sftp)` — Faster large downloads**:
   Downloading a single file of 16 MiB or more now reads it over up to four streams at once, each fetching a different part of the file, instead of one read at a time. A single sequential read is limited by chunk size divided by round-trip time, so high-latency links gained the most headroom. Smaller files, servers that refuse extra file handles, and folder downloads keep the previous single-stream behaviour. Progress, cancel and the "incomplete download" check work the same; a cancelled or failed download removes the partial file. Uploads were already pipelined and are unchanged.
 

@@ -1,6 +1,7 @@
 import { parseOsc7, parsePromptCwd, setTerminalCwd, forgetTerminalCwd } from "../terminal/cwd";
 import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
 import { getFileLinkRegex } from "../terminal/fileLinkTypes";
+import { saveTextFile } from "../terminal/saveFile";
 import { startRecording, stopRecording, getRecorder, isRecording, onRecordingChange, castToPlainText } from "../terminal/recorder";
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
@@ -470,20 +471,21 @@ const TerminalView = ({
   };
 
   const handleStopRecording = (format: 'cast' | 'text') => {
-    const rec = stopRecording(terminalId);
+    const rec = getRecorder(terminalId);
     if (!rec) return;
     const body = format === 'cast' ? rec.toCast() : castToPlainText(rec.events);
-    const blob = new Blob([body], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `session-${serverName || 'terminal'}-${stamp}.${format === 'cast' ? 'cast' : 'log'}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    notify(rec.truncated ? 'Recording saved (size limit reached, end cut off)' : `Recording saved (${rec.durationSeconds.toFixed(0)}s)`);
+    const extension = format === 'cast' ? 'cast' : 'log';
+    saveTextFile(body, `session-${serverName || 'terminal'}-${stamp}.${extension}`, extension)
+      .then((path) => {
+        if (path === null) {
+          notify('Save cancelled - still recording', 'err');
+          return;
+        }
+        stopRecording(terminalId);
+        notify(rec.truncated ? 'Recording saved (size limit reached, end cut off)' : `Recording saved (${rec.durationSeconds.toFixed(0)}s)`);
+      })
+      .catch((e) => notify(`Could not save recording: ${e}`, 'err'));
   };
   const handlePasteRef = useRef<(text: string) => void>(() => {});
 
@@ -554,17 +556,10 @@ const TerminalView = ({
       lines.pop();
     }
     const text = lines.join('\n');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `terminal-${serverName || 'session'}-${stamp}.log`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    notify('Buffer exported to .log');
+    saveTextFile(text, `terminal-${serverName || 'session'}-${stamp}.log`, 'log')
+      .then((path) => { if (path !== null) notify('Buffer exported to .log'); })
+      .catch((e) => notify(`Could not export buffer: ${e}`, 'err'));
   };
 
   // Command block separation and output capture (OSC 133 + buffer parsing)
