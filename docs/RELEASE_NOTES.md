@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`perf(sftp)` — Faster large downloads**:
+  Downloading a single file of 16 MiB or more now reads it over up to four streams at once, each fetching a different part of the file, instead of one read at a time. A single sequential read is limited by chunk size divided by round-trip time, so high-latency links gained the most headroom. Smaller files, servers that refuse extra file handles, and folder downloads keep the previous single-stream behaviour. Progress, cancel and the "incomplete download" check work the same; a cancelled or failed download removes the partial file. Uploads were already pipelined and are unchanged.
+
 - **`feat(sync)` — Choose what to sync**:
   **Settings → Cloud Sync → What to sync on this device** lets you leave out whole groups of data — Servers and folders, Credentials and SSH keys, Saved commands, Notes. Unchecked data is neither uploaded nor downloaded by this device, and its deletions are held back too, so you can, for example, keep credentials on your laptop only. The choice is per device and does not affect other devices. Sync Health counts ignore the excluded groups.
 

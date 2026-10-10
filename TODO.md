@@ -20,12 +20,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ---
 
-## ⚡ Core Performance & IPC Optimizations
-
-- [ ] 🟡 **P2 · L** — **SFTP Pipelined Transfers & Concurrent Chunking**
-  - Implement multi-stream concurrent byte-range chunking for large single-file transfers across parallel SFTP channels.
-  - Automatically saturate high-bandwidth, high-latency WAN links beyond the current 256 KiB sequential pipelined stream.
-
 ---
 
 ## ✏️ Editor & Terminal UX
