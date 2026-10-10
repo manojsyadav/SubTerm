@@ -6,6 +6,7 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio } from "lucide-react";
 import { useBroadcast } from "../ui/broadcast";
 import TerminalView from "./TerminalView";
+import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
 import type { GitRepoInfo } from "./GitDrawer";
 import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
@@ -2071,37 +2072,16 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             its scrollback. The tiles fill the whole left panel; the tool
             side panel continues to work exactly as before. */}
         <div className={`h-full relative ${activeTool && isCompact ? 'hidden' : 'flex-1 min-w-0'}`}>
-          {(() => {
-            const inSplit = splitTerminals.length >= 2 && !isCompact;
-            // One flat, id-keyed list for BOTH layouts. Switching between
-            // single and split view only changes wrapper styles, so every
-            // TerminalView (and its xterm scrollback) stays mounted.
-            return (
-              <div className={inSplit ? `absolute inset-0 flex ${splitOrientation === "h" ? "flex-row" : "flex-col"}` : "contents"}>
-                {terminals.map(t => {
-                  const slotIdx = inSplit ? splitTerminals.indexOf(t.id) : -1;
-                  const inTile = slotIdx >= 0;
-                  const isFocused = activeTab === t.id;
-                  const grow = splitRatios[slotIdx] ?? 1;
-                  const notLast = inTile && slotIdx < splitTerminals.length - 1;
-                  return (
-                    <div
-                      key={t.id}
-                      style={inTile ? { flexGrow: grow, flexBasis: 0, order: slotIdx } : undefined}
-                      onMouseDown={inTile ? () => setActiveTab(t.id) : undefined}
-                      onTouchStart={inTile ? () => setActiveTab(t.id) : undefined}
-                      className={
-                        inTile
-                          ? `group/pane relative min-w-0 min-h-0 border ${
-                              isFocused
-                                ? "border-primary/40 shadow-[inset_0_0_0_1px_rgba(var(--primary),0.15)]"
-                                : "border-white/[0.03]"
-                            }`
-                          : inSplit
-                            ? "hidden"
-                            : `absolute inset-0 ${isFocused ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`
-                      }
-                    >
+          <TerminalPanes
+            terminals={terminals}
+            splitTerminals={splitTerminals}
+            orientation={splitOrientation}
+            ratios={splitRatios}
+            isCompact={isCompact}
+            activeTab={activeTab}
+            onFocusPane={setActiveTab}
+            renderPane={(t, { slotIdx, inTile, inSplit, isFocused, notLast }) => (
+              <>
                       {inTile && (
                         <div className="absolute top-1.5 left-2 z-30 pointer-events-none opacity-40 group-hover/pane:opacity-90 transition-opacity flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/60 border border-white/10 text-[10px] font-mono text-zinc-300">
                           <span className={`w-1.5 h-1.5 rounded-full ${isFocused ? 'bg-primary' : 'bg-zinc-500'}`} />
@@ -2212,12 +2192,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                             }`}
                           />
                         )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+              </>
+            )}
+          />
         </div>
 
         {/* Resizable divider — only useful when both panes are visible. */}

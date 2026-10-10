@@ -48,9 +48,6 @@ This document tracks active development tasks, pending architectural optimizatio
   - View-only decoration — the document is never modified, so saving always writes the full file. Show "N lines hidden" in the status bar; auto-expand a block when the cursor enters it or an edit touches its boundary.
   - **Validation:** toggling hides/shows comment blocks in `.sh`, `.yml`, `.conf`; saving with comments hidden leaves the file's comment lines intact; unit tests cover comment-line detection per language.
 
-- [ ] 🟡 **P2 · S** — **Regression test: splitting a terminal keeps scrollback**
-  - Guards the fix in `fd99aeb` (terminals share one flat id-keyed list so split/unsplit never remounts a `TerminalView`). The repo has no component tests yet; add a minimal one (or a documented manual check in `docs/`) so the layout isn't re-split into separate trees later.
-
 - [ ] 🟡 **P2 · M** — **Split-pane polish**
   - Persist split layout (members, orientation, ratios) per session across restarts.
   - Keyboard shortcuts for focus next/previous pane and for split right/down, registered in `src/shortcuts/defaults.ts`.
