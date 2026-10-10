@@ -1,3 +1,4 @@
+import { SettingsFileLinkTypes } from "./SettingsFileLinkTypes";
 import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -403,6 +404,10 @@ const PageTerminal = ({ settings, setSettings }: any) => {
             </div>
           );
         })}
+      </SectionCard>
+
+      <SectionCard title="Clickable file types" subtitle="Choose which file names in terminal output can be clicked to open in the editor. Add or remove extensions and exact file names; changes apply immediately.">
+        <SettingsFileLinkTypes />
       </SectionCard>
 
       <SectionCard title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">

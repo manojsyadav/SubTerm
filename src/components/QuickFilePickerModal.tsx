@@ -1,3 +1,4 @@
+import { isClickableFileName } from "../terminal/fileLinkTypes";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -31,9 +32,7 @@ interface QuickFilePickerModalProps {
 
 const isTextOrCodeFile = (name: string) => {
   return (
-    /\.(ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|zsh|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service|timer|crt|cer|pem|csr|key|pub|cnf|j2|tf|tfvars|csv)$/i.test(
-      name
-    ) ||
+    isClickableFileName(name) || // user-configurable list (Settings -> Clickable file types)
     /^(Dockerfile|Makefile|docker-compose|README|LICENSE|\.env|\.gitignore|\.bashrc|\.zshrc)$/i.test(
       name
     ) ||

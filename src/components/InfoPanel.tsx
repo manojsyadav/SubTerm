@@ -902,7 +902,8 @@ const InfoPanel = ({ sessionId, disabled, visible = true, mode = "info", onOpenC
 
   if (mode === "docker") {
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-[#0a0a0d] overflow-hidden">
+      // DockerTab has no scroller of its own, so this wrapper must scroll (overflow-hidden here clipped long container lists).
+      <div className="flex-1 flex flex-col min-h-0 bg-[#0a0a0d] overflow-y-auto custom-scrollbar p-3 sm:p-4">
         <DockerTab
           sessionId={sessionId}
           disabled={disabled}

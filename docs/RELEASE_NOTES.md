@@ -6,6 +6,12 @@
 
 ### 🚀 New Features
 
+- **`feat(terminal)` — Configurable clickable file types**:
+  **Settings → Clickable file types** lets you choose which file names in terminal output become clickable to open in the editor: add or remove extensions (for example `.crt`, `.tpl`, `.j2`) and exact file names (`Dockerfile`, `Jenkinsfile`), or reset to the defaults. Changes apply immediately, and the same list drives which files the Quick Open picker offers as editable. Extensions ending in a symbol (such as `.c++`) now match correctly.
+
+- **`fix(docker)` — Docker container list scrolls**:
+  The Docker panel's list was clipped instead of scrolling when there were more containers or images than fit on screen.
+
 - **`feat(editor)` — Hide comments**:
   A **Hide comments** button in the Quick Editor collapses runs of comment-only lines into a single `⋯ N comment lines hidden — click to show` marker (click it to expand just that block). View only: the file is never modified, so saving always writes the full contents, and the status bar shows how many lines are hidden. Supports shell/YAML/TOML/Python/nginx/INI (`#`, `;`), C-style languages (`//`, `/* */`), SQL, HTML/XML and CSS; trailing comments after code and a shebang line stay visible. Needs syntax highlighting; has its own toggle in Settings → Feature Toggles.
 

@@ -1,4 +1,5 @@
 import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
+import { getFileLinkRegex } from "../terminal/fileLinkTypes";
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -819,8 +820,9 @@ const TerminalView = ({
             }
 
             // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
-            const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service|timer|crt|cer|pem|csr|key|pub|cnf|j2|tf|tfvars|csv)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
-            while ((match = fileRegex.exec(lineText)) !== null) {
+            // Extensions / names are user-configurable (Settings -> Clickable file types).
+            const fileRegex = getFileLinkRegex();
+            while (fileRegex && (match = fileRegex.exec(lineText)) !== null) {
               const fileName = match[1];
               const startX = match.index + (match[0].length - fileName.length) + 1;
               const endX = startX + fileName.length - 1;
