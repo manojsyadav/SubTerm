@@ -70,7 +70,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
           prev === "sign-up-verify" || prev === "sign-up-password" ? prev : "chooser",
         );
       }
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     }
   }, []);
@@ -92,7 +92,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
         setStage("signed-in");
         resetForms();
       }
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -107,7 +107,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
       await invoke("cloud_signup", { email: email.trim() });
       setInfo("Check your inbox for the verification link. Paste the token below.");
       setStage("sign-up-verify");
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -127,7 +127,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
       setEmail(resp.email);
       setStage("sign-up-password");
       setInfo("Email verified. Now set a password for your account.");
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -148,7 +148,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
         setInfo("Account created and signed in.");
         resetForms();
       }
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -163,7 +163,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
       await invoke("cloud_request_password_reset", { email: email.trim() });
       setInfo("If that email is registered, a reset link is on its way. Paste the token below.");
       setStage("forgot-reset");
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -186,7 +186,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
         setInfo("Password updated and signed in. Other devices have been signed out.");
         resetForms();
       }
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -201,7 +201,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
       await invoke("cloud_request_login_link", { email: email.trim() });
       setInfo("If that email is registered, a sign-in link is on its way. Paste the token below.");
       setStage("link-verify");
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -221,7 +221,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
         setStage("signed-in");
         resetForms();
       }
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -235,7 +235,7 @@ const CloudPanel = ({ isOpen, onClose, onLocalProfilesChanged }: Props) => {
       setStage("chooser");
       setSignedInEmail(null);
       resetForms();
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);

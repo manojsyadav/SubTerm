@@ -91,7 +91,7 @@ export const FileDiffModal: React.FC<FileDiffModalProps> = ({ isOpen, onClose, l
         setLeftContent(rightContent);
       }
       onOverwritten?.();
-    } catch (err: any) {
+    } catch (err) {
       setError(`Overwrite failed: ${err}`);
     } finally {
       setOverwriting(null);

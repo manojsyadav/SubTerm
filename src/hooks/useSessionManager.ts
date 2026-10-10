@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { QuickAuth } from "../components/QuickConnectModal";
+import type { Server } from "../types";
 
 export type Session = {
   id: string;
@@ -102,7 +103,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   );
 
   const openServer = useCallback(
-    (server: any, initialTool?: Session["initialTool"]) => {
+    (server: Server, initialTool?: Session["initialTool"]) => {
       const sessionId = `session-${server.id}`;
       setSessions((prev) => {
         const existing = prev.find((s) => s.id === sessionId);
@@ -132,11 +133,11 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   );
 
   const openMultipleServers = useCallback(
-    (serversToOpen: any[], onFleetBroadcast?: (ids: string[]) => void) => {
+    (serversToOpen: Server[], onFleetBroadcast?: (ids: string[]) => void) => {
       if (!serversToOpen || !serversToOpen.length) return;
       const newSessions: Session[] = [];
       const newIds: string[] = [];
-      serversToOpen.forEach((srv: any) => {
+      serversToOpen.forEach((srv) => {
         const sId = `session-${srv.id}`;
         newIds.push(sId);
         newSessions.push({

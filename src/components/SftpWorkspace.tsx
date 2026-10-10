@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
@@ -38,7 +39,7 @@ interface SftpWorkspaceProps {
   // umbrella ("Files" vs "Mirror" sub-tabs), so the session toolbar has
   // one fewer item to fit on phones.
   serverId?: number;
-  mirrorsConfig?: any[];
+  mirrorsConfig?: ComponentProps<typeof MirrorsPanel>["configuredMirrors"];
   /** Focused PTY. Passed through while SFTP hides the terminal on a narrow window. */
   terminalId?: string;
   /** Compact layout: close the SFTP pane so the terminal that just received `cd` is visible. */

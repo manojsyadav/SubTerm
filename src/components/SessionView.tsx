@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio } from "lucide-react";
 import { useBroadcast } from "../ui/broadcast";
+import type { Session } from "../hooks/useSessionManager";
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
@@ -77,9 +78,51 @@ const SepToggle = ({ on, onToggle, status, title, onReconnect }: {
   </span>
 );
 
-const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: any) => {
+interface FingerprintPromptPayload {
+  host: string;
+  keyType: string;
+  fingerprint: string;
+  mismatch?: boolean;
+  priorFingerprints?: string[];
+  nonce?: string;
+}
+
+interface KbiPromptPayload {
+  nonce?: string;
+  name?: string;
+  instructions?: string;
+  prompts?: { prompt: string; echo?: boolean }[];
+}
+
+/** Payload of `connection-failed-*` events. */
+interface ConnectionFailedPayload {
+  reason?: string;
+  is_auth_error?: boolean;
+}
+
+/** Payload of `session-disconnected-*` events. */
+interface SessionDisconnectedPayload {
+  reason?: string;
+  user_initiated?: boolean;
+}
+
+type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'mirrors' | 'cmds' | 'info';
+
+interface SessionViewProps {
+  session: Session;
+  profile?: string;
+  onClose: () => void;
+  addLog: (msg: string, type?: string) => void;
+  onStatusChange?: (sessionId: string, status: string) => void;
+  chromeless?: boolean;
+  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean } }[], activeTab: string) => void;
+  isSessionActive?: boolean;
+  onOpenSettings?: () => void;
+}
+
+const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: SessionViewProps) => {
   const broadcast = useBroadcast();
-  const isProd = Boolean((session as any)?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
+  const isProd = Boolean(session?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>(() => session?.isLocal ? 'connected' : 'connecting');
 
   // Bubble every status change up to the parent so the session-tab strip
@@ -100,7 +143,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     version: string;
     kernel: string;
   } | null>(() => {
-    if ((session as any)?.osInfo) return (session as any).osInfo;
+    if (session?.osInfo) return session.osInfo;
     if (session?.isLocal) {
       if (session.localShell === "wsl") {
         return { os_type: "linux", distro: "WSL Linux", distro_id: "wsl", version: "", kernel: "" };
@@ -146,11 +189,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       ? [...prev.slice(prev.length - LOG_CAP + 1), stamped]
       : [...prev, stamped]);
   };
-  const [fingerprintPrompt, setFingerprintPrompt] = useState<any>(null);
+  const [fingerprintPrompt, setFingerprintPrompt] = useState<FingerprintPromptPayload | null>(null);
   // Keyboard-interactive (2FA / verification-code) prompt. `kbiPrompt` holds
   // the backend payload ({ nonce, name, instructions, prompts:[{prompt,echo}] });
   // `kbiValues` mirrors one editable answer per prompt.
-  const [kbiPrompt, setKbiPrompt] = useState<any>(null);
+  const [kbiPrompt, setKbiPrompt] = useState<KbiPromptPayload | null>(null);
   const [kbiValues, setKbiValues] = useState<string[]>([]);
   const [isAuthError, setIsAuthError] = useState(false);
   const [customPassword, setCustomPassword] = useState("");
@@ -523,7 +566,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       onTerminalsChange(session.id, terminals, activeTab);
     }
   }, [session?.id, terminals, activeTab, onTerminalsChange]);
-  const [activeTool, setActiveTool] = useState<'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'mirrors' | 'cmds' | 'info' | null>(() => session?.initialTool || null);
+  const [activeTool, setActiveTool] = useState<ActiveTool | null>(() => session?.initialTool || null);
   const toolEnabled: Record<string, boolean> = {
     sftp: true,
     tunnels: useFeatureFlag('panelTunnels'),
@@ -560,8 +603,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   }, [activeTool, ...Object.values(toolEnabled)]);
   useEffect(() => {
     if (!session?.id) return;
-    const handleSetTool = (e: any) => {
-      if (e.detail) setActiveTool(e.detail);
+    const handleSetTool = (e: Event) => {
+      const detail = (e as CustomEvent<ActiveTool | null | undefined>).detail;
+      if (detail) setActiveTool(detail);
     };
     window.addEventListener(`submarine-set-tool-${session.id}`, handleSetTool);
     return () => window.removeEventListener(`submarine-set-tool-${session.id}`, handleSetTool);
@@ -616,23 +660,23 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   useEffect(() => {
     if (!session?.id) return;
-    const handleSplit = (e: any) => {
-      splitWithNewPane(e.detail?.orientation);
+    const handleSplit = (e: Event) => {
+      splitWithNewPane((e as CustomEvent<{ orientation?: "h" | "v" } | undefined>).detail?.orientation);
     };
     const handleNewTerm = () => {
       addNewTerminal();
     };
     // Focus the next/previous split pane (or terminal tab when not split), wrapping around.
-    const handleFocusPane = (e: any) => {
+    const handleFocusPane = (e: Event) => {
       const ids = splitTerminals.length >= 2 ? splitTerminals : terminals.map(t => t.id);
-      const next = cyclePaneId(ids, activeTab, e.detail?.dir === -1 ? -1 : 1);
+      const next = cyclePaneId(ids, activeTab, (e as CustomEvent<{ dir?: number } | undefined>).detail?.dir === -1 ? -1 : 1);
       if (next) setActiveTab(next);
     };
     const handleToggleSftp = () => {
       setActiveTool(prev => prev === 'sftp' ? null : 'sftp');
     };
-    const handleTerminalCd = (e: any) => {
-      const targetPath = e.detail?.path;
+    const handleTerminalCd = (e: Event) => {
+      const targetPath = (e as CustomEvent<{ path?: string } | undefined>).detail?.path;
       if (!targetPath) return;
       setActiveTool(null);
       const cleanPath = targetPath.replace(/"/g, '\\"');
@@ -640,8 +684,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       const bytes = Array.from(new TextEncoder().encode(cdCmd));
       invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
     };
-    const handleTerminalExec = (e: any) => {
-      const text = e.detail?.text;
+    const handleTerminalExec = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: string } | undefined>).detail?.text;
       if (!text) return;
       const bytes = Array.from(new TextEncoder().encode(text));
       invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
@@ -658,9 +702,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         }
       }
     };
-    const handleOpenEditor = async (e: any) => {
-      const p = e.detail?.path;
-      const cwd = e.detail?.cwd;
+    const handleOpenEditor = async (e: Event) => {
+      const detail = (e as CustomEvent<{ path?: string; cwd?: string } | undefined>).detail;
+      const p = detail?.path;
+      const cwd = detail?.cwd;
       if (!p) {
         setFilePickerPath(cwd || "");
         setFilePickerOpen(true);
@@ -730,7 +775,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       // If no file extension or ends with slash, verify if directory before opening in editor
       if (!cleanPath.includes('.') || cleanPath.endsWith('/')) {
         try {
-          const res = await invoke<any>('sftp_list_dir', { sessionId: session.id, path: cleanPath });
+          const res = await invoke<{ entries?: unknown[] }>('sftp_list_dir', { sessionId: session.id, path: cleanPath });
           if (res && Array.isArray(res.entries)) {
             // It is a directory! Open in SFTP panel rather than text editor
             setActiveTool('sftp');
@@ -762,8 +807,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       }
     };
 
-    const handleToggleTool = (e: any) => {
-      const tool = e.detail?.tool;
+    const handleToggleTool = (e: Event) => {
+      const tool = (e as CustomEvent<{ tool?: ActiveTool } | undefined>).detail?.tool;
       if (tool) {
         setActiveTool((prev) => (prev === tool ? null : tool));
       }
@@ -876,11 +921,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       });
 
     // Setup listeners
-    const unlistenLog = listen(`session-log-${session.id}`, (event: any) => {
+    const unlistenLog = listen<{ msg: string; type: string }>(`session-log-${session.id}`, (event) => {
       pushLog(event.payload);
     });
 
-    const unlistenPrompt = listen(`fingerprint-prompt-${session.id}`, (event: any) => {
+    const unlistenPrompt = listen<FingerprintPromptPayload>(`fingerprint-prompt-${session.id}`, (event) => {
       setFingerprintPrompt(event.payload);
     });
 
@@ -888,7 +933,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       setFingerprintPrompt(null);
     });
 
-    const unlistenKbi = listen(`kbi-prompt-${session.id}`, (event: any) => {
+    const unlistenKbi = listen<KbiPromptPayload>(`kbi-prompt-${session.id}`, (event) => {
       const p = event.payload;
       setKbiPrompt(p);
       setKbiValues(Array.isArray(p?.prompts) ? p.prompts.map(() => "") : []);
@@ -908,14 +953,14 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       sftpRetryRef.current = 0;
       setSftpConnStatus('ready');
     });
-    const unlistenSftpFail = listen(`connection-failed-${session.id}::sftp`, (event: any) => {
+    const unlistenSftpFail = listen<ConnectionFailedPayload>(`connection-failed-${session.id}::sftp`, (event) => {
       // Auth-style failures (2FA-only server, bad credentials) won't get
       // better on retry — go straight to failed; SFTP rides the primary.
       if (event.payload?.is_auth_error) setSftpConnStatus('failed');
       else if (separateSftpRef.current && statusRef.current === 'connected') scheduleSecondaryRetry('sftp');
       else setSftpConnStatus('off');
     });
-    const unlistenSftpDown = listen(`session-disconnected-${session.id}::sftp`, (event: any) => {
+    const unlistenSftpDown = listen<SessionDisconnectedPayload>(`session-disconnected-${session.id}::sftp`, (event) => {
       // Unexpected transport death (the backend already dropped the base SFTP
       // cache, so file ops already fall back to the primary) — try to bring
       // the dedicated connection back. A user-initiated disconnect (toggle
@@ -930,7 +975,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       setFwdConnStatus('ready');
       // Tunnel migration onto the fresh transport happens backend-side.
     });
-    const unlistenFwdFail = listen(`connection-failed-${session.id}::fwd`, (event: any) => {
+    const unlistenFwdFail = listen<ConnectionFailedPayload>(`connection-failed-${session.id}::fwd`, (event) => {
       if (event.payload?.is_auth_error) {
         // Won't get better on retry — run the tunnels on the primary instead.
         setFwdConnStatus('failed');
@@ -943,7 +988,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         setFwdConnStatus('off');
       }
     });
-    const unlistenFwdDown = listen(`session-disconnected-${session.id}::fwd`, (event: any) => {
+    const unlistenFwdDown = listen<SessionDisconnectedPayload>(`session-disconnected-${session.id}::fwd`, (event) => {
       // The watcher already stopped the tunnels that rode this transport.
       // Retry brings the transport back (backend migration restarts them on
       // it); exhausted retries restore them on the primary. A user-initiated
@@ -1008,7 +1053,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       }
     });
 
-    const unlistenFailed = listen(`connection-failed-${session.id}`, (event: any) => {
+    const unlistenFailed = listen<ConnectionFailedPayload>(`connection-failed-${session.id}`, (event) => {
       pushLog({ msg: `Connection failed: ${event.payload?.reason}`, type: 'error' });
       const isAuth = !!event.payload?.is_auth_error;
       setStatus('failed');
@@ -1030,7 +1075,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     // kill, idle timeout). Flip into a frozen state — terminals + SFTP are
     // disabled until the user reconnects or closes the tab. Kick off
     // auto-reconnect immediately; the banner shows the countdown.
-    const unlistenDisconnected = listen(`session-disconnected-${session.id}`, (event: any) => {
+    const unlistenDisconnected = listen<SessionDisconnectedPayload>(`session-disconnected-${session.id}`, (event) => {
       const reason = event.payload?.reason || "Connection lost";
       const userInitiated = !!event.payload?.user_initiated;
       setStatus('disconnected');
@@ -1376,7 +1421,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 </p>
               )}
               <div className="mt-3 space-y-3">
-                {(kbiPrompt.prompts || []).map((p: any, i: number) => (
+                {(kbiPrompt.prompts || []).map((p, i: number) => (
                   <div key={i} className="space-y-1.5">
                     <label className="block text-[12px] text-zinc-300 break-words">
                       {p?.prompt || "Response"}
@@ -1733,7 +1778,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             return (
               <button
                 key={id}
-                onClick={() => setActiveTool(on ? null : id as any)}
+                onClick={() => setActiveTool(on ? null : id as ActiveTool)}
                 title={hint}
                 aria-label={hint}
                 aria-pressed={on}
@@ -1815,7 +1860,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               </button>
             )}
           </div>
-          {quickCommands.map((item: any) => (
+          {quickCommands.map((item) => (
             <button
               key={item.id || item.label}
               onClick={() => {

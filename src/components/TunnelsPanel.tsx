@@ -186,7 +186,7 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
       if (found.length === 0) {
         setScanError("No open listening ports detected (or command requires sudo).");
       }
-    } catch (err: any) {
+    } catch (err) {
       setScanError(`Scan failed: ${String(err)}`);
     } finally {
       setScanning(false);
@@ -208,7 +208,7 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
         },
       });
       persistTunnels();
-    } catch (e: any) {
+    } catch (e) {
       setError(`Failed to forward port ${discovered.port}: ${String(e)}`);
     } finally {
       setForwardingPort(null);
@@ -228,7 +228,7 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
       const next: Record<string, TunnelStatus> = {};
       for (const t of list) next[t.id] = t;
       setTunnels(next);
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     }
   };
@@ -326,7 +326,7 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
       // Save the new tunnel to the node so it comes back next time.
       persistTunnels();
       // The list updates via the live event — no manual reload needed.
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -346,7 +346,7 @@ const TunnelsPanel = ({ sessionId, serverId, disabled = false }: TunnelsPanelPro
       await invoke("stop_tunnel", { tunnelId: id });
       // Persist the removal so a stopped tunnel doesn't return next open.
       persistTunnels();
-    } catch (e: any) { setError(String(e)); }
+    } catch (e) { setError(String(e)); }
   };
 
   const arr = Object.values(tunnels);

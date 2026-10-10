@@ -1,3 +1,4 @@
+import type { AppSettings, SetAppSettings } from "../types.settings";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -81,8 +82,8 @@ function fmtBytes(n: number): string {
 }
 
 interface Props {
-  settings: any;
-  setSettings: (updater: any) => void;
+  settings: AppSettings;
+  setSettings: SetAppSettings;
   onOpenCloudAccount: () => void;
   onSync?: () => Promise<void> | void;
   syncing?: boolean;
@@ -385,7 +386,7 @@ export function SettingsCloudSync({
                 type="button"
                 role="switch"
                 aria-checked={settings.autoSync !== false}
-                onClick={() => setSettings((s: any) => ({ ...s, autoSync: !(s.autoSync !== false) }))}
+                onClick={() => setSettings((s) => ({ ...s, autoSync: !(s.autoSync !== false) }))}
                 className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
                   settings.autoSync !== false ? "bg-primary" : "bg-white/10"
                 }`}
@@ -406,7 +407,7 @@ export function SettingsCloudSync({
                 <select
                   value={settings.syncIntervalMin || 5}
                   onChange={(e) =>
-                    setSettings((s: any) => ({ ...s, syncIntervalMin: parseInt(e.target.value, 10) || 5 }))
+                    setSettings((s) => ({ ...s, syncIntervalMin: parseInt(e.target.value, 10) || 5 }))
                   }
                   className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-zinc-200 outline-none focus:border-primary/50"
                 >
@@ -440,7 +441,7 @@ export function SettingsCloudSync({
             <input
               type="text"
               value={settings.cloudApiBase || ""}
-              onChange={(e) => setSettings((s: any) => ({ ...s, cloudApiBase: e.target.value }))}
+              onChange={(e) => setSettings((s) => ({ ...s, cloudApiBase: e.target.value }))}
               placeholder="https://api.subterm.com (leave empty for default)"
               className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-primary/50"
             />
@@ -585,7 +586,7 @@ export function SettingsCloudSync({
                 />
                 <select
                   value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as any)}
+                  onChange={(e) => setInviteRole(e.target.value as "editor" | "user")}
                   className="bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-primary/50"
                 >
                   <option value="editor">Editor (Read & Write)</option>

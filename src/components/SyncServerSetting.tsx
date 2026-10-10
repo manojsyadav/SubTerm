@@ -40,7 +40,7 @@ const SyncServerSetting = ({ signedIn, onChanged }: Props) => {
       setServer(next);
       setEditing(false);
       onChanged();
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);

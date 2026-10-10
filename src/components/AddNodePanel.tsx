@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal, Plus } from "lucide-react";
 import PasswordField from "./PasswordField";
 import { useTextPrompt } from "../ui/confirm";
+import type { Server as ServerRecord, Folder, Credential, SshKey } from "../types";
 
 // Compact "2h ago" style relative time for the attribution line.
 function relTime(d: Date): string {
@@ -34,7 +35,81 @@ type ImportedHost = {
   proxy_jump: string | null;
 };
 
-const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, refreshSshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile, initialImportOpen }: any) => {
+// Best-effort message from a caught value (Tauri rejects with plain strings).
+function errMessage(e: unknown): string {
+  if (typeof e === "string") return e;
+  const m = (e as { message?: unknown } | null | undefined)?.message;
+  return (m as string) || String(e);
+}
+
+export interface TunnelDraft {
+  /** Stable per-row id used as the React key. */
+  rid?: string;
+  local: string;
+  remote: string;
+  type: string;
+}
+
+export interface MirrorDraft {
+  local: string;
+  remote: string;
+  soft_delete: boolean;
+  excludes: string[];
+  conflict_resolution: string;
+}
+
+/** Form state for the add/edit server panel. */
+export interface NodeFormState {
+  id: number | null;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  authType: string;
+  credentialId: string;
+  folderId: string;
+  keyId: string;
+  proxyType: string;
+  proxyHost: string;
+  proxyPort: number;
+  tunnels: TunnelDraft[];
+  autostart: boolean;
+  mirrors: MirrorDraft[];
+  color: string | null;
+  notes: string;
+  runOnConnect: string;
+  jumpHostId: string;
+  editedBy: string | null;
+  updatedAt: string | null;
+  password_dirty: boolean;
+  is_production: boolean;
+  icon: string;
+  forward_agent: boolean;
+  wol_mac?: string;
+  knock_ports?: string;
+}
+
+interface AddNodePanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  newNode: NodeFormState;
+  setNewNode: React.Dispatch<React.SetStateAction<NodeFormState>>;
+  onSave: () => void;
+  credentials?: Credential[];
+  sshKeys?: SshKey[];
+  refreshSshKeys?: () => void | Promise<unknown>;
+  folders?: Folder[];
+  refreshFolders: () => void | Promise<unknown>;
+  refreshServers?: () => void | Promise<unknown>;
+  servers?: ServerRecord[];
+  isEditMode?: boolean;
+  formError?: string;
+  isMobile?: boolean;
+  initialImportOpen?: boolean;
+}
+
+const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, refreshSshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile, initialImportOpen }: AddNodePanelProps) => {
   const textPrompt = useTextPrompt();
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -81,8 +156,8 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
     try {
       const hosts = await invoke<ImportedHost[]>("parse_ssh_config", { path: null });
       setImportHosts(hosts);
-    } catch (e: any) {
-      setImportError(typeof e === "string" ? e : (e?.message || String(e)));
+    } catch (e: unknown) {
+      setImportError(errMessage(e));
     } finally {
       setImportLoading(false);
     }
@@ -104,8 +179,8 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
     try {
       const hosts = await invoke<ImportedHost[]>("parse_client_import", { text: importPasteText });
       setImportHosts(hosts);
-    } catch (e: any) {
-      setImportError(typeof e === "string" ? e : (e?.message || String(e)));
+    } catch (e: unknown) {
+      setImportError(errMessage(e));
     } finally {
       setImportLoading(false);
     }
@@ -122,8 +197,8 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
       try {
         const hosts = await invoke<ImportedHost[]>("parse_ssh_config", { path: null });
         setImportHosts(hosts);
-      } catch (e: any) {
-        setImportError(typeof e === "string" ? e : (e?.message || String(e)));
+      } catch (e: unknown) {
+        setImportError(errMessage(e));
       } finally {
         setImportLoading(false);
       }
@@ -190,9 +265,9 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
           color: null,
         });
         ok++;
-      } catch (e: any) {
+      } catch (e: unknown) {
         failed++;
-        lastErr = typeof e === "string" ? e : (e?.message || String(e));
+        lastErr = errMessage(e);
       }
     }
     setImportBusy(false);
@@ -219,7 +294,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
     }
   };
 
-  const updateTunnel = (idx: number, field: string, value: string) => {
+  const updateTunnel = (idx: number, field: "local" | "remote" | "type", value: string) => {
     const newT = [...newNode.tunnels];
     newT[idx][field] = value;
     setNewNode({ ...newNode, tunnels: newT });
@@ -277,7 +352,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                 <div className="flex gap-2">
                   <select className="flex-1 h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-[#232328] transition-all shadow-inner" value={newNode.folderId} onChange={e => setNewNode({ ...newNode, folderId: e.target.value })}>
                     <option value="" className="bg-[#1a1a1e] text-zinc-500">-- Root --</option>
-                    {folders?.map((f: any) => <option key={f.id} value={f.id.toString()} className="bg-[#1a1a1e] text-white">{f.name}</option>)}
+                    {folders?.map((f) => <option key={f.id} value={f.id.toString()} className="bg-[#1a1a1e] text-white">{f.name}</option>)}
                   </select>
                   <button onClick={() => setIsCreatingFolder(true)} className="w-9 h-9 bg-white/5 border border-white/10 rounded-lg text-primary hover:bg-white/10 transition-all flex items-center justify-center shrink-0">
                     <FolderPlus size={14} />
@@ -383,14 +458,14 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
             </div>
 
             {newNode.authType === 'vault' && (() => {
-              const selectedCred = credentials?.find((c: any) => c.id?.toString() === newNode.credentialId?.toString());
+              const selectedCred = credentials?.find((c) => c.id?.toString() === newNode.credentialId?.toString());
               return (
                 <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-zinc-400 ml-1">Saved login</label>
                     <select className="w-full h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-zinc-300 border border-white/10 outline-none focus:border-primary/50 transition-all shadow-inner" value={newNode.credentialId} onChange={e => setNewNode({ ...newNode, credentialId: e.target.value })}>
                       <option value="" className="bg-[#1a1a1e] text-zinc-500">-- Pick one --</option>
-                      {credentials?.map((c: any) => <option key={c.id} value={c.id.toString()} className="bg-[#1a1a1e] text-zinc-300">{c.name} ({c.username})</option>)}
+                      {credentials?.map((c) => <option key={c.id} value={c.id.toString()} className="bg-[#1a1a1e] text-zinc-300">{c.name} ({c.username})</option>)}
                     </select>
                   </div>
                   {selectedCred && (
@@ -434,7 +509,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                   <div className="flex gap-1.5">
                     <select className="flex-1 min-w-0 h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-zinc-300 border border-white/10 outline-none focus:border-primary/50 transition-all shadow-inner" value={newNode.keyId} onChange={e => setNewNode({ ...newNode, keyId: e.target.value })}>
                       <option value="" className="bg-[#1a1a1e] text-zinc-500">-- Pick a key --</option>
-                      {sshKeys?.map((k: any) => <option key={k.id} value={k.id.toString()} className="bg-[#1a1a1e] text-zinc-300">{k.name}</option>)}
+                      {sshKeys?.map((k) => <option key={k.id} value={k.id.toString()} className="bg-[#1a1a1e] text-zinc-300">{k.name}</option>)}
                     </select>
                     {/* Quick-generate so picking a key doesn't force the user to
                         cancel out of editing this server, go to Settings, make
@@ -454,7 +529,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                         try {
                           await invoke("generate_ssh_key", { name });
                           await refreshSshKeys?.();
-                          const keys = await invoke<any[]>("get_ssh_keys");
+                          const keys = await invoke<SshKey[]>("get_ssh_keys");
                           const created = keys.find((k) => k.name === name);
                           if (created) setNewNode({ ...newNode, keyId: created.id.toString() });
                         } catch { /* generate failure surfaces via the keys list staying unchanged */ }
@@ -511,8 +586,8 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
               >
                 <option value="" className="bg-[#1a1a1e] text-zinc-500">Direct — no jump host</option>
                 {(servers || [])
-                  .filter((s: any) => s.id !== newNode.id)
-                  .map((s: any) => (
+                  .filter((s) => s.id !== newNode.id)
+                  .map((s) => (
                     <option key={s.id} value={s.id.toString()} className="bg-[#1a1a1e] text-zinc-300">
                       {s.name} ({s.host})
                     </option>
@@ -527,7 +602,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
               </div>
 
               <div className="space-y-2">
-                {newNode.tunnels?.map((t: any, idx: number) => (
+                {newNode.tunnels?.map((t, idx: number) => (
                   // `rid` is a stable per-row id added on Add. Falling
                   // back to idx for legacy rows that lack it; new rows
                   // always carry rid so deletions / reorders preserve
@@ -568,7 +643,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                       </>
                     )}
 
-                    <button onClick={() => setNewNode({ ...newNode, tunnels: newNode.tunnels.filter((_: any, i: number) => i !== idx) })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded transition-all shrink-0">
+                    <button onClick={() => setNewNode({ ...newNode, tunnels: newNode.tunnels.filter((_, i: number) => i !== idx) })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded transition-all shrink-0">
                       <X size={12} />
                     </button>
                   </div>
@@ -593,7 +668,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                 >+ Add</button>
               </div>
               <div className="space-y-2">
-                {(newNode.mirrors || []).map((m: any, idx: number) => (
+                {(newNode.mirrors || []).map((m, idx: number) => (
                   <div key={idx} className="p-2.5 bg-[#1a1a1e] rounded-lg border border-white/5 group space-y-1.5">
                     <div className="flex items-center gap-2">
                       <input
@@ -619,7 +694,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                       />
                       <button
                         type="button"
-                        onClick={() => setNewNode({ ...newNode, mirrors: newNode.mirrors.filter((_: any, i: number) => i !== idx) })}
+                        onClick={() => setNewNode({ ...newNode, mirrors: newNode.mirrors.filter((_, i: number) => i !== idx) })}
                         className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded transition-all shrink-0"
                       >
                         <X size={12} />
@@ -694,10 +769,10 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                       onClick={async () => {
                         setWolBusy(true);
                         try {
-                          await invoke("send_wake_on_lan", { macAddress: newNode.wol_mac.trim(), broadcastIp: null });
+                          await invoke("send_wake_on_lan", { macAddress: (newNode.wol_mac ?? "").trim(), broadcastIp: null });
                           setWolStatus("Magic packet broadcasted!");
                           setTimeout(() => setWolStatus(null), 3500);
-                        } catch (err: any) {
+                        } catch (err: unknown) {
                           setWolStatus(`WoL failed: ${String(err)}`);
                         } finally {
                           setWolBusy(false);
@@ -728,14 +803,14 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                       onClick={async () => {
                         setKnockBusy(true);
                         try {
-                          const ports = newNode.knock_ports
+                          const ports = (newNode.knock_ports ?? "")
                             .split(",")
                             .map((p: string) => parseInt(p.trim(), 10))
                             .filter((n: number) => !isNaN(n) && n > 0 && n <= 65535);
                           await invoke("perform_port_knock", { host: newNode.host.trim(), ports, delayMs: 100 });
                           setKnockStatus(`Knocked ${ports.length} ports!`);
                           setTimeout(() => setKnockStatus(null), 3500);
-                        } catch (err: any) {
+                        } catch (err: unknown) {
                           setKnockStatus(`Knock failed: ${String(err)}`);
                         } finally {
                           setKnockBusy(false);

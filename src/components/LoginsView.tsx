@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Key, Shield, Edit2, Trash2, User } from "lucide-react";
+import type { Credential, SshKey } from "../types";
+import type { CredentialEditData, KeyEditData } from "./VaultEditPanels";
 
 // The "Logins" view (saved passwords + SSH keys) — extracted out of
 // DesktopApp.tsx (part of the ongoing decomposition tracked in TODO.md).
@@ -7,16 +9,16 @@ import { Plus, Key, Shield, Edit2, Trash2, User } from "lucide-react";
 // in DesktopApp.tsx, passed down as props; no behavior change.
 
 export interface LoginsViewProps {
-  credentials: any[];
-  sshKeys: any[];
+  credentials: Credential[];
+  sshKeys: SshKey[];
   addLog: (msg: string, type?: string) => void;
   confirm: (opts: { title: string; message: string; destructive?: boolean }) => Promise<boolean>;
   refreshCredentials: () => void;
   refreshSshKeys: () => void;
   bumpSync: () => void;
-  setEditCredData: (d: any) => void;
+  setEditCredData: (d: CredentialEditData) => void;
   setIsCredPanelOpen: (b: boolean) => void;
-  setEditKeyData: (d: any) => void;
+  setEditKeyData: (d: KeyEditData) => void;
   setIsKeyPanelOpen: (b: boolean) => void;
   textPrompt: (opts: { title: string; message: string; placeholder?: string; okLabel?: string; validate?: (v: string) => string | null }) => Promise<string | null>;
 }
@@ -123,7 +125,7 @@ export const LoginsView = ({
           {sshKeys.length === 0 ? (
             <div className="col-span-full py-10 text-center text-zinc-600 text-[14px] italic border border-dashed border-white/5 rounded-2xl">No keys saved yet.</div>
           ) : (
-            sshKeys.map((k: any) => (
+            sshKeys.map((k) => (
               <div key={k.id} className="bg-[#16161a] border border-white/5 rounded-xl p-3 group relative hover:border-primary/30 transition-all">
                 <div className="flex justify-between items-start mb-1">
                   <h4 className="text-[14px] font-bold text-zinc-100 truncate pr-8">{k.name}</h4>
@@ -133,7 +135,7 @@ export const LoginsView = ({
                       // on demand instead of leaking them in the list response.
                       let secrets: { private_key?: string|null; passphrase?: string|null } = {};
                       if (k.has_private_key || k.has_passphrase) {
-                        try { secrets = await invoke<any>("reveal_ssh_key", { id: k.id }); }
+                        try { secrets = await invoke<{ private_key?: string | null; passphrase?: string | null }>("reveal_ssh_key", { id: k.id }); }
                         catch (e) { addLog(`REVEAL_KEY_FAILED: ${e}`, "error"); }
                       }
                       setEditKeyData({

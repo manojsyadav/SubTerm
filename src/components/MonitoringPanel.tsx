@@ -6,6 +6,7 @@ import {
   RefreshCw, Settings2, FileCode2, Settings as SettingsIcon, Bell, BellOff, Volume2,
 } from "lucide-react";
 import Sparkline from "./Sparkline";
+import type { Server } from "../types";
 import { useConfirm } from "../ui/confirm";
 
 // ---------- shared types ------------------------------------------------------
@@ -84,7 +85,8 @@ const beepNow = () => {
     if (!sharedAudioCtx) {
       // Some browsers expose AudioContext only on the prefixed name in
       // older versions — fall back if needed.
-      const Ctor: any = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const w = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+      const Ctor = w.AudioContext || w.webkitAudioContext;
       if (!Ctor) return;
       sharedAudioCtx = new Ctor();
     }
@@ -191,7 +193,7 @@ const randomId = () => Math.random().toString(36).slice(2, 10);
 // ---------- component ---------------------------------------------------------
 
 interface Props {
-  servers: any[];
+  servers: Server[];
   refreshServers: () => void;
   /// Optional hook to push lines into the global Logs tab. When provided,
   /// every outage / recovered event is recorded there too so the user has
@@ -273,7 +275,7 @@ const MonitoringPanel = ({ servers, addLog }: Props) => {
     try {
       const data = await invoke<MonitorRow[]>("monitor_list");
       setRows(data);
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     }
   };
@@ -353,10 +355,10 @@ const MonitoringPanel = ({ servers, addLog }: Props) => {
 
   // ---- mutations --------------------------------------------------------------
 
-  const wrap = async (fn: () => Promise<any>) => {
+  const wrap = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError(null);
     try { await fn(); await reload(); }
-    catch (e: any) { setError(String(e)); }
+    catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
 
@@ -381,7 +383,7 @@ const MonitoringPanel = ({ servers, addLog }: Props) => {
   // ---- derived ----------------------------------------------------------------
 
   const availableToAdd = useMemo(
-    () => servers.filter((s: any) => !rows.some((r) => r.node_id === s.id)),
+    () => servers.filter((s) => !rows.some((r) => r.node_id === s.id)),
     [servers, rows]
   );
   const anyRunning = rows.some((r) => !r.paused);
@@ -523,7 +525,7 @@ const MonitoringPanel = ({ servers, addLog }: Props) => {
                   All saved nodes are already being monitored.
                 </div>
               ) : (
-                availableToAdd.map((s: any) => (
+                availableToAdd.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => addNode(s.id)}
@@ -677,7 +679,7 @@ const ServerCard = ({ row, sample, history, busy, onPause, onResume, onConfig, o
 /// Sparkline is responsive (fills remaining flex space) so a wider card
 /// gets a wider sparkline without changing the rest of the layout.
 const CompactBuiltinRow = ({ metricKey, meta, value, hist }: {
-  metricKey: string; meta?: any; value?: number; hist: number[];
+  metricKey: string; meta?: { label: string; unit: string; is_pct: boolean; color: string }; value?: number; hist: number[];
 }) => (
   <div className="flex items-center gap-2 px-1.5 h-[22px] bg-white/[0.025] rounded hover:bg-white/[0.04] transition-colors">
     <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 w-[58px] shrink-0 truncate">
@@ -748,7 +750,7 @@ const SettingsModal = ({ onClose, onSaved }: {
       setS(saved);
       onSaved?.(saved);
       onClose();
-    } catch (e: any) {
+    } catch (e) {
       setErr(String(e));
     } finally {
       setSaving(false);
@@ -1002,7 +1004,7 @@ const ConfigureSlideover = ({ row, busy, onClose, onSetMetrics, onSetCustoms }: 
                       <label className="space-y-1">
                         <span className="text-zinc-400 uppercase tracking-wider font-bold">Parse</span>
                         <select value={cm.parse}
-                          onChange={(e) => updateDraft(idx, { parse: e.target.value as any })}
+                          onChange={(e) => updateDraft(idx, { parse: e.target.value as CustomMetric["parse"] })}
                           className="w-full h-7 px-1.5 bg-white/[0.04] border border-white/10 rounded text-[11px] text-zinc-100 outline-none">
                           <option className="bg-[#1a1a1e]" value="number">First number</option>
                           <option className="bg-[#1a1a1e]" value="regex">Regex capture</option>
@@ -1012,7 +1014,7 @@ const ConfigureSlideover = ({ row, busy, onClose, onSetMetrics, onSetCustoms }: 
                       <label className="space-y-1">
                         <span className="text-zinc-400 uppercase tracking-wider font-bold">Display</span>
                         <select value={cm.display}
-                          onChange={(e) => updateDraft(idx, { display: e.target.value as any })}
+                          onChange={(e) => updateDraft(idx, { display: e.target.value as CustomMetric["display"] })}
                           disabled={cm.parse === "text"}
                           className="w-full h-7 px-1.5 bg-white/[0.04] border border-white/10 rounded text-[11px] text-zinc-100 outline-none disabled:opacity-50">
                           <option className="bg-[#1a1a1e]" value="sparkline">Sparkline</option>

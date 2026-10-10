@@ -231,7 +231,7 @@ export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => 
       const addCount = lines.filter((l) => l.type === "add").length;
       const delCount = lines.filter((l) => l.type === "del").length;
       setDiffState({ open: true, loading: false, lines, addCount, delCount });
-    } catch (err: any) {
+    } catch (err) {
       setDiffState({ open: true, loading: false, error: String(err), lines: [], addCount: 0, delCount: 0 });
     }
   };

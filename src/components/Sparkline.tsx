@@ -30,7 +30,7 @@ const Sparkline = ({
   fill = true,
   fixedWidth = false,
 }: SparklineProps) => {
-  const svgProps: any = {
+  const svgProps: React.SVGProps<SVGSVGElement> = {
     viewBox: `0 0 ${width} ${height}`,
     preserveAspectRatio: "none",
     className: "block",

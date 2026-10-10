@@ -20,7 +20,8 @@ import { RenameInput } from "./ui/renameInput";
 import { useIsNarrow } from "./hooks/useViewport";
 import { Sidebar } from "./components/Sidebar";
 import { NodeGrid } from "./components/NodeGrid";
-import AddNodePanel from "./components/AddNodePanel";
+import AddNodePanel, { type NodeFormState } from "./components/AddNodePanel";
+import type { Server } from "./types";
 import { renderServerIcon } from "./components/ServerIcon";
 import TerminalView from "./components/TerminalView";
 import SettingsPanel from "./components/SettingsPanel";
@@ -138,7 +139,7 @@ function DesktopApp() {
     pinTerminalToWall, unpinTerminalFromWall, unpinSessionFromWall,
   } = wallManager;
 
-  const vaultRef = useRef<any>(null);
+  const vaultRef = useRef<ReturnType<typeof useProfileVault> | null>(null);
 
   const sessionManager = useSessionManager({
     onSessionClosed: (sid) => {
@@ -348,7 +349,7 @@ function DesktopApp() {
       await invoke("switch_profile_seamless", { targetName: targetProfile });
       await handleProfileUnlocked(targetProfile);
       addLog(`Switched to workspace "${targetProfile}".`, "success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = String(err);
       if (msg.includes("NO_SESSION_PASSWORD") || msg.toLowerCase().includes("decrypt") || msg.includes("PASSWORD")) {
         throw err;
@@ -370,7 +371,7 @@ function DesktopApp() {
     });
   };
 
-  const handleOpenMultipleServers = (serversToOpen: any[]) => {
+  const handleOpenMultipleServers = (serversToOpen: Server[]) => {
     openMultipleServers(serversToOpen, (newIds) => {
       broadcast.selectAll(newIds);
       addLog(`Fleet: Launched ${newIds.length} sessions with broadcast enabled`, "success");
@@ -420,13 +421,13 @@ function DesktopApp() {
   const [libraryTab, setLibraryTab] = useState<"commands" | "notes">("commands");
 
   const [isCredPanelOpen, setIsCredPanelOpen] = useState(false);
-  const [editCredData, setEditCredData] = useState<any>({ id: null, name: "", auth_type: "password", username: "", password: "", key_id: null });
+  const [editCredData, setEditCredData] = useState<{ id: number | null; name: string; auth_type: string; username: string; password: string; key_id: number | null }>({ id: null, name: "", auth_type: "password", username: "", password: "", key_id: null });
   
   const [isKeyPanelOpen, setIsKeyPanelOpen] = useState(false);
-  const [editKeyData, setEditKeyData] = useState<any>({ id: null, name: "", public_key: "", private_key: "", passphrase: "" });
+  const [editKeyData, setEditKeyData] = useState<{ id: number | null; name: string; public_key: string; private_key: string; passphrase: string }>({ id: null, name: "", public_key: "", private_key: "", passphrase: "" });
   const [formError, setFormError] = useState("");
 
-  const defaultNode = {
+  const defaultNode: NodeFormState = {
     id: null as number | null,
     name: "", host: "", port: 22, username: "", password: "",
     // "custom_pass" picked as default because most users adding a new
@@ -434,9 +435,9 @@ function DesktopApp() {
     // *after* they've saved a few credentials and want to reuse one.
     authType: "custom_pass", credentialId: "", folderId: "", keyId: "",
     proxyType: "none", proxyHost: "", proxyPort: 1080,
-    tunnels: [] as { local: string, remote: string, type: string }[],
+    tunnels: [],
     autostart: false,
-    mirrors: [] as { local: string, remote: string, soft_delete: boolean, excludes: string[], conflict_resolution: string }[],
+    mirrors: [],
     color: null as string | null,
     // Free-form per-node description / runbook text. Lives on the server row
     // in the encrypted vault. Empty string by default — the textarea in the
@@ -469,7 +470,7 @@ function DesktopApp() {
   // hook updates on every resize so layout swaps follow the actual width.
   const isMobile = useIsNarrow();
 
-  const [newNode, setNewNode] = useState(defaultNode);
+  const [newNode, setNewNode] = useState<NodeFormState>(defaultNode);
 
   useEffect(() => {
     const rgb = hexToRgb(appSettings.primaryColor);
@@ -568,7 +569,7 @@ function DesktopApp() {
     return () => { if (unlisten) unlisten(); };
   }, [confirm]);
 
-  const handleEditNode = async (server: any) => {
+  const handleEditNode = async (server: Server) => {
     // Servers come back from get_servers with `has_password` (boolean) but
     // no plaintext. Reveal the secret only when the user opens the edit
     // sheet — that way the password never sits in renderer memory during
@@ -837,7 +838,7 @@ function DesktopApp() {
         )}
 
         {/* Server Bookmarks */}
-        {quickAccessServersList.map((server: any) => {
+        {quickAccessServersList.map((server) => {
           const sess = sessions.find((s) => s.serverId === server.id || s.serverName === server.name);
           const isCurrent = Boolean(sess && activeView === sess.id);
           const isConn = Boolean(sess && sessionStatuses[sess.id] === "connected");
@@ -1100,7 +1101,7 @@ function DesktopApp() {
         onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY; }}
       >
         {sessions
-          .filter((s) => !quickAccessServersList.some((qs: any) => qs.id === s.serverId || qs.name === s.serverName))
+          .filter((s) => !quickAccessServersList.some((qs) => qs.id === s.serverId || qs.name === s.serverName))
           .map(s => {
           const st = sessionStatuses[s.id] ?? "connecting";
           // Dot palette: green = connected, amber = connecting, red = failed
@@ -1532,7 +1533,7 @@ function DesktopApp() {
                   Upload public key
                 </div>
                 <div className="max-h-[160px] overflow-y-auto custom-scrollbar">
-                  {sshKeys.map((k: any) => (
+                  {sshKeys.map((k) => (
                     <button
                       key={k.id}
                       className="w-full text-left px-3 py-1.5 hover:bg-primary/15 hover:text-primary text-zinc-200 flex items-center gap-2 truncate"

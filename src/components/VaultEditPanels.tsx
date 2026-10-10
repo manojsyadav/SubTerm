@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TerminalSquare, StickyNote, Shield, Key, X } from "lucide-react";
 import PasswordField from "./PasswordField";
+import type { Server, SshKey } from "../types";
 
 // Four near-identical "slide-over CRUD panel" components extracted out of
 // DesktopApp.tsx (part of the ongoing decomposition tracked in TODO.md) —
@@ -58,7 +59,7 @@ export interface CommandEditPanelProps {
   onClose: () => void;
   data: { id: number | null; title: string; content: string; serverId: number | null; tags: string };
   setData: (d: CommandEditPanelProps["data"]) => void;
-  servers: any[];
+  servers: Server[];
   formError: string;
   setFormError: (s: string) => void;
   addLog: (msg: string, type?: string) => void;
@@ -110,7 +111,7 @@ export const CommandEditPanel = ({ isOpen, onClose, data, setData, servers, form
         onChange={e => setData({ ...data, serverId: e.target.value ? parseInt(e.target.value, 10) : null })}
       >
         <option value="">Global (every server)</option>
-        {servers.map((s: any) => (
+        {servers.map((s) => (
           <option key={s.id} value={s.id}>{s.name || s.host}</option>
         ))}
       </select>
@@ -173,12 +174,31 @@ export const NoteEditPanel = ({ isOpen, onClose, data, setData, formError, setFo
   </PanelShell>
 );
 
+/** Credential form state: a stored `Credential` plus the revealed password. */
+export interface CredentialEditData {
+  id: number | null;
+  name: string;
+  auth_type: string;
+  username: string;
+  password: string;
+  key_id: number | null;
+}
+
+/** SSH key form state: key fields plus the revealed private key and passphrase. */
+export interface KeyEditData {
+  id: number | null;
+  name: string;
+  public_key: string;
+  private_key: string;
+  passphrase: string;
+}
+
 export interface CredentialEditPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  data: any;
-  setData: (d: any) => void;
-  sshKeys: any[];
+  data: CredentialEditData;
+  setData: (d: CredentialEditData) => void;
+  sshKeys: SshKey[];
   formError: string;
   setFormError: (s: string) => void;
   addLog: (msg: string, type?: string) => void;
@@ -257,7 +277,7 @@ export const CredentialEditPanel = ({ isOpen, onClose, data, setData, sshKeys, f
           onChange={e => setData({ ...data, key_id: e.target.value ? parseInt(e.target.value) : null })}
         >
           <option value="" className="bg-black text-zinc-500">-- Pick a key --</option>
-          {sshKeys?.map((k: any) => (
+          {sshKeys?.map((k) => (
             <option key={k.id} value={k.id.toString()} className="bg-black text-white">{k.name}</option>
           ))}
         </select>
@@ -278,8 +298,8 @@ export const CredentialEditPanel = ({ isOpen, onClose, data, setData, sshKeys, f
 export interface KeyEditPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  data: any;
-  setData: (d: any) => void;
+  data: KeyEditData;
+  setData: (d: KeyEditData) => void;
   formError: string;
   setFormError: (s: string) => void;
   addLog: (msg: string, type?: string) => void;

@@ -1,6 +1,8 @@
+import type { Server as ServerRecord, Folder } from "../types";
+import type { AppSettings, SetAppSettings } from "../types.settings";
 import { SettingsFileLinkTypes } from "./SettingsFileLinkTypes";
 import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IS_ANDROID } from "../util/platform";
 import { toExportableServers, serversToJson, serversToCsv } from "../export/serverExport";
@@ -120,7 +122,28 @@ const bgColors = [
   { name: "Deep Space", value: "#0d0d10" },
 ];
 
-const PageAppearance = ({ settings, setSettings }: any) => (
+type PinnableServer = ServerRecord & { ip?: string };
+
+interface SettingsPageProps {
+  settings: AppSettings;
+  setSettings: SetAppSettings;
+}
+
+interface CloudSyncExtras {
+  onSync?: () => Promise<void> | void;
+  syncing?: boolean;
+  lastSyncLabel?: string | null;
+}
+
+interface SettingsPanelProps extends SettingsPageProps, CloudSyncExtras, ComponentProps<typeof SettingsProfileManagement> {
+  servers?: ServerRecord[];
+  folders?: Folder[];
+  isMobile?: boolean;
+  onOpenLogs?: () => void;
+  onClose?: () => void;
+}
+
+const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
   <div className="space-y-6">
     <SectionCard title="Primary Accent Color">
       <div className="flex items-center justify-between mb-4">
@@ -153,7 +176,7 @@ const PageAppearance = ({ settings, setSettings }: any) => (
   </div>
 );
 
-const PageTerminal = ({ settings, setSettings }: any) => {
+const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
   const [themesList, setThemesList] = useState<TerminalThemeConfig[]>(getAllTerminalThemes());
   const [flags, setFlags] = useState<Record<FeatureKey, boolean>>(() =>
     Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>,
@@ -203,8 +226,8 @@ const PageTerminal = ({ settings, setSettings }: any) => {
       setImportThemeModal(false);
       setImportThemeText("");
       setImportThemeError("");
-    } catch (e: any) {
-      setImportThemeError(`Invalid JSON: ${e.message}`);
+    } catch (e) {
+      setImportThemeError(`Invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -579,11 +602,11 @@ const PageTerminal = ({ settings, setSettings }: any) => {
   );
 };
 
-const PageServers = ({ settings, setSettings, servers }: any) => {
+const PageServers = ({ settings, setSettings, servers }: SettingsPageProps & { servers: PinnableServer[] }) => {
   const [selectedToAdd, setSelectedToAdd] = useState("");
   const quickAccessIds: number[] = settings.quickAccessServerIds || [];
-  const currentQuickServers = quickAccessIds.map((id: number) => servers.find((s: any) => s.id === id)).filter(Boolean);
-  const availableToAdd = servers.filter((s: any) => !quickAccessIds.includes(s.id));
+  const currentQuickServers = quickAccessIds.map((id) => servers.find((s) => s.id === id)).filter((s): s is PinnableServer => !!s);
+  const availableToAdd = servers.filter((s) => !quickAccessIds.includes(s.id));
   const handleAdd = () => {
     const numId = parseInt(selectedToAdd, 10);
     if (!numId || quickAccessIds.length >= 5) return;
@@ -605,7 +628,7 @@ const PageServers = ({ settings, setSettings, servers }: any) => {
           {currentQuickServers.length === 0 && (
             <div className="p-4 text-center rounded-xl border border-dashed border-white/10 text-xs text-zinc-500">No servers pinned yet. Add up to 5 below.</div>
           )}
-          {currentQuickServers.map((srv: any, idx: number) => (
+          {currentQuickServers.map((srv, idx) => (
             <div key={srv.id} className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0">{idx + 1}</span>
@@ -625,7 +648,7 @@ const PageServers = ({ settings, setSettings, servers }: any) => {
           <div className="pt-3 border-t border-white/5 flex items-center gap-2 mt-3">
             <select value={selectedToAdd} onChange={(e) => setSelectedToAdd(e.target.value)} className="flex-1 bg-[#18181f] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary/50">
               <option value="">Select a server to pin...</option>
-              {availableToAdd.map((s: any) => (<option key={s.id} value={s.id}>{s.name} ({s.host || s.ip || "SSH"})</option>))}
+              {availableToAdd.map((s) => (<option key={s.id} value={s.id}>{s.name} ({s.host || s.ip || "SSH"})</option>))}
             </select>
             <button disabled={!selectedToAdd} onClick={handleAdd} className="px-3 py-2 bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors disabled:opacity-40"><Plus size={13} /> Pin</button>
           </div>
@@ -635,7 +658,7 @@ const PageServers = ({ settings, setSettings, servers }: any) => {
   );
 };
 
-const PageMonitoring = ({ settings, setSettings }: any) => (
+const PageMonitoring = ({ settings, setSettings }: SettingsPageProps) => (
   <div className="space-y-6">
     <SectionCard title="Resource Monitoring">
       <Row label="Enable monitoring" desc="Show the Monitor tab and start background polling for CPU, RAM, disk, and outage detection.">
@@ -649,7 +672,7 @@ const PageMonitoring = ({ settings, setSettings }: any) => (
   </div>
 );
 
-const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: any) => {
+const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: SettingsPageProps & CloudSyncExtras) => {
   const [cloudOpen, setCloudOpen] = useState(false);
   return (
     <div className="space-y-6">
@@ -663,7 +686,7 @@ const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: an
   );
 };
 
-const PageProfile = ({ onUnlocked, activeProfile, onSwitchProfile, isUnlocked, onRequestUnlock }: any) => (
+const PageProfile = ({ onUnlocked, activeProfile, onSwitchProfile, isUnlocked, onRequestUnlock }: ComponentProps<typeof SettingsProfileManagement>) => (
   <div className="space-y-6">
     <SettingsProfileManagement
       onUnlocked={onUnlocked}
@@ -679,7 +702,7 @@ const PageQuickCommands = () => <div className="space-y-6"><SettingsQuickCommand
 
 const PageShortcuts = () => <div className="space-y-6"><SettingsKeyboardShortcuts /></div>;
 
-const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: any) => {
+const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: SettingsPageProps & { servers?: ServerRecord[]; folders?: Folder[] }) => {
   const [exporting, setExporting] = useState<"json" | "csv" | null>(null);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
 
@@ -698,7 +721,7 @@ const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: 
       const localPath = `${dir.replace(/[\\/]+$/, "")}${sep}${fileName}`;
       await invoke("local_write_file_text", { localPath, content });
       setExportMsg(`Exported ${list.length} server${list.length === 1 ? "" : "s"} to ${fileName}`);
-    } catch (e: any) {
+    } catch (e) {
       setExportMsg(`Export failed: ${e}`);
     } finally {
       setExporting(null);
@@ -709,7 +732,7 @@ const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: 
     <div className="space-y-6">
       <SectionCard title="Reset Preferences" subtitle="Resets UI aesthetics to factory defaults. Your servers and profiles are unaffected.">
         <button
-          onClick={() => { if (window.confirm("Reset all UI customisations to defaults?")) { setSettings((s: any) => ({ ...s, primaryColor: "#60a5fa", backgroundColor: "#0a0a0c", terminalFontSize: 14, enableMonitoring: true })); } }}
+          onClick={() => { if (window.confirm("Reset all UI customisations to defaults?")) { setSettings((s) => ({ ...s, primaryColor: "#60a5fa", backgroundColor: "#0a0a0c", terminalFontSize: 14, enableMonitoring: true })); } }}
           className="mt-4 px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase hover:bg-white/5 transition-all w-full"
         >
           Reset to Defaults
@@ -752,7 +775,7 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 );
 
 // â”€â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: any) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
   const [activeCategory, setActiveCategory] = useState<CategoryId>("appearance");
 
   const needsUnlock = (id: CategoryId) => !isUnlocked && LOCKED_CATEGORIES.includes(id);

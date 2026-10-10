@@ -47,7 +47,7 @@ async function transferWithOverwriteCheck(
   try {
     await invokeFn(false);
     return "done";
-  } catch (err: any) {
+  } catch (err) {
     const msg = String(err);
     if (!msg.startsWith("EXISTS:")) throw err;
     if (batch.kind === "skip-all") return "skipped";
@@ -284,7 +284,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   useEffect(() => {
     if (!sessionId) return;
-    const handleOpenEditor = (e: any) => {
+    const handleOpenEditor = (ev: Event) => {
+      const e = ev as CustomEvent<{ path?: string }>;
       const filePath = e.detail?.path;
       if (!filePath) return;
       const fileName = filePath.split(/[\\/]/).filter(Boolean).pop() || filePath;
@@ -326,7 +327,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       await invoke("sftp_exec_command", { sessionId, command: cmd });
       notify(`Extracted ${entry.name}`, "success");
       fetch(currentPath);
-    } catch (err: any) {
+    } catch (err) {
       notify(`Extraction failed: ${err}`, "error");
     }
   };
@@ -343,7 +344,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       await invoke("sftp_exec_command", { sessionId, command: cmd });
       notify(`Created ${tarName}`, "success");
       fetch(currentPath);
-    } catch (err: any) {
+    } catch (err) {
       notify(`Compression failed: ${err}`, "error");
     }
   };
@@ -450,7 +451,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       } else {
         setGitFileStatuses({});
       }
-    } catch (err: any) {
+    } catch (err) {
       notify(`List failed: ${err}`, "error");
     } finally {
       setLoading(false);
@@ -459,7 +460,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
 
   useEffect(() => {
     if (!sessionId) return;
-    const handleNavigate = (e: any) => {
+    const handleNavigate = (ev: Event) => {
+      const e = ev as CustomEvent<{ path?: string }>;
       const p = e.detail?.path;
       if (p) fetch(p);
     };
@@ -493,7 +495,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         }
         const home = await provider.homePath();
         await tryFetch(home);
-      } catch (err: any) {
+      } catch (err) {
         notify(`Failed to load: ${err}`, "error");
       } finally {
         setLoading(false);
@@ -681,7 +683,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       try {
         const existing = (await provider.list(targetDir)).entries.map((e) => e.name);
         taken = takenNames(movable.map((it) => it.name), existing, rules);
-      } catch (err: any) {
+      } catch (err) {
         notify(`Move failed: ${err}`, "error");
         return;
       }
@@ -696,7 +698,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         try {
           await provider.rename(it.path, provider.joinPath(targetDir, it.name));
           moved.push(it.path);
-        } catch (err: any) {
+        } catch (err) {
           failures.push(`${it.name} (${err})`);
         }
       }
@@ -792,7 +794,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     listen<{ status: string; message?: string }>(
       `sftp-sync-status-${sessionId}`,
       (event) => {
-        const { status, message } = event.payload || ({} as any);
+        const { status, message } = event.payload || ({} as { status?: string; message?: string });
         if (status === "success") {
           notify(message || "Changes uploaded", "success");
         } else if (status === "error") {
@@ -814,7 +816,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     listen<{ paths: string[]; position: { x: number; y: number } }>(
       "tauri://drag-drop",
       async (event) => {
-        const { paths, position } = event.payload || ({} as any);
+        const { paths, position } = event.payload || ({} as { paths?: string[]; position: { x: number; y: number } });
         if (!paths?.length || !dropTargetRef.current) return;
         const hit = document.elementFromPoint(position.x, position.y);
         if (!hit || !dropTargetRef.current.contains(hit)) return;
@@ -835,7 +837,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             );
             if (res === "done") notify(`Uploaded ${name}`, "success");
             if (res === "cancelled") { cancelled = true; notify("Upload batch cancelled", "info"); }
-          } catch (err: any) {
+          } catch (err) {
             notify(`Upload failed: ${err}`, "error");
           }
         }
@@ -877,7 +879,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           try {
             await provider.rename(it.path, provider.joinPath(dest, it.name));
             count++;
-          } catch (err: any) {
+          } catch (err) {
             notify(`Move failed for ${it.name}: ${err}`, "error");
           }
         }
@@ -921,7 +923,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         notify("Properties updated", "success");
       }
       await fetch(currentPath);
-    } catch (err: any) {
+    } catch (err) {
       notify(`Failed: ${err}`, "error");
     } finally {
       setModal(null);
@@ -953,7 +955,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     let count = 0;
     for (const it of items) {
       try { await provider.remove(it.path, it.isDir && !it.isSymlink); count++; }
-      catch (err: any) { notify(`Delete failed for ${it.name}: ${err}`, "error"); }
+      catch (err) { notify(`Delete failed for ${it.name}: ${err}`, "error"); }
     }
     if (count > 0) {
       setSelected(new Set());
@@ -982,7 +984,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         dest = IS_ANDROID
           ? ((await invoke<string>("android_default_local_dir")) || undefined)
           : ((await invoke<string | null>("select_local_folder")) || undefined);
-      } catch (err: any) { notify(`Pick folder failed: ${err}`, "error"); return; }
+      } catch (err) { notify(`Pick folder failed: ${err}`, "error"); return; }
       if (!dest) return;
     }
     const sep = dest.includes("\\") ? "\\" : "/";
@@ -1009,7 +1011,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         );
         if (res === "done") count++;
         if (res === "cancelled") { cancelled = true; }
-      } catch (err: any) {
+      } catch (err) {
         notify(`Download failed for ${e.name}: ${err}`, "error");
       }
     }
@@ -1046,7 +1048,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         );
         if (res === "done") count++;
         if (res === "cancelled") { cancelled = true; }
-      } catch (err: any) {
+      } catch (err) {
         notify(`Upload failed for ${e.name}: ${err}`, "error");
       }
     }
@@ -1074,7 +1076,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     try {
       notify(`Opening ${entry.name} in default editor…`, "info");
       await invoke("sftp_open_remote_file", { sessionId, remotePath: entry.path, transferId });
-    } catch (err: any) {
+    } catch (err) {
       if (String(err) !== "cancelled") {
         notify(`Open failed: ${err}`, "error");
       }
@@ -1088,7 +1090,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     if (entry.isDir) { fetch(entry.path); return; }
     try {
       await invoke("local_open_file", { localPath: entry.path });
-    } catch (err: any) {
+    } catch (err) {
       notify(`Open failed: ${err}`, "error");
     }
   };
@@ -1097,7 +1099,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   const revealLocalEntry = async (entry: FileEntry) => {
     try {
       await invoke("local_open_in_explorer", { localPath: entry.path });
-    } catch (err: any) {
+    } catch (err) {
       notify(`Reveal failed: ${err}`, "error");
     }
   };
@@ -1124,7 +1126,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     }
     const sorted = [...source].sort((a, b) => {
       if (a.isDir !== b.isDir) return b.isDir ? 1 : -1;
-      let va: any, vb: any;
+      let va: string | number = 0, vb: string | number = 0;
       switch (sort.column) {
         case "name": va = a.name.toLowerCase(); vb = b.name.toLowerCase(); break;
         case "size": va = a.isDir ? -1 : a.size; vb = b.isDir ? -1 : b.size; break;
@@ -1526,7 +1528,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                     try {
                       const dirs = await invoke<{ label: string; path: string }[]>("android_quick_dirs");
                       setAndroidQuickDirs(dirs);
-                    } catch (err: any) {
+                    } catch (err) {
                       notify(`Browse failed: ${err}`, "error");
                       return;
                     }
@@ -1537,7 +1539,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 try {
                   const picked = await invoke<string | null>("select_local_folder");
                   if (picked) await fetch(picked);
-                } catch (err: any) {
+                } catch (err) {
                   notify(`Browse failed: ${err}`, "error");
                 }
               }}
@@ -1622,7 +1624,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         />
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as any)}
+          onChange={(e) => setTypeFilter(e.target.value as FileTypeFilter)}
           className={`h-5 px-1 rounded text-[10px] border outline-none font-mono transition-colors shrink-0 ${
             typeFilter !== "all"
               ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold"
@@ -2286,7 +2288,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                       } else if (isTextFile(e.name)) {
                         setEditorEntry(e);
                       } else {
-                        onRowClick({ shiftKey: false, ctrlKey: false, metaKey: false } as any, e, entries);
+                        onRowClick({ shiftKey: false, ctrlKey: false, metaKey: false } as React.MouseEvent, e, entries);
                       }
                     }}
                     className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/10 text-left transition-colors"

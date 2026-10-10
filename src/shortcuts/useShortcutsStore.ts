@@ -38,8 +38,8 @@ export function useShortcutsStore() {
   const [customShortcuts, setCustomShortcuts] = useState<CustomShortcutMap>(getCustomShortcuts);
 
   useEffect(() => {
-    const handler = (e: any) => {
-      setCustomShortcuts(e.detail || getCustomShortcuts());
+    const handler = (e: Event) => {
+      setCustomShortcuts((e as CustomEvent<CustomShortcutMap>).detail || getCustomShortcuts());
     };
     window.addEventListener(EVENT_NAME, handler);
     window.addEventListener("storage", handler);

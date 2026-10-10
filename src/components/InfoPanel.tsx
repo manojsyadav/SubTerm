@@ -6,6 +6,7 @@ import {
   AlertCircle, Search, ShieldAlert, Plug, Play, Square, RotateCw, Box,
   Shield, Globe,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import DockerTab from "./DockerTab";
 import { ScrollableTabs } from "./ScrollableTabs";
 import { useConfirm } from "../ui/confirm";
@@ -34,7 +35,7 @@ interface SystemctlResult {
 }
 
 type SubTab = "overview" | "network" | "ports" | "services";
-const TABS: { id: "overview" | "network" | "ports"; label: string; icon: any }[] = [
+const TABS: { id: "overview" | "network" | "ports"; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "System",  icon: Server },
   { id: "network",  label: "Network", icon: NetIcon },
   { id: "ports",    label: "Ports",   icon: Plug },
@@ -206,6 +207,8 @@ function parseOverview(raw: string): OverviewData {
 
 // ---------- NETWORK ----------
 
+interface IpAddrJson { ifname?: string; operstate?: string; flags?: string[]; address?: string; mtu?: number; addr_info?: { family?: string; local?: string; prefixlen?: number }[] }
+interface IpRouteJson { dst?: string; gateway?: string; dev?: string }
 interface NicAddr { family: string; local: string; prefixlen: number; }
 interface Nic { name: string; state: string; mac: string; mtu: number; addrs: NicAddr[]; }
 
@@ -239,12 +242,12 @@ function parseNicsJson(raw: string): Nic[] {
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return sortNics(arr.map((n: any) => ({
+    return sortNics(arr.map((n: IpAddrJson) => ({
       name: n.ifname || "?",
       state: n.operstate || (Array.isArray(n.flags) && n.flags.includes("UP") ? "UP" : "DOWN"),
       mac: n.address || "",
       mtu: n.mtu || 0,
-      addrs: (n.addr_info || []).map((a: any) => ({
+      addrs: (n.addr_info || []).map((a) => ({
         family: a.family || "", local: a.local || "", prefixlen: a.prefixlen || 0,
       })),
     })));
@@ -346,7 +349,7 @@ function parseRoutesJson(raw: string): RouteRow[] {
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return arr.map((r: any): RouteRow => ({ dst: r.dst || "default", via: r.gateway || "", dev: r.dev || "" }));
+    return arr.map((r: IpRouteJson): RouteRow => ({ dst: r.dst || "default", via: r.gateway || "", dev: r.dev || "" }));
   } catch { return []; }
 }
 // `ip -o route show`: "default via 192.168.1.1 dev eth0 proto dhcp .."
@@ -791,6 +794,8 @@ function describeError(err: string): { title: string; hint?: string } {
 
 // ---------- TAB STATE ----------
 
+type AnyTabSetter = (s: TabState<unknown> | ((prev: TabState<unknown>) => TabState<unknown>)) => void;
+
 interface TabState<T> {
   loaded: boolean;
   loading: boolean;
@@ -818,13 +823,13 @@ const InfoPanel = ({ sessionId, disabled, visible = true, mode = "info", onOpenC
   const [services, setServices] = useState<TabState<{ available: boolean; rows: ServiceRow[] }>>(freshTab);
 
   type ProbeSubTab = "overview" | "network" | "ports" | "services";
-  const stateMap: Record<ProbeSubTab, readonly [TabState<any>, React.Dispatch<React.SetStateAction<TabState<any>>>]> = {
-    overview: [overview, setOverview] as const,
-    network:  [network, setNetwork] as const,
-    ports:    [ports, setPorts] as const,
-    services: [services, setServices] as const,
+  const stateMap: Record<ProbeSubTab, readonly [TabState<unknown>, AnyTabSetter]> = {
+    overview: [overview, setOverview as unknown as AnyTabSetter] as const,
+    network:  [network, setNetwork as unknown as AnyTabSetter] as const,
+    ports:    [ports, setPorts as unknown as AnyTabSetter] as const,
+    services: [services, setServices as unknown as AnyTabSetter] as const,
   };
-  const activeState: TabState<any> = stateMap[tab as ProbeSubTab][0];
+  const activeState: TabState<unknown> = stateMap[tab as ProbeSubTab][0];
 
   // Per-section token counter. We can't cancel an SSH exec channel from
   // the frontend (that would need a backend-side abort handle, out of
@@ -839,13 +844,13 @@ const InfoPanel = ({ sessionId, disabled, visible = true, mode = "info", onOpenC
 
   const fetchSection = async (which: SubTab) => {
     if (disabled) return;
-    const setter = stateMap[which as ProbeSubTab][1] as (s: any) => void;
+    const setter = stateMap[which as ProbeSubTab][1];
     const myToken = ++tokenRef.current[which as ProbeSubTab];
-    setter((prev: TabState<any>) => ({ ...prev, loading: true, error: null }));
+    setter((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const r = await invoke<SectionResult>("ssh_info_probe_section", { sessionId, section: which });
       if (tokenRef.current[which as ProbeSubTab] !== myToken) return;
-      let parsed: any;
+      let parsed: unknown;
       switch (which) {
         case "overview": parsed = parseOverview(r.data); break;
         case "network":  parsed = parseNetwork(r.data); break;
@@ -857,10 +862,10 @@ const InfoPanel = ({ sessionId, disabled, visible = true, mode = "info", onOpenC
         data: parsed,
         meta: { exec_ms: r.exec_ms, truncated: r.truncated },
       });
-    } catch (e: any) {
+    } catch (e) {
       if (tokenRef.current[which as ProbeSubTab] !== myToken) return;
-      const msg = typeof e === "string" ? e : (e?.message || "Probe failed");
-      setter((prev: TabState<any>) => ({ ...prev, loading: false, error: msg }));
+      const msg = typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "Probe failed");
+      setter((prev) => ({ ...prev, loading: false, error: msg }));
     }
   };
 
@@ -1345,8 +1350,8 @@ const FirewallCard = ({ sessionId, fw }: FirewallCardProps) => {
         ? await invoke<string>("ssh_iptables_chain", { sessionId, table: c.table, chain: c.name })
         : await invoke<string>("ssh_nft_chain", { sessionId, family: c.family, table: c.table, chain: c.name });
       setChainRules(prev => ({ ...prev, [k]: { loading: false, error: null, text } }));
-    } catch (e: any) {
-      const msg = typeof e === "string" ? e : (e?.message || "chain fetch failed");
+    } catch (e) {
+      const msg = typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "chain fetch failed");
       setChainRules(prev => ({ ...prev, [k]: { loading: false, error: msg, text: null } }));
     }
   };
@@ -1389,7 +1394,7 @@ const FirewallCard = ({ sessionId, fw }: FirewallCardProps) => {
             // bandwidth win: no chain fetch until the user clicks.
             const isInteresting = c.policy === "DROP" || c.policy === "REJECT";
             const open = explicitlyOpen !== undefined ? explicitlyOpen : (isInteresting && c.count > 0);
-            const polTone = c.policy === "DROP" || c.policy === "REJECT" ? "red"
+            const polTone: "red" | "green" | "zinc" = c.policy === "DROP" || c.policy === "REJECT" ? "red"
               : c.policy === "ACCEPT" ? "green" : "zinc";
             const detail = chainRules[k];
             // Location suffix: for iptables it's `[table]`, for nft it's `[family/table]`.
@@ -1407,7 +1412,7 @@ const FirewallCard = ({ sessionId, fw }: FirewallCardProps) => {
                   <ChevronRightIcon open={open} />
                   <span className="text-[11px] font-mono font-bold text-white truncate">{c.name}</span>
                   <span className="text-[9.5px] text-zinc-500 shrink-0 font-mono">{loc}</span>
-                  {c.policy && c.policy !== "-" && <StatusBadge tone={polTone as any}>{c.policy}</StatusBadge>}
+                  {c.policy && c.policy !== "-" && <StatusBadge tone={polTone}>{c.policy}</StatusBadge>}
                   <span className="text-[9.5px] text-zinc-500 ml-auto shrink-0">
                     {c.count} rule{c.count === 1 ? "" : "s"}
                   </span>
@@ -1469,8 +1474,8 @@ const PortsTab = ({ data, sessionId, onRefresh }: { data: PortsData; sessionId: 
       const r = await invoke<SystemctlResult>("ssh_kill_process", { sessionId, pid: parseInt(pid, 10), signal: "TERM" });
       if (!r.success) setKillError(`PID ${pid}: ${r.stdout || `kill exited ${r.exit_code}`}`);
       else setTimeout(onRefresh, 500);
-    } catch (e: any) {
-      setKillError(`PID ${pid}: ${typeof e === "string" ? e : (e?.message || "kill failed")}`);
+    } catch (e) {
+      setKillError(`PID ${pid}: ${typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "kill failed")}`);
     } finally {
       setKilling(k => ({ ...k, [pid]: false }));
     }
@@ -1640,8 +1645,8 @@ const ProcessesTab = ({ sessionId, disabled, visible = true }: { sessionId: stri
       setAvailable(p.available);
       setLastMs(r.exec_ms);
       setErr(null);
-    } catch (e: any) {
-      setErr(typeof e === "string" ? e : (e?.message || "probe failed"));
+    } catch (e) {
+      setErr(typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "probe failed"));
     } finally {
       setLoading(false);
     }
@@ -1673,8 +1678,8 @@ const ProcessesTab = ({ sessionId, disabled, visible = true }: { sessionId: stri
       const r = await invoke<SystemctlResult>("ssh_kill_process", { sessionId, pid: parseInt(row.pid, 10), signal: "TERM" });
       if (!r.success) setErr(`PID ${row.pid}: ${r.stdout || `kill exited ${r.exit_code}`}`);
       setTimeout(fetchNow, 400);
-    } catch (e: any) {
-      setErr(`PID ${row.pid}: ${typeof e === "string" ? e : (e?.message || "kill failed")}`);
+    } catch (e) {
+      setErr(`PID ${row.pid}: ${typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "kill failed")}`);
     } finally {
       setKilling(k => ({ ...k, [row.pid]: false }));
     }
@@ -1871,8 +1876,8 @@ const ServicesTab = ({ sessionId, data, onRefresh }: { sessionId: string; data: 
         // the unit has time to settle (start/stop can be async).
         setTimeout(onRefresh, 800);
       }
-    } catch (e: any) {
-      const msg = typeof e === "string" ? e : (e?.message || `${action} failed`);
+    } catch (e) {
+      const msg = typeof e === "string" ? e : ((e as { message?: string } | null)?.message || `${action} failed`);
       setLastResult(prev => ({ ...prev, [unit]: { ok: false, msg, sudo: false } }));
     } finally {
       setBusy(b => ({ ...b, [unit]: false }));

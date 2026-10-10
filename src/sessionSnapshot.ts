@@ -68,19 +68,21 @@ export function parseSnapshot(raw: string | null, hasServer: (id: number) => boo
   activeServerId: number | null;
 } {
   const empty = { found: false, total: 0, savedIds: "[]", sessions: [] as SnapSession[], activeServerId: null as number | null };
-  let snap: any = null;
+  // Untrusted input: every field is re-checked below.
+  type RawSnap = { sessions: (SnapSession | null | undefined)[]; activeServerId?: unknown };
+  let snap: RawSnap | null = null;
   try {
-    snap = raw ? JSON.parse(raw) : null;
+    snap = raw ? (JSON.parse(raw) as RawSnap | null) : null;
   } catch {
     return { ...empty, found: !!raw };
   }
   if (!snap || !Array.isArray(snap.sessions)) return { ...empty, found: !!raw };
   let savedIds = "[]";
   try {
-    savedIds = JSON.stringify(snap.sessions.map((r: any) => r?.serverId));
+    savedIds = JSON.stringify(snap.sessions.map((r) => r?.serverId));
   } catch { /* keep default */ }
-  const sessions = snap.sessions.filter((r: any) =>
-    r && typeof r.serverId === 'number' && r.serverId > 0 && hasServer(r.serverId)).slice(0, MAX_SNAP_SESSIONS);
+  const sessions = snap.sessions.filter((r): r is SnapSession =>
+    !!r && typeof r.serverId === 'number' && r.serverId > 0 && hasServer(r.serverId)).slice(0, MAX_SNAP_SESSIONS);
   return {
     found: true,
     total: snap.sessions.length,

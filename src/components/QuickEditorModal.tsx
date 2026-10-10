@@ -78,7 +78,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
           setOriginalContent(text);
           setContent(text);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (mounted) setError(String(err));
       } finally {
         if (mounted) setLoading(false);
@@ -114,7 +114,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
       onSaved?.();
-    } catch (err: any) {
+    } catch (err) {
       setError(`Save failed: ${err}`);
     } finally {
       setSaving(false);

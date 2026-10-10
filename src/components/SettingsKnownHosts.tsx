@@ -25,7 +25,7 @@ export function SettingsKnownHosts() {
     try {
       const data = await invoke<KnownHostRecord[]>("get_known_hosts");
       setHosts(data || []);
-    } catch (e: any) {
+    } catch (e) {
       console.error("Failed to fetch known hosts:", e);
       setActionError(String(e));
     } finally {
@@ -70,7 +70,7 @@ export function SettingsKnownHosts() {
     try {
       await invoke("delete_known_host", { id: host.id });
       setHosts((prev) => prev.filter((h) => h.id !== host.id));
-    } catch (e: any) {
+    } catch (e) {
       setActionError(`Failed to delete host key: ${e}`);
     }
   };
@@ -86,7 +86,7 @@ export function SettingsKnownHosts() {
     try {
       await invoke("clear_all_known_hosts");
       setHosts([]);
-    } catch (e: any) {
+    } catch (e) {
       setActionError(`Failed to clear known hosts: ${e}`);
     }
   };

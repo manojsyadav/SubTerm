@@ -23,7 +23,24 @@ export interface ExportableServer {
   forwardAgent: boolean;
 }
 
-export function toExportableServers(servers: any[], folders: any[]): ExportableServer[] {
+/** Server row as returned by `get_servers`; flags may arrive as booleans or 0/1. */
+export interface RawServerRow {
+  name?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  auth_type?: string;
+  folder_id?: number | null;
+  proxy_type?: string;
+  proxy_host?: string;
+  proxy_port?: number;
+  notes?: string;
+  run_on_connect?: string;
+  is_production?: boolean | number;
+  forward_agent?: boolean | number;
+}
+
+export function toExportableServers(servers: RawServerRow[], folders: { id: number; name: string }[]): ExportableServer[] {
   const folderName = new Map<number, string>(folders.map((f) => [f.id, f.name]));
   return servers.map((s) => ({
     name: s.name || "",

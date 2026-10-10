@@ -76,7 +76,7 @@ interface ContainerStats { id: string; name: string; cpuPerc: string; memUsage: 
 // mappers below are unchanged. The LAST key absorbs any stray delimiter in its
 // value (docker's fields don't contain `|`, but this keeps a surprise from
 // shifting columns).
-function parseFields<T>(raw: string, keys: string[], mapper: (o: any) => T): T[] {
+function parseFields<T>(raw: string, keys: string[], mapper: (o: Record<string, string>) => T): T[] {
   const out: T[] = [];
   for (const line of raw.split(/\r?\n/)) {
     if (!line.trim()) continue;
@@ -219,8 +219,8 @@ const DockerTab = ({ sessionId, disabled, onOpenContainerTerminal }: DockerTabPr
         createdAt: o.CreatedAt || "",
       }));
       setContainers({ loaded: true, loading: false, error: null, data });
-    } catch (e: any) {
-      setContainers(s => ({ ...s, loading: false, error: typeof e === "string" ? e : (e?.message || "failed") }));
+    } catch (e) {
+      setContainers(s => ({ ...s, loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed") }));
     }
   };
 
@@ -237,8 +237,8 @@ const DockerTab = ({ sessionId, disabled, onOpenContainerTerminal }: DockerTabPr
         createdSince: o.CreatedSince || "",
       }));
       setImages({ loaded: true, loading: false, error: null, data });
-    } catch (e: any) {
-      setImages(s => ({ ...s, loading: false, error: typeof e === "string" ? e : (e?.message || "failed") }));
+    } catch (e) {
+      setImages(s => ({ ...s, loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed") }));
     }
   };
 
@@ -253,8 +253,8 @@ const DockerTab = ({ sessionId, disabled, onOpenContainerTerminal }: DockerTabPr
         mountpoint: o.Mountpoint || "",
       }));
       setVolumes({ loaded: true, loading: false, error: null, data });
-    } catch (e: any) {
-      setVolumes(s => ({ ...s, loading: false, error: typeof e === "string" ? e : (e?.message || "failed") }));
+    } catch (e) {
+      setVolumes(s => ({ ...s, loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed") }));
     }
   };
 
@@ -270,8 +270,8 @@ const DockerTab = ({ sessionId, disabled, onOpenContainerTerminal }: DockerTabPr
         scope: o.Scope || "",
       }));
       setNetworks({ loaded: true, loading: false, error: null, data });
-    } catch (e: any) {
-      setNetworks(s => ({ ...s, loading: false, error: typeof e === "string" ? e : (e?.message || "failed") }));
+    } catch (e) {
+      setNetworks(s => ({ ...s, loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed") }));
     }
   };
 
@@ -284,8 +284,8 @@ const DockerTab = ({ sessionId, disabled, onOpenContainerTerminal }: DockerTabPr
       setComposeRaw(r.data);
       const data = parseComposeContainers(r.data);
       setComposeContainers({ loaded: true, loading: false, error: null, data });
-    } catch (e: any) {
-      setComposeContainers(s => ({ ...s, loading: false, error: typeof e === "string" ? e : (e?.message || "failed") }));
+    } catch (e) {
+      setComposeContainers(s => ({ ...s, loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed") }));
     }
   };
 
@@ -407,7 +407,7 @@ const ContainersView = ({
 
   const loadTunnels = async () => {
     try {
-      const list: any[] = await invoke("list_tunnels", { sessionId });
+      const list = await invoke<{ kind: string; listen_addr: string; target: string }[]>("list_tunnels", { sessionId });
       const map: Record<string, { localPort: string; target: string }> = {};
       for (const t of list) {
         if (t.kind === "local") {
@@ -453,7 +453,7 @@ const ContainersView = ({
       setTunnelSuccess({ port: hostPort, localPort: String(localPort) });
       setTimeout(() => setTunnelSuccess(null), 5000);
       await loadTunnels();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Tunnel creation failed:", err);
     } finally {
       setTunnelingPort(null);
@@ -499,8 +499,8 @@ const ContainersView = ({
         },
       }));
       if (r.success) setTimeout(onRefresh, 600);
-    } catch (e: any) {
-      setLastResult(prev => ({ ...prev, [c.id]: { ok: false, msg: typeof e === "string" ? e : (e?.message || "failed"), sudo: false } }));
+    } catch (e) {
+      setLastResult(prev => ({ ...prev, [c.id]: { ok: false, msg: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed"), sudo: false } }));
     } finally {
       setBusy(b => { const n = { ...b }; delete n[c.id]; return n; });
     }
@@ -912,7 +912,7 @@ const KindPill = ({
 
 const PruneView = ({ sessionId }: { sessionId: string }) => {
   const [busy, setBusy] = useState<string | null>(null);
-  const [result, setResult] = useState<Record<string, { ok: boolean; msg: string; sudo: boolean }>>({});
+  const [result, setResult] = useState<Record<string, { ok: boolean; msg: string; sudo: boolean } | undefined>>({});
   const confirm = useConfirm();
 
   const scopes: { key: string; label: string; description: string; warning?: string }[] = [
@@ -926,7 +926,7 @@ const PruneView = ({ sessionId }: { sessionId: string }) => {
   const run = async (scope: string, label: string) => {
     if (!(await confirm({ title: `Run prune for ${label}?`, message: "This is irreversible.", destructive: true }))) return;
     setBusy(scope);
-    setResult(r => ({ ...r, [scope]: undefined as any }));
+    setResult(r => ({ ...r, [scope]: undefined }));
     try {
       const r = await invoke<DockerActionResult>("ssh_docker_prune", { sessionId, scope });
       setResult(prev => ({
@@ -937,8 +937,8 @@ const PruneView = ({ sessionId }: { sessionId: string }) => {
           sudo: r.used_sudo,
         },
       }));
-    } catch (e: any) {
-      setResult(prev => ({ ...prev, [scope]: { ok: false, msg: typeof e === "string" ? e : (e?.message || "failed"), sudo: false } }));
+    } catch (e) {
+      setResult(prev => ({ ...prev, [scope]: { ok: false, msg: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "failed"), sudo: false } }));
     } finally {
       setBusy(null);
     }
@@ -1006,6 +1006,7 @@ const ContainerDetailsModal = ({
   const [logsError, setLogsError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const liveStreamIdRef = useRef<string | null>(null);
+  const liveCleanupRef = useRef<(() => void) | null>(null);
   const logsBoxRef = useRef<HTMLPreElement | null>(null);
   const autoScrollRef = useRef(true);
   // Live-log chunks are coalesced through a one-per-frame rAF before hitting
@@ -1026,8 +1027,8 @@ const ContainerDetailsModal = ({
           logsBoxRef.current.scrollTop = logsBoxRef.current.scrollHeight;
         }
       });
-    } catch (e: any) {
-      setLogsError(typeof e === "string" ? e : (e?.message || "logs failed"));
+    } catch (e) {
+      setLogsError(typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "logs failed"));
     } finally { setLogsLoading(false); }
   };
 
@@ -1071,9 +1072,9 @@ const ContainerDetailsModal = ({
         if (logRafRef.current != null) { cancelAnimationFrame(logRafRef.current); logRafRef.current = null; }
         logBufRef.current = "";
       };
-      (liveStreamIdRef as any).cleanup = cleanup;
-    } catch (e: any) {
-      setLogsError(typeof e === "string" ? e : (e?.message || "live start failed"));
+      liveCleanupRef.current = cleanup;
+    } catch (e) {
+      setLogsError(typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "live start failed"));
       setLive(false);
       liveStreamIdRef.current = null;
     }
@@ -1082,9 +1083,9 @@ const ContainerDetailsModal = ({
     const sid = liveStreamIdRef.current;
     if (!sid) { setLive(false); return; }
     try { await invoke("ssh_docker_logs_stop", { streamId: sid }); } catch {}
-    if ((liveStreamIdRef as any).cleanup) {
-      try { (liveStreamIdRef as any).cleanup(); } catch {}
-      delete (liveStreamIdRef as any).cleanup;
+    if (liveCleanupRef.current) {
+      try { liveCleanupRef.current(); } catch {}
+      liveCleanupRef.current = null;
     }
     liveStreamIdRef.current = null;
     setLive(false);
@@ -1106,7 +1107,7 @@ const ContainerDetailsModal = ({
   }, [logs, live]);
 
   // ----- Inspect / Stats / Config (lazy on tab swap) -----
-  const [inspect, setInspect] = useState<{ loading: boolean; error: string | null; data: any | null }>({ loading: false, error: null, data: null });
+  const [inspect, setInspect] = useState<{ loading: boolean; error: string | null; data: DockerInspect | null }>({ loading: false, error: null, data: null });
   const [oneStats, setOneStats] = useState<{ loading: boolean; error: string | null; data: ContainerStats | null }>({ loading: false, error: null, data: null });
 
   const fetchInspect = async () => {
@@ -1115,8 +1116,8 @@ const ContainerDetailsModal = ({
       const r = await invoke<DockerTextResult>("ssh_docker_inspect", { sessionId, kind: "container", name });
       const parsed = JSON.parse(r.data);
       setInspect({ loading: false, error: null, data: Array.isArray(parsed) ? parsed[0] : parsed });
-    } catch (e: any) {
-      setInspect({ loading: false, error: typeof e === "string" ? e : (e?.message || "inspect failed"), data: null });
+    } catch (e) {
+      setInspect({ loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "inspect failed"), data: null });
     }
   };
 
@@ -1138,8 +1139,8 @@ const ContainerDetailsModal = ({
       // server ever returns extras (older docker daemons occasionally do).
       const found = rows.find(s => s.name === name) || rows[0];
       setOneStats({ loading: false, error: null, data: found || null });
-    } catch (e: any) {
-      setOneStats({ loading: false, error: typeof e === "string" ? e : (e?.message || "stats failed"), data: null });
+    } catch (e) {
+      setOneStats({ loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "stats failed"), data: null });
     }
   };
 
@@ -1156,7 +1157,7 @@ const ContainerDetailsModal = ({
     return () => {
       const sid = liveStreamIdRef.current;
       if (sid) { invoke("ssh_docker_logs_stop", { streamId: sid }).catch(() => {}); }
-      if ((liveStreamIdRef as any).cleanup) { try { (liveStreamIdRef as any).cleanup(); } catch {} }
+      if (liveCleanupRef.current) { try { liveCleanupRef.current(); } catch {} }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1289,17 +1290,24 @@ const ContainerDetailsModal = ({
   );
 };
 
-const ConfigView = ({ data }: { data: any }) => {
+interface DockerInspect {
+  Config?: { Env?: string[]; ExposedPorts?: Record<string, unknown> };
+  HostConfig?: { PortBindings?: Record<string, { HostIp?: string; HostPort?: string }[] | null> };
+  NetworkSettings?: { Networks?: Record<string, { IPAddress?: string; Gateway?: string }> };
+  Mounts?: { Type?: string; Source?: string; Name?: string; Destination?: string; Mode?: string; RW?: boolean }[];
+}
+
+const ConfigView = ({ data }: { data: DockerInspect }) => {
   // Pull common, useful fields out of the inspect JSON so the user doesn't
   // have to scroll a 10 KB blob to read their env or port bindings.
   const config = data?.Config || {};
   const host = data?.HostConfig || {};
   const netSettings = data?.NetworkSettings || {};
   const env: string[] = config.Env || [];
-  const mounts: any[] = data?.Mounts || [];
-  const portBindings: Record<string, any[] | null> = host.PortBindings || {};
-  const exposed: Record<string, any> = config.ExposedPorts || {};
-  const networks: Record<string, any> = netSettings.Networks || {};
+  const mounts = data?.Mounts || [];
+  const portBindings: Record<string, { HostIp?: string; HostPort?: string }[] | null> = host.PortBindings || {};
+  const exposed: Record<string, unknown> = config.ExposedPorts || {};
+  const networks: Record<string, { IPAddress?: string; Gateway?: string }> = netSettings.Networks || {};
 
   return (
     <>
@@ -1358,7 +1366,7 @@ const ConfigView = ({ data }: { data: any }) => {
       <Card title={`Networks (${Object.keys(networks).length})`}>
         {Object.keys(networks).length === 0 ? <Empty>Not connected to any network.</Empty> : (
           <div className="space-y-1">
-            {Object.entries(networks).map(([name, n]: any) => (
+            {Object.entries(networks).map(([name, n]) => (
               <div key={name} className="bg-black/30 border border-white/5 rounded px-2 py-1 text-[10.5px] font-mono">
                 <div className="text-zinc-200">{name}</div>
                 <div className="text-zinc-500">{n.IPAddress || "—"} · gateway {n.Gateway || "—"}</div>
@@ -1395,8 +1403,8 @@ const ComposeViewerModal = ({
       const r = await invoke<DockerTextResult>("ssh_docker_compose_view", { sessionId, composeFile: filePath });
       if (!r.success) throw new Error(r.data || "compose view failed");
       setYaml({ loading: false, error: null, data: r.data });
-    } catch (e: any) {
-      setYaml({ loading: false, error: typeof e === "string" ? e : (e?.message || "view failed"), data: null });
+    } catch (e) {
+      setYaml({ loading: false, error: typeof e === "string" ? e : ((e as { message?: string } | null)?.message || "view failed"), data: null });
     }
   };
 

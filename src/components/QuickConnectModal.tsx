@@ -214,7 +214,7 @@ const QuickConnectModal = ({ isOpen, onClose, onConnect }: Props) => {
                 value={password}
                 onChange={setPassword}
                 placeholder="••••••"
-                onKeyDown={(e: any) => e.key === "Enter" && connect()}
+                onKeyDown={(e) => e.key === "Enter" && connect()}
                 className="w-full h-9 px-3 bg-zinc-900/60 border border-white/10 rounded-lg text-[12.5px] text-primary outline-none focus:border-primary/50"
               />
             </div>

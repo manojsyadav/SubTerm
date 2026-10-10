@@ -156,7 +156,7 @@ const MirrorsPanel = ({ sessionId, serverId = 0, configuredMirrors, disabled = f
       }
       setStatuses(next);
       setRunningByPair(running);
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     }
   };
@@ -219,7 +219,7 @@ const MirrorsPanel = ({ sessionId, serverId = 0, configuredMirrors, disabled = f
     try {
       const picked: string | null = await invoke("pick_local_directory");
       if (picked) setDraft({ ...draft, local: picked });
-    } catch (e: any) { setError(String(e)); }
+    } catch (e) { setError(String(e)); }
   };
 
   const askPreviewThenStart = async (spec: MirrorSpec) => {
@@ -232,7 +232,7 @@ const MirrorsPanel = ({ sessionId, serverId = 0, configuredMirrors, disabled = f
       const norm: MirrorSpec = { ...spec, conflict_resolution: spec.conflict_resolution || "local" };
       const report: DryRunReport = await invoke("mirror_dry_run", { sessionId, spec: norm });
       setPending({ spec: norm, report });
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setWorking(false);
@@ -258,7 +258,7 @@ const MirrorsPanel = ({ sessionId, serverId = 0, configuredMirrors, disabled = f
             const without = prev.filter(m => k(m) !== k(pending.spec));
             return [...without, pending.spec];
           });
-        } catch (e: any) {
+        } catch (e) {
           setError(`Mirror started but not saved to profile: ${e}`);
         }
       }
@@ -270,7 +270,7 @@ const MirrorsPanel = ({ sessionId, serverId = 0, configuredMirrors, disabled = f
       setAdding(false);
       setDraft({ local: "", remote: "", soft_delete: true, excludes: [], conflict_resolution: "local" });
       setExcludesText("");
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setWorking(false);
@@ -279,7 +279,7 @@ const MirrorsPanel = ({ sessionId, serverId = 0, configuredMirrors, disabled = f
 
   const stopMirror = async (id: string) => {
     try { await invoke("stop_mirror", { mirrorId: id }); }
-    catch (e: any) { setError(String(e)); }
+    catch (e) { setError(String(e)); }
   };
 
   const fmtBytes = (n: number) => {
