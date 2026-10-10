@@ -46,12 +46,12 @@ fn sweep_old_files(dir: &std::path::Path) {
 
 #[tauri::command]
 pub async fn launch_rdp(state: tauri::State<'_, DbState>, id: i32) -> Result<(), String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = (state, id);
-        return Err("RDP launching is not available on Android.".into());
+        return Err("RDP launching is not available on phones and tablets.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let (host, port, username) = {
             let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
@@ -100,7 +100,7 @@ fn spawn_client(path: &std::path::Path, _host: &str, _port: u16, _user: &str) ->
         .map_err(|e| format!("Could not open the connection file. Install Microsoft Remote Desktop: {e}"))
 }
 
-#[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
+#[cfg(all(unix, not(target_os = "macos"), desktop))]
 fn spawn_client(_path: &std::path::Path, host: &str, port: u16, user: &str) -> Result<(), String> {
     let mut cmd = std::process::Command::new("xfreerdp");
     cmd.arg(format!("/v:{host}:{port}")).arg("/cert:tofu").arg("+clipboard");

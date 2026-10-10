@@ -221,7 +221,7 @@ pub fn run() {
     // it intercepts window events; no JS-facing commands to lock down.
     // Mobile builds skip this entirely: Android decides window geometry,
     // not us, and the plugin's crate isn't compiled into the Android target.
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
     // Cross-platform URL opener — Android (Intent.ACTION_VIEW), Windows
     // (start), macOS (open), Linux (xdg-open). about.rs's open_external_url

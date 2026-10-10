@@ -1813,14 +1813,14 @@ pub async fn sftp_open_remote_file(
     // intent-based "open with" model would need a Tauri plugin instead,
     // and saving back through SAF doesn't fit the temp-file pattern we
     // depend on. Refuse cleanly so the UI can surface a polite message.
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = &temp_file_path;
         emit_open(transferred, total_size, "error");
         emit_transfer(transferred, total_size, "error", Some("Live edit in system editor is not available on Android.".into()), false);
         return Err("Live edit in system editor is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let open_res = open::that(&temp_file_path);
         if let Err(e) = open_res {
@@ -2061,12 +2061,12 @@ pub async fn sftp_prepare_drag(
 
 #[tauri::command]
 pub async fn local_open_file(local_path: String) -> Result<(), String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = local_path;
         return Err("Open-with is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let safe = guard_local_path(&local_path, false)?;
         open::that(&safe).map_err(|e| format!("Failed to open local file: {}", e))?;
@@ -2076,12 +2076,12 @@ pub async fn local_open_file(local_path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn local_open_in_explorer(local_path: String) -> Result<(), String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = local_path;
         return Err("Open-in-Explorer is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let safe = guard_local_path(&local_path, false)?;
         if safe.is_dir() {
@@ -2472,7 +2472,7 @@ pub struct LocalFileEntry {
 
 #[tauri::command]
 pub async fn local_home_dir(app: tauri::AppHandle) -> Result<String, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         // Android has no "home directory" in the desktop sense — the
         // `directories` crate returns nothing meaningful here. Fall back to
@@ -2483,7 +2483,7 @@ pub async fn local_home_dir(app: tauri::AppHandle) -> Result<String, String> {
         if !dir.is_empty() { return Ok(dir); }
         return Err("Could not resolve home directory".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let _ = app;
         directories::UserDirs::new()
@@ -2494,7 +2494,7 @@ pub async fn local_home_dir(app: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn local_desktop_dir(app: tauri::AppHandle) -> Result<String, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         // No Desktop concept on Android — reuse the writable-probe default
         // instead of erroring, so `FilePanel.homePath()` lands somewhere
@@ -2503,7 +2503,7 @@ pub async fn local_desktop_dir(app: tauri::AppHandle) -> Result<String, String> 
         if !dir.is_empty() { return Ok(dir); }
         return Err("Could not resolve default directory".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let _ = app;
         // Falls back to the home directory if a Desktop folder isn't configured
@@ -2559,10 +2559,29 @@ pub struct AndroidQuickDir {
 
 #[tauri::command]
 pub async fn android_quick_dirs(app: tauri::AppHandle) -> Result<Vec<AndroidQuickDir>, String> {
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let _ = app;
         return Ok(Vec::new());
+    }
+    // iOS (the command keeps its Android-era name so the front end contract is unchanged):
+    // the app sandbox's Documents folder is the place a user can reach through the Files
+    // app, with the app's own data folder as the fallback.
+    #[cfg(target_os = "ios")]
+    {
+        use tauri::Manager as _;
+        let mut out: Vec<AndroidQuickDir> = Vec::new();
+        for (label, dir) in [
+            ("Documents", app.path().document_dir()),
+            ("App storage", app.path().app_local_data_dir()),
+        ] {
+            if let Ok(dir) = dir {
+                if is_dir_writable(&dir) {
+                    out.push(AndroidQuickDir { label: label.into(), path: dir.to_string_lossy().into_owned() });
+                }
+            }
+        }
+        return Ok(out);
     }
     #[cfg(target_os = "android")]
     {
@@ -2662,12 +2681,12 @@ pub struct ImportedHost {
 /// clear message rather than pretending to look somewhere.
 #[tauri::command]
 pub fn parse_ssh_config(path: Option<String>) -> Result<Vec<ImportedHost>, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = path;
         Err("Not available on Android — use export/import instead".into())
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         // One in-progress Host block. We accumulate resolved fields as we
         // walk the file and emit one ImportedHost per alias when the block
@@ -3253,11 +3272,11 @@ pub async fn local_copy_entry(src: String, dest: String, is_dir: bool) -> Result
 
 #[tauri::command]
 pub async fn select_local_folder() -> Result<Option<String>, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         return Err("Folder picker not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let folder = rfd::FileDialog::new()
             .set_title("Choose Local Directory")

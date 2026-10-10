@@ -580,12 +580,12 @@ pub(crate) async fn export_profile(
     // Native file dialogs are desktop-only. On Android we'd hit the SAF
     // intent system via a Tauri plugin instead, but profile export from
     // the mobile UI isn't a wired feature yet, so the command just refuses.
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = src;
         return Err("Profile export is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         // rfd's blocking dialog must not run on the main thread on macOS — we're
         // already off the UI thread in a tauri async command so a direct call is
@@ -614,12 +614,12 @@ pub(crate) async fn save_audit_log(
     content: String,
     filename: String,
 ) -> Result<Option<String>, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = (content, filename);
         return Err("Audit log export is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let chosen = rfd::FileDialog::new()
             .set_title("Save Session Audit Log")
@@ -650,12 +650,12 @@ pub(crate) async fn save_text_file(
     filename: String,
     extension: String,
 ) -> Result<Option<String>, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = (content, filename, extension);
         return Err("Saving files from here is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let ext = extension.trim_start_matches('.').to_string();
         let mut dialog = rfd::FileDialog::new().set_title("Save").set_file_name(&filename);
@@ -680,11 +680,11 @@ pub(crate) async fn save_text_file(
 /// before committing the copy.
 #[tauri::command]
 pub(crate) async fn import_profile_pick() -> Result<Option<(String, String)>, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         return Err("Profile import is not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let picked = rfd::FileDialog::new()
             .set_title("Import SubTerm Profile")

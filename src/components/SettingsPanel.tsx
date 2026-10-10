@@ -5,7 +5,7 @@ import { SettingsRdpMode } from "./SettingsRdpMode";
 import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
 import { useState, type ComponentProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { IS_ANDROID } from "../util/platform";
+import { IS_MOBILE_OS } from "../util/platform";
 import { toExportableServers, serversToJson, serversToCsv } from "../export/serverExport";
 import {
   Settings, Palette, RefreshCw, List, Cloud, User,
@@ -718,7 +718,7 @@ const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: 
       const list = toExportableServers(servers, folders);
       const content = format === "json" ? serversToJson(list) : serversToCsv(list);
       const fileName = `subterm-servers-export-${new Date().toISOString().slice(0, 10)}.${format}`;
-      const dir = IS_ANDROID
+      const dir = IS_MOBILE_OS
         ? await invoke<string>("android_default_local_dir")
         : await invoke<string | null>("select_local_folder");
       if (!dir) { setExporting(null); return; }

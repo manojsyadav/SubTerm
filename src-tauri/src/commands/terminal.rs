@@ -200,7 +200,7 @@ pub async fn close_terminal(
     Ok(())
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn open_local_terminal(
     app: tauri::AppHandle,
@@ -524,7 +524,7 @@ pub async fn get_available_local_shells() -> Result<Vec<LocalShellOption>, Strin
     Ok(shells)
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 #[tauri::command]
 pub async fn open_local_terminal(
     _app: tauri::AppHandle,
@@ -539,7 +539,7 @@ pub async fn open_local_terminal(
     Err("Local terminal is not supported on Android".to_string())
 }
 
-#[cfg(target_os = "android")]
+#[cfg(mobile)]
 #[tauri::command]
 pub async fn get_available_local_shells() -> Result<Vec<LocalShellOption>, String> {
     Ok(vec![])

@@ -44,8 +44,8 @@ This document tracks active development tasks, pending architectural optimizatio
   - Still open: clipboard (`ironrdp-cliprdr`), resize on window change (display control), certificate trust-on-first-use instead of accepting any certificate, audio, dirty-rectangle batching for slow links, a real tab instead of a full-window view, shipping the helper in installer bundles (`tauri.conf.json` resources), Linux/macOS helper builds in CI.
   - Why a helper program: IronRDP pins `picky`/`curve25519-dalek` pre-release versions that cannot resolve in the same lockfile as `russh`. Revisit if either side moves.
 
-- [ ] 🟢 **P3 · XL** — **iOS / iPadOS Support**
-  - Target compilation and packaging for iPadOS and iOS devices, pairing with SubTerm's mobile accessory keybar.
+- [ ] 🟢 **P3 · L** — **iOS / iPadOS: first Mac build**
+  - Prepared but never built: desktop-only crates are excluded for iOS, platform checks use `desktop` / `mobile`, iOS detection and Documents-folder handling exist, scripts `ios:init` / `ios:dev` / `ios:build` are in `package.json`, and [`docs/IOS.md`](docs/IOS.md) has the steps. Needs a Mac with Xcode: run `npm run ios:init`, fix the first compile errors (suspects: `notify`, `if-watch`, C builds of `ring` / `zstd`), then test connect, terminal, SFTP and suspend/resume.
 
 ---
 
