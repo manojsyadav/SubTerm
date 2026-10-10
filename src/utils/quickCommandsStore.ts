@@ -128,7 +128,10 @@ export function saveQuickCommandsConfig(config: Record<string, QuickCommandEnvGr
   }
 }
 
-export function resolveEnvKey(detectedOs: any, session: any): string {
+export function resolveEnvKey(
+  detectedOs: { os_type?: string; distro?: string; distro_id?: string } | null | undefined,
+  session: { isLocal?: boolean; localShell?: string } | null | undefined,
+): string {
   const osType = detectedOs?.os_type || (session?.isLocal ? "windows" : "linux");
   if (osType === "windows") {
     if (session?.isLocal && session?.localShell === "cmd") {

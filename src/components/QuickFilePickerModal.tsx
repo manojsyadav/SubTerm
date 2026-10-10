@@ -15,6 +15,11 @@ import {
   AlertCircle
 } from "lucide-react";
 
+interface SftpListing {
+  current_path?: string;
+  entries?: { name: string; path: string; is_dir?: boolean; size?: number }[];
+}
+
 interface FileEntry {
   name: string;
   path: string;
@@ -77,15 +82,15 @@ export const QuickFilePickerModal: React.FC<QuickFilePickerModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await invoke<any>("sftp_list_dir", {
+      const res = await invoke<SftpListing>("sftp_list_dir", {
         sessionId,
         path: path || "",
       });
       if (res) {
         setCurrentPath(res.current_path || path || "/");
         const mapped: FileEntry[] = (res.entries || [])
-          .filter((e: any) => e.name !== "." && e.name !== "..")
-          .map((e: any) => ({
+          .filter((e) => e.name !== "." && e.name !== "..")
+          .map((e) => ({
             name: e.name,
             path: e.path,
             isDir: !!e.is_dir,
@@ -103,7 +108,7 @@ export const QuickFilePickerModal: React.FC<QuickFilePickerModalProps> = ({
         });
         setEntries(mapped);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.warn("Failed to list SFTP dir:", err);
       setError(String(err));
     } finally {

@@ -27,7 +27,7 @@ export default tseslint.config(
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "error",
       // Deliberate best-effort fallbacks (localStorage writes, optional
       // cleanup) throughout the codebase use an intentionally empty
       // `catch {}` rather than logging noise for errors nobody acts on.

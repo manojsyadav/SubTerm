@@ -114,7 +114,7 @@ export const SettingsProfileManagement = ({
       setInfo(`Workspace "${trimmed}" created.`);
       if (onUnlocked) onUnlocked(trimmed);
       else await reloadProfiles();
-    } catch (e: any) {
+    } catch (e) {
       setError(cleanErr(e));
     } finally {
       setBusy(false);
@@ -139,7 +139,7 @@ export const SettingsProfileManagement = ({
       await invoke("sync_profile_password", { name: profileName, currentPassword: pass });
       setInfo(`Workspace "${profileName}" is now synced to your Unified Master Password!`);
       await reloadProfiles();
-    } catch (e: any) {
+    } catch (e) {
       setError(cleanErr(e));
     } finally {
       setBusy(false);
@@ -164,7 +164,7 @@ export const SettingsProfileManagement = ({
       setConfirmMasterPw("");
       setInfo("Master Password updated successfully!");
       await reloadProfiles();
-    } catch (e: any) {
+    } catch (e) {
       setError(cleanErr(e));
     } finally {
       setBusy(false);
@@ -196,7 +196,7 @@ export const SettingsProfileManagement = ({
       setEditingProfile(null);
       setInfo(`Profile "${trimmed}" updated.`);
       await reloadProfiles();
-    } catch (e: any) {
+    } catch (e) {
       setError(cleanErr(e));
     } finally {
       setBusy(false);
@@ -218,7 +218,7 @@ export const SettingsProfileManagement = ({
       deleteProfileIcon(name);
       setInfo(`Profile "${name}" deleted.`);
       await reloadProfiles();
-    } catch (e: any) {
+    } catch (e) {
       setError(cleanErr(e));
     } finally {
       setBusy(false);

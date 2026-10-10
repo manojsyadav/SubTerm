@@ -91,7 +91,7 @@ export const MasterUnlockPage = ({
           const bioSaved = localStorage.getItem("subterm-master-bio") || localStorage.getItem(`submarine-bio-${target}`);
           setHasBiometricSaved(!!bioSaved);
         }
-      } catch (e: any) {
+      } catch (e) {
         if (isMounted) setError(cleanErr(e));
       } finally {
         if (isMounted) {
@@ -170,7 +170,7 @@ export const MasterUnlockPage = ({
         onUnlocked(target);
         onClose?.();
       }
-    } catch (e: any) {
+    } catch (e) {
       const raw = String(e);
       if (raw.toLowerCase().includes("decrypt") || raw.includes("PASSWORD")) {
         setError("Incorrect Master Password. Please try again.");
@@ -207,7 +207,7 @@ export const MasterUnlockPage = ({
       localStorage.setItem("subterm_last_workspace", target);
       onUnlocked(target);
       onClose?.();
-    } catch (e: any) {
+    } catch (e) {
       const raw = String(e);
       if (raw.toLowerCase().includes("decrypt")) {
         setError("Biometric token expired or invalid. Please type your password.");
@@ -236,7 +236,7 @@ export const MasterUnlockPage = ({
     try {
       await invoke("cloud_auth_sign_in", { email: cloudEmail, password: cloudPassword });
       // Fetch sync profiles from cloud
-      const cps = await invoke<any[]>("cloud_list_sync_profiles");
+      const cps = await invoke<{ profile: string; name: string; records: number }[]>("cloud_list_sync_profiles");
       if (cps && cps.length > 0) {
         // Import first cloud profile
         const first = cps[0];
@@ -249,7 +249,7 @@ export const MasterUnlockPage = ({
       } else {
         setError("No profiles found in cloud account.");
       }
-    } catch (e: any) {
+    } catch (e) {
       setError(cleanErr(e));
     } finally {
       setCloudBusy(false);

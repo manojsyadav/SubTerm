@@ -5,6 +5,10 @@ import {
   CheckCircle2, XCircle, Clock, Play, RefreshCw, Zap
 } from "lucide-react";
 
+import type { Server as ServerRecord } from "../types";
+
+type NetTab = "probe" | "multiscan" | "wol" | "knock";
+
 export interface PortProbeResult {
   host: string;
   port: number;
@@ -32,10 +36,10 @@ export const NetworkToolsModal = ({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  servers?: any[];
+  servers?: Pick<ServerRecord, "id" | "name" | "host">[];
   initialHost?: string;
 }) => {
-  const [activeTab, setActiveTab] = useState<"probe" | "multiscan" | "wol" | "knock">("probe");
+  const [activeTab, setActiveTab] = useState<NetTab>("probe");
   const [host, setHost] = useState(initialHost || (servers[0]?.host || ""));
   const [port, setPort] = useState<number>(22);
   const [probing, setProbing] = useState(false);
@@ -67,7 +71,7 @@ export const NetworkToolsModal = ({
         timeoutMs: 3000,
       });
       setSingleResult(res);
-    } catch (err: any) {
+    } catch (err) {
       setSingleResult({
         host: host.trim(),
         port: Number(port) || 22,
@@ -92,7 +96,7 @@ export const NetworkToolsModal = ({
         timeoutMs: 2000,
       });
       setScanResults(res);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
     } finally {
       setScanning(false);
@@ -108,7 +112,7 @@ export const NetworkToolsModal = ({
         broadcastIp: broadcastIp.trim() || null,
       });
       setWolStatus("Magic packet broadcasted successfully!");
-    } catch (err: any) {
+    } catch (err) {
       setWolStatus(`WoL failed: ${err}`);
     }
   };
@@ -127,7 +131,7 @@ export const NetworkToolsModal = ({
         delayMs: 150,
       });
       setKnockStatus("Port knock sequence completed!");
-    } catch (err: any) {
+    } catch (err) {
       setKnockStatus(`Knock failed: ${err}`);
     }
   };
@@ -162,18 +166,18 @@ export const NetworkToolsModal = ({
 
         {/* Tab switcher */}
         <div className="flex border-b border-white/5 bg-black/20 px-5 pt-2 gap-2">
-          {[
+          {([
             { id: "probe", label: "TCP Port Probe", icon: Activity },
             { id: "multiscan", label: "Service Audit", icon: RefreshCw },
             { id: "wol", label: "Wake-on-LAN", icon: Radio },
             { id: "knock", label: "Port Knocking", icon: Shield },
-          ].map((tab) => {
+          ] as { id: NetTab; label: string; icon: typeof Activity }[]).map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-medium transition-colors ${
                   active
                     ? "border-sky-400 text-sky-300 bg-white/[0.02]"

@@ -1,3 +1,4 @@
+import type { Server as ServerRecord } from "../types";
 import { useFeatureFlag } from "../featureFlags";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { 
@@ -20,11 +21,11 @@ export interface PaletteItem {
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
-  servers: any[];
+  servers: ServerRecord[];
   sessions: { id: string; serverName: string; serverId: number }[];
   activeView: string;
   onSelectView: (viewId: string) => void;
-  onConnectServer: (server: any) => void;
+  onConnectServer: (server: ServerRecord) => void;
   onOpenQuickConnect: () => void;
   onOpenAddNode: () => void;
   onOpenSettings: () => void;

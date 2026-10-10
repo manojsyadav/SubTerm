@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import { Crown, Pencil, Eye } from "lucide-react";
 
 // The three sharing roles, in one place — the Profile panel (manage access) and
@@ -5,7 +6,7 @@ import { Crown, Pencil, Eye } from "lucide-react";
 // "Editor" in one screen and "editor" in the other is exactly the kind of drift
 // that made sharing feel like two unrelated features.
 
-export const roleMeta: Record<string, { label: string; icon: any; cls: string }> = {
+export const roleMeta: Record<string, { label: string; icon: LucideIcon; cls: string }> = {
   owner:  { label: "Owner",  icon: Crown,  cls: "text-amber-300 bg-amber-500/10 border-amber-500/30" },
   editor: { label: "Editor", icon: Pencil, cls: "text-sky-300 bg-sky-500/10 border-sky-500/30" },
   user:   { label: "Viewer", icon: Eye,    cls: "text-zinc-300 bg-white/5 border-white/10" },

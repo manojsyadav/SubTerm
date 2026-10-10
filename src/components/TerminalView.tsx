@@ -1491,7 +1491,7 @@ const TerminalView = ({
     }
 
     // Handle Terminal Closure (Server exit / EOF / drop)
-    const unlistenClosedPromise = listen(`terminal-closed-${terminalId}`, (event: any) => {
+    const unlistenClosedPromise = listen(`terminal-closed-${terminalId}`, (event: { payload?: { clean_exit?: boolean } }) => {
       if (commandSettleTimerRef.current) window.clearTimeout(commandSettleTimerRef.current);
       if (commandDismissTimerRef.current) window.clearTimeout(commandDismissTimerRef.current);
       setLastCommand(null);

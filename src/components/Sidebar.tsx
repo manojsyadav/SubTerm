@@ -3,6 +3,34 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Server, KeyRound, Library, Activity, Settings, Lock, ArrowLeftRight } from "lucide-react";
 
+interface MonitorListRow {
+  node_id: number;
+  name: string;
+  paused?: boolean;
+  connected?: boolean;
+  last_error?: string | null;
+}
+
+interface MonitorSamplePayload {
+  values?: { cpu_perc?: number; mem_perc?: number };
+}
+
+interface MonitorOutagePayload {
+  node_name?: string;
+}
+
+interface SidebarProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  isMobile?: boolean;
+  isUnlocked?: boolean;
+  onUnlock?: () => void;
+  onLogout?: () => void;
+  onLock?: () => void;
+  onSwitchProfile?: () => void;
+  enableMonitoring?: boolean;
+}
+
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
 // driven by `isMobile` so the terminal/session views can use the full screen
 // width on phones — vertical sidebars eat ~50px of width that's expensive on
@@ -19,7 +47,7 @@ export const Sidebar = ({
   onLock,
   onSwitchProfile,
   enableMonitoring = true,
-}: any) => {
+}: SidebarProps) => {
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
   const [alertSummary, setAlertSummary] = useState<string | null>(null);
@@ -36,7 +64,7 @@ export const Sidebar = ({
 
     const checkHealth = async () => {
       try {
-        const rows: any[] = await invoke("monitor_list");
+        const rows: MonitorListRow[] = await invoke("monitor_list");
         if (!isMounted) return;
         if (!rows || rows.length === 0) {
           setHealthState("idle");
@@ -69,7 +97,7 @@ export const Sidebar = ({
         }
 
         for (const r of rows) {
-          listen<any>(`monitor-sample-${r.node_id}`, (ev) => {
+          listen<MonitorSamplePayload>(`monitor-sample-${r.node_id}`, (ev) => {
             if (!isMounted) return;
             const values = ev.payload?.values || {};
             const cpu = values.cpu_perc ?? 0;
@@ -80,13 +108,13 @@ export const Sidebar = ({
             }
           }).then((unlisten) => cleanups.push(unlisten));
 
-          listen<any>(`monitor-outage-${r.node_id}`, (ev) => {
+          listen<MonitorOutagePayload>(`monitor-outage-${r.node_id}`, (ev) => {
             if (!isMounted) return;
             setHealthState("critical");
             setAlertSummary(`${ev.payload?.node_name || r.name}: outage detected`);
           }).then((unlisten) => cleanups.push(unlisten));
 
-          listen<any>(`monitor-recovered-${r.node_id}`, () => {
+          listen<unknown>(`monitor-recovered-${r.node_id}`, () => {
             if (!isMounted) return;
             checkHealth();
           }).then((unlisten) => cleanups.push(unlisten));

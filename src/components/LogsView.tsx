@@ -60,7 +60,7 @@ export const LogsView = ({ logs, setActiveView, setLogs, confirm }: LogsViewProp
       ) : (
         [...logs].reverse().map((log) => (
           <div
-            key={(log as any).id ?? `${log.time}-${log.msg}`}
+            key={log.id ?? `${log.time}-${log.msg}`}
             className="flex flex-col sm:flex-row sm:items-start sm:gap-3 text-[10px] sm:text-[12px] font-mono group hover:bg-white/5 p-1 rounded-md transition-colors"
           >
             <div className="flex items-baseline gap-2 sm:gap-3 sm:shrink-0">

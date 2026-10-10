@@ -48,7 +48,7 @@ const AboutPanel = ({ isOpen, onClose }: Props) => {
     try {
       const u = await invoke<UpdateInfo>("check_for_updates");
       setUpdate(u);
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     } finally {
       setChecking(false);
@@ -58,7 +58,7 @@ const AboutPanel = ({ isOpen, onClose }: Props) => {
   const openUrl = async (url: string) => {
     try {
       await invoke("open_external_url", { url });
-    } catch (e: any) {
+    } catch (e) {
       setError(String(e));
     }
   };

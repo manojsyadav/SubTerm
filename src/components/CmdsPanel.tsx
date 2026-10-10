@@ -1,3 +1,4 @@
+import type { Server as ServerRecord } from "../types";
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Play, RefreshCw, Search, X, Terminal, StickyNote, ClipboardCopy, ChevronDown, ChevronRight, Pencil, Check, Server } from "lucide-react";
@@ -83,19 +84,19 @@ export const CmdsPanel = ({ activeTab, onClose, serverId, serverName }: { active
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const tasks: Promise<any>[] = [
+      const tasks: Promise<unknown>[] = [
         invoke<CommandItem[]>("get_commands"),
         invoke<NoteItem[]>("get_notes"),
       ];
       // Pull node notes from get_servers when this Library is scoped to a
       // session. The backend exposes only the bulk list — cheap enough
       // (handful of rows) and avoids a new single-server command.
-      if (hasNode) tasks.push(invoke<any[]>("get_servers"));
+      if (hasNode) tasks.push(invoke<ServerRecord[]>("get_servers"));
       const out = await Promise.all(tasks);
       setCommands((out[0] as CommandItem[]) || []);
       setNotes((out[1] as NoteItem[]) || []);
       if (hasNode) {
-        const servers = (out[2] as any[]) || [];
+        const servers = (out[2] as ServerRecord[]) || [];
         const server = servers.find((s) => s.id === serverId);
         const text: string = server?.notes ?? "";
         setNodeOriginal(text);

@@ -16,7 +16,7 @@ interface Props {
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
-  onKeyDown?: (e: any) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   disabled?: boolean;
 }
 
@@ -29,7 +29,7 @@ const PasswordField = ({
       <input
         type={show ? "text" : "password"}
         value={value}
-        onChange={(e: any) => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
         onKeyDown={onKeyDown}

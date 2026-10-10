@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import type { Server, Credential, SshKey, Folder, SavedCommand, Note } from "../types";
+import type { ConfirmOptions } from "../ui/confirm";
 
 const appWindow = getCurrentWindow();
 
@@ -11,7 +13,7 @@ export interface ProfileVaultSettings {
 
 export interface UseProfileVaultOptions {
   settings: ProfileVaultSettings;
-  onAutostartSessions?: (sessions: any[]) => void;
+  onAutostartSessions?: (sessions: Server[]) => void;
   onLoggedOut?: () => void;
 }
 
@@ -22,12 +24,12 @@ export function useProfileVault(options: UseProfileVaultOptions) {
   const [cloudSyncing, setCloudSyncing] = useState(false);
   const [lastSyncLabel, setLastSyncLabel] = useState<string | null>(null);
 
-  const [servers, setServers] = useState<any[]>([]);
-  const [credentials, setCredentials] = useState<any[]>([]);
-  const [sshKeys, setSshKeys] = useState<any[]>([]);
-  const [folders, setFolders] = useState<any[]>([]);
-  const [commands, setCommands] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
+  const [servers, setServers] = useState<Server[]>([]);
+  const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [sshKeys, setSshKeys] = useState<SshKey[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [commands, setCommands] = useState<SavedCommand[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [logs, setLogs] = useState<{ id: string; msg: string; type: string; time: string }[]>([]);
 
   const addLog = useCallback((msg: string, type = "info") => {
@@ -37,7 +39,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const refreshServers = useCallback(async () => {
     try {
-      setServers((await invoke("get_servers")) as any[]);
+      setServers(await invoke<Server[]>("get_servers"));
     } catch (e) {
       addLog(`SYNC_SERVERS: ${e}`, "error");
     }
@@ -45,7 +47,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const refreshCredentials = useCallback(async () => {
     try {
-      setCredentials((await invoke("get_credentials")) as any[]);
+      setCredentials(await invoke<Credential[]>("get_credentials"));
     } catch (e) {
       addLog(`SYNC_CREDENTIALS: ${e}`, "error");
     }
@@ -53,7 +55,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const refreshSshKeys = useCallback(async () => {
     try {
-      setSshKeys((await invoke("get_ssh_keys")) as any[]);
+      setSshKeys(await invoke<SshKey[]>("get_ssh_keys"));
     } catch (e) {
       addLog(`SYNC_SSH_KEYS: ${e}`, "error");
     }
@@ -61,7 +63,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const refreshFolders = useCallback(async () => {
     try {
-      setFolders((await invoke("get_folders")) as any[]);
+      setFolders(await invoke<Folder[]>("get_folders"));
     } catch (e) {
       addLog(`SYNC_FOLDERS: ${e}`, "error");
     }
@@ -69,7 +71,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const refreshCommands = useCallback(async () => {
     try {
-      setCommands((await invoke("get_commands")) as any[]);
+      setCommands(await invoke<SavedCommand[]>("get_commands"));
     } catch (e) {
       addLog(`SYNC_COMMANDS: ${e}`, "error");
     }
@@ -77,7 +79,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const refreshNotes = useCallback(async () => {
     try {
-      setNotes((await invoke("get_notes")) as any[]);
+      setNotes(await invoke<Note[]>("get_notes"));
     } catch (e) {
       addLog(`SYNC_NOTES: ${e}`, "error");
     }
@@ -280,7 +282,7 @@ export function useProfileVault(options: UseProfileVaultOptions) {
         .catch(() => {});
 
       try {
-        const list = await invoke<any[]>("get_servers");
+        const list = await invoke<Server[]>("get_servers");
         const toStart = list.filter((s) => s.autostart);
         if (toStart.length > 0) {
           options.onAutostartSessions?.(toStart);
@@ -295,8 +297,8 @@ export function useProfileVault(options: UseProfileVaultOptions) {
 
   const handleLogout = useCallback(
     async (
-      sessions: any[],
-      confirmFn: (opts: any) => Promise<boolean>,
+      sessions: { id: string }[],
+      confirmFn: (opts: ConfirmOptions) => Promise<boolean>,
       onConfirmLogout: () => void
     ) => {
       if (sessions.length > 0) {

@@ -6,6 +6,8 @@ import { useConfirm } from "../ui/confirm";
 import { useViewportWidth } from "../hooks/useViewport";
 import { renderServerIcon } from "./ServerIcon";
 import DistroLogo from "./DistroLogo";
+import type { Server as ServerRecord, Folder as FolderRecord } from "../types";
+import type { Session } from "../hooks/useSessionManager";
 
 // Fixed card geometry — MUST match the rendered card's actual CSS (h-16 =
 // 64px) and the grid's gap-3 (12px). Both the row virtualizer and the
@@ -15,7 +17,30 @@ import DistroLogo from "./DistroLogo";
 const CARD_H = 64;
 const GRID_GAP = 12;
 
-export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onOpenNetworkTools, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: any) => {
+interface NodeGridProps {
+  servers?: ServerRecord[];
+  folders?: FolderRecord[];
+  activeFolderId?: number | null;
+  onActiveFolderChange?: (id: number | null) => void;
+  onOpenServer: (server: ServerRecord, initialTool?: Session["initialTool"]) => void;
+  onOpenMultipleServers?: (servers: ServerRecord[]) => void;
+  onEditServer: (server: ServerRecord) => void;
+  // Method syntax (bivariant params): these are also wired straight to
+  // onClick, so they may receive the click event as their first argument.
+  onAddClick(folderId?: unknown): void;
+  onQuickConnect?(arg?: unknown): void;
+  onOpenLocalTerminal?(arg?: unknown): void;
+  onImportSSHConfig?(arg?: unknown): void;
+  onOpenNetworkTools?(arg?: unknown): void;
+  onRemoveServer: (id: number) => void | Promise<unknown>;
+  onRemoveFolder: (id: number) => void | Promise<unknown>;
+  onRenameFolder?: (id: number, name: string) => void | Promise<unknown>;
+  onCloneServer?: (id: number) => void | Promise<unknown>;
+  onReorderServers?: (ids: number[]) => void | Promise<unknown>;
+  isMobile?: boolean;
+}
+
+export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onOpenNetworkTools, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: NodeGridProps) => {
   const [search, setSearch] = useState("");
   // Native window.confirm() is a silent no-op inside Tauri's Android WebView
   // (same shim gap useTextPrompt was added for), so the delete buttons here
@@ -38,7 +63,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   const commitRename = async () => {
     if (!renaming || !onRenameFolder) return;
     const next = renaming.draft.trim();
-    if (next && next !== folders?.find((f: any) => f.id === renaming.id)?.name) {
+    if (next && next !== folders?.find((f) => f.id === renaming.id)?.name) {
       try { await onRenameFolder(renaming.id, next); } catch { /* parent surfaces error */ }
     }
     setRenaming(null);
@@ -59,11 +84,11 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     }
   };
 
-  const filteredServers = servers?.filter((s: any) =>
+  const filteredServers = servers?.filter((s) =>
     matchesSearch(s.name, search) || matchesSearch(s.host, search)
   ) || [];
 
-  const currentFolder = folders?.find((f: any) => f.id === activeFolderId);
+  const currentFolder = folders?.find((f) => f.id === activeFolderId);
 
   // If search is active, we might want to just show all matching servers flat,
   // or still respect the folder. Let's just show them flat if searching.
@@ -71,7 +96,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
 
   const displayedServers = isSearching
     ? filteredServers
-    : filteredServers.filter((s: any) => s.folder_id === activeFolderId);
+    : filteredServers.filter((s) => s.folder_id === activeFolderId);
 
   // Single source of truth for column count — drives both the virtualized
   // grid's row layout AND the drag-reorder geometry below, instead of the
@@ -102,7 +127,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   const orderRef = useRef<number[] | null>(null);
   orderRef.current = order;
   const initialOrderRef = useRef<number[]>([]);
-  const onReorderRef = useRef<any>(onReorderServers);
+  const onReorderRef = useRef(onReorderServers);
   onReorderRef.current = onReorderServers;
   const rafRef = useRef<number | null>(null);
   // The scroll container + its scrollTop at drag start. The slot snapshot is in
@@ -231,13 +256,13 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   // (or the drag ended with no change) — avoids a flash back to the old order.
   useEffect(() => {
     if (dragId !== null || order === null) return;
-    const cur = displayedServers.map((s: any) => s.id);
+    const cur = displayedServers.map((s) => s.id);
     if (cur.length === order.length && cur.every((v: number, i: number) => v === order[i])) {
       setOrder(null);
     }
   }, [dragId, order, displayedServers]);
 
-  const beginDrag = (e: any, id: number) => {
+  const beginDrag = (e: React.PointerEvent | React.MouseEvent, id: number) => {
     if (!canReorder) return;
     e.preventDefault();
     e.stopPropagation();
@@ -259,7 +284,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     const originY = wrapperRect?.top ?? 0;
     const cardW = cardSizeRef.current.w;
     const cols = columnCount;
-    slotsRef.current = displayedServers.map((_: any, i: number) => {
+    slotsRef.current = displayedServers.map((_, i: number) => {
       const gridIndex = folderCount + i;
       const row = Math.floor(gridIndex / cols);
       const col = gridIndex % cols;
@@ -276,27 +301,27 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     scrollerRef.current = (gridRef.current?.closest('.custom-scrollbar') as HTMLElement | null) ?? null;
     scrollTop0Ref.current = scrollerRef.current ? scrollerRef.current.scrollTop : 0;
     draggedRef.current = false;
-    initialOrderRef.current = displayedServers.map((s: any) => s.id);
+    initialOrderRef.current = displayedServers.map((s) => s.id);
     setOrder(initialOrderRef.current);
     setDragId(id);
   };
 
   // The servers to render, honouring the live drag order when one is active.
-  const orderedServers: any[] = (() => {
+  const orderedServers: ServerRecord[] = (() => {
     if (!order) return displayedServers;
-    const byId = new Map<number, any>(displayedServers.map((s: any) => [s.id, s]));
-    const out = order.map((id) => byId.get(id)).filter(Boolean);
+    const byId = new Map<number, ServerRecord>(displayedServers.map((s) => [s.id, s]));
+    const out = order.map((id) => byId.get(id)).filter((x): x is ServerRecord => Boolean(x));
     // Include any servers not present in `order` (e.g. added mid-drag) at the end.
     for (const s of displayedServers) if (!order.includes(s.id)) out.push(s);
     return out;
   })();
 
-  const draggedServer = dragId != null ? displayedServers.find((s: any) => s.id === dragId) : null;
+  const draggedServer = dragId != null ? displayedServers.find((s) => s.id === dragId) : null;
 
   // Flat list of grid cells in render order (folders first, then servers),
   // chunked into rows of `columnCount` for the row virtualizer. Rebuilt
   // whenever any of its inputs change — cheap relative to a render anyway.
-  type Cell = { kind: "folder"; f: any } | { kind: "server"; s: any };
+  type Cell = { kind: "folder"; f: FolderRecord } | { kind: "server"; s: ServerRecord };
   const cells: Cell[] = useMemo(() => {
     const out: Cell[] = [];
     if (showFolders) for (const f of folders || []) out.push({ kind: "folder", f });
@@ -324,7 +349,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   // lets the FLIP effect measure and animate real positions. While this card is
   // the one being dragged it renders as a dashed placeholder holding the slot;
   // the floating clone (portal, below) is what the pointer carries.
-  const renderServer = (s: any) => {
+  const renderServer = (s: ServerRecord) => {
     const isProd = Boolean(s.is_production || /prod|production|live/i.test(s.name || ""));
     const accent = s.color || (isProd ? '#f43f5e' : 'rgb(var(--primary))');
     const monogram = (s.name || '').trim().charAt(0).toUpperCase();
@@ -477,8 +502,8 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   // Folders share the compact horizontal language so the grid reads as one
   // surface: a tinted folder glyph, name + server count, inline rename in
   // place, and the same hover lift as server cards.
-  const FolderCard = ({ f }: { f: any }) => {
-    const serverCount = servers?.filter((s: any) => s.folder_id === f.id).length || 0;
+  const FolderCard = ({ f }: { f: FolderRecord }) => {
+    const serverCount = servers?.filter((s) => s.folder_id === f.id).length || 0;
     const isRenaming = renaming?.id === f.id;
     const accent = f.color || 'rgb(var(--primary))';
     return (

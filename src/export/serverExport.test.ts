@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { toExportableServers, serversToJson, serversToCsv } from "./serverExport";
 
-const rawServer = (overrides: Record<string, any> = {}) => ({
+const rawServer = (overrides: Record<string, unknown> = {}) => ({
   id: 1,
   name: "prod-db",
   host: "10.0.0.5",

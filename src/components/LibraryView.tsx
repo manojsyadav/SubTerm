@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Shield, Search, Plus, TerminalSquare, StickyNote, Play, Edit2, Trash2 } from "lucide-react";
+import type { SavedCommand, Note, Server } from "../types";
+import type { CommandEditPanelProps } from "./VaultEditPanels";
 
 // The "Library" tab — merged Commands + Notes view — extracted out of
 // DesktopApp.tsx (part of the ongoing decomposition tracked in TODO.md).
@@ -11,18 +13,18 @@ export interface LibraryViewProps {
   setLibraryQuery: (q: string) => void;
   libraryTab: "commands" | "notes";
   setLibraryTab: (t: "commands" | "notes") => void;
-  commands: any[];
-  notes: any[];
-  servers: any[];
-  sessions: any[];
+  commands: SavedCommand[];
+  notes: Note[];
+  servers: Server[];
+  sessions: unknown[];
   confirm: (opts: { title: string; message: string; destructive?: boolean }) => Promise<boolean>;
   refreshCommands: () => void;
   refreshNotes: () => void;
   bumpSync: () => void;
   handleExecuteSnippet: (content: string, title?: string) => void;
-  setEditCommandData: (d: any) => void;
+  setEditCommandData: (d: CommandEditPanelProps["data"]) => void;
   setIsCommandPanelOpen: (b: boolean) => void;
-  setEditNoteData: (d: any) => void;
+  setEditNoteData: (d: { id: number | null; title: string; body: string }) => void;
   setIsNotePanelOpen: (b: boolean) => void;
 }
 
@@ -161,7 +163,7 @@ export const LibraryView = ({
                   <div className="flex flex-wrap items-center gap-1 mb-2">
                     {cmd.serverId ? (
                       <span className="px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-300 text-[9.5px] font-bold uppercase tracking-wide">
-                        {servers.find((s: any) => s.id === cmd.serverId)?.name || `Server #${cmd.serverId}`}
+                        {servers.find((s) => s.id === cmd.serverId)?.name || `Server #${cmd.serverId}`}
                       </span>
                     ) : (
                       <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-zinc-400 text-[9.5px] font-bold uppercase tracking-wide">Global</span>

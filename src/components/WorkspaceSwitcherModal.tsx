@@ -48,7 +48,7 @@ export const WorkspaceSwitcherModal = ({
       setLoading(true);
       const list = await invoke<string[]>("list_profiles");
       setProfiles(list);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(String(e));
     } finally {
       setLoading(false);
@@ -100,7 +100,7 @@ export const WorkspaceSwitcherModal = ({
     try {
       await onSwitchWorkspace(profileName);
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg = String(e);
       if (msg.includes("NO_SESSION_PASSWORD") || msg.toLowerCase().includes("decrypt") || msg.includes("PASSWORD")) {
         // Needs legacy password to unlock & sync
@@ -127,7 +127,7 @@ export const WorkspaceSwitcherModal = ({
       } catch {}
       await onSwitchWorkspace(legacyProfile);
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError("Incorrect password for this workspace.");
     } finally {
       setLegacyBusy(false);
@@ -146,7 +146,7 @@ export const WorkspaceSwitcherModal = ({
       setProfileIcon(name, selectedIcon);
       await onSwitchWorkspace(name);
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(String(e));
       setCreateBusy(false);
     }
