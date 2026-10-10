@@ -2007,178 +2007,153 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             its scrollback. The tiles fill the whole left panel; the tool
             side panel continues to work exactly as before. */}
         <div className={`h-full relative ${activeTool && isCompact ? 'hidden' : 'flex-1 min-w-0'}`}>
-          {splitTerminals.length >= 2 && !isCompact ? (
-            <div className={`absolute inset-0 flex ${splitOrientation === "h" ? "flex-row" : "flex-col"}`}>
-              {splitTerminals.map((termId, slotIdx) => {
-                const t = terminals.find(x => x.id === termId);
-                if (!t) return null;
-                const isFocused = activeTab === t.id;
-                const grow = splitRatios[slotIdx] ?? 1;
-                const notLast = slotIdx < splitTerminals.length - 1;
-                return (
-                  <div
-                    key={t.id}
-                    style={{ flexGrow: grow, flexBasis: 0 }}
-                    onMouseDown={() => setActiveTab(t.id)}
-                    onTouchStart={() => setActiveTab(t.id)}
-                    className={`group/pane relative min-w-0 min-h-0 border ${
-                      isFocused
-                        ? "border-primary/40 shadow-[inset_0_0_0_1px_rgba(var(--primary),0.15)]"
-                        : "border-white/[0.03]"
-                    }`}
-                  >
-                    {/* Small pane indicator chip */}
-                    <div className="absolute top-1.5 left-2 z-30 pointer-events-none opacity-40 group-hover/pane:opacity-90 transition-opacity flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/60 border border-white/10 text-[10px] font-mono text-zinc-300">
-                      <span className={`w-1.5 h-1.5 rounded-full ${isFocused ? 'bg-primary' : 'bg-zinc-500'}`} />
-                      <span>{t.title ? `Shell #${t.title}` : `Pane #${slotIdx + 1}`}</span>
-                    </div>
-
-                    <TerminalView
-                      sessionId={session.id}
-                      terminalId={t.id}
-                      disabled={status !== 'connected' || !!sessionEndedAudit}
-                      isActive={isSessionActive && isFocused && !(activeTool && isCompact)}
-                      containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
-                      connectionEpoch={connectionEpoch}
-                      serverId={session.serverId}
-                      serverName={session.serverName}
-                      isProd={isProd}
-                      isLocal={session.isLocal}
-                      localShell={session?.localShell}
-                      onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
-                    />
-                    {/* Per-pane detach affordance — pulls the pane out of
-                        the split without killing the underlying terminal.
-                        Positioned top-right so it doesn't fight the
-                        divider (which lives on the pane's right/bottom
-                        edge). Hidden until pane hover, tiny hit area. */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSplitTerminals(prev => prev.filter(id => id !== t.id));
-                        setSplitRatios(prev => prev.filter((_, i) => i !== slotIdx));
-                        // If the focused pane left the split, hand focus
-                        // to whichever pane is left (or fall back to the
-                        // orphan terminal itself).
-                        if (isFocused) {
-                          const remaining = splitTerminals.filter(id => id !== t.id);
-                          setActiveTab(remaining[0] ?? t.id);
-                        }
-                      }}
-                      title="Remove this pane from the split (keeps the terminal)"
-                      className="absolute top-1 right-1 z-30 h-5 w-5 rounded flex items-center justify-center bg-black/40 border border-white/10 text-zinc-400 hover:text-white hover:bg-black/60 opacity-0 hover:opacity-100 group-hover/pane:opacity-100 transition-opacity"
+          {(() => {
+            const inSplit = splitTerminals.length >= 2 && !isCompact;
+            // One flat, id-keyed list for BOTH layouts. Switching between
+            // single and split view only changes wrapper styles, so every
+            // TerminalView (and its xterm scrollback) stays mounted.
+            return (
+              <div className={inSplit ? `absolute inset-0 flex ${splitOrientation === "h" ? "flex-row" : "flex-col"}` : "contents"}>
+                {terminals.map(t => {
+                  const slotIdx = inSplit ? splitTerminals.indexOf(t.id) : -1;
+                  const inTile = slotIdx >= 0;
+                  const isFocused = activeTab === t.id;
+                  const grow = splitRatios[slotIdx] ?? 1;
+                  const notLast = inTile && slotIdx < splitTerminals.length - 1;
+                  return (
+                    <div
+                      key={t.id}
+                      style={inTile ? { flexGrow: grow, flexBasis: 0, order: slotIdx } : undefined}
+                      onMouseDown={inTile ? () => setActiveTab(t.id) : undefined}
+                      onTouchStart={inTile ? () => setActiveTab(t.id) : undefined}
+                      className={
+                        inTile
+                          ? `group/pane relative min-w-0 min-h-0 border ${
+                              isFocused
+                                ? "border-primary/40 shadow-[inset_0_0_0_1px_rgba(var(--primary),0.15)]"
+                                : "border-white/[0.03]"
+                            }`
+                          : inSplit
+                            ? "hidden"
+                            : `absolute inset-0 ${isFocused ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`
+                      }
                     >
-                      <X size={11} />
-                    </button>
-                    {/* Divider between this pane and the next. Rendered
-                        only when there IS a next pane — otherwise a
-                        trailing divider would float in dead space. */}
-                    {notLast && (
-                      <div
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const container = e.currentTarget.parentElement?.parentElement;
-                          if (!container) return;
-                          const rect = container.getBoundingClientRect();
-                          const total = splitOrientation === "h" ? rect.width : rect.height;
-                          const startClient = splitOrientation === "h" ? e.clientX : e.clientY;
-                          const sumGrow = splitRatios.reduce((a, b) => a + (b || 0), 0) || splitTerminals.length;
-                          const pxPerUnit = total / sumGrow;
-                          const startA = splitRatios[slotIdx] ?? 1;
-                          const startB = splitRatios[slotIdx + 1] ?? 1;
-                          const move = (ev: MouseEvent) => {
-                            const client = splitOrientation === "h" ? ev.clientX : ev.clientY;
-                            const deltaUnits = (client - startClient) / pxPerUnit;
-                            // Redistribute between the two adjacent panes
-                            // only — the rest of the row stays untouched.
-                            // Clamp each so neither collapses below 0.3
-                            // units (≈15% of the pair's original span).
-                            const minPair = 0.3;
-                            const combined = startA + startB;
-                            const nextA = Math.max(minPair, Math.min(combined - minPair, startA + deltaUnits));
-                            const nextB = combined - nextA;
-                            setSplitRatios(prev => {
-                              const copy = prev.slice();
-                              copy[slotIdx] = nextA;
-                              copy[slotIdx + 1] = nextB;
-                              return copy;
-                            });
-                          };
-                          const up = () => {
-                            window.removeEventListener("mousemove", move);
-                            window.removeEventListener("mouseup", up);
-                          };
-                          window.addEventListener("mousemove", move);
-                          window.addEventListener("mouseup", up);
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          // Reset all panes to equal share, not just this
-                          // divider's pair — matches the "reset layout"
-                          // idiom users expect from tmux/tiling WMs.
-                          setSplitRatios(splitTerminals.map(() => 1));
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSplitOrientation(o => o === "h" ? "v" : "h");
-                        }}
-                        title="Drag to resize · double-click resets · right-click flips orientation"
-                        className={`absolute z-20 bg-white/5 hover:bg-primary/40 transition-colors ${
-                          splitOrientation === "h"
-                            ? "top-0 bottom-0 right-0 w-1 cursor-col-resize"
-                            : "left-0 right-0 bottom-0 h-1 cursor-row-resize"
-                        }`}
+                      {inTile && (
+                        <div className="absolute top-1.5 left-2 z-30 pointer-events-none opacity-40 group-hover/pane:opacity-90 transition-opacity flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/60 border border-white/10 text-[10px] font-mono text-zinc-300">
+                          <span className={`w-1.5 h-1.5 rounded-full ${isFocused ? 'bg-primary' : 'bg-zinc-500'}`} />
+                          <span>{t.title ? `Shell #${t.title}` : `Pane #${slotIdx + 1}`}</span>
+                        </div>
+                      )}
+
+                      <TerminalView
+                        sessionId={session.id}
+                        terminalId={t.id}
+                        disabled={status !== 'connected' || !!sessionEndedAudit}
+                        isActive={isSessionActive && isFocused && !(activeTool && isCompact) && (!inSplit || inTile)}
+                        containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
+                        connectionEpoch={connectionEpoch}
+                        serverId={session.serverId}
+                        serverName={session.serverName}
+                        isProd={isProd}
+                        isLocal={session.isLocal}
+                        localShell={session?.localShell}
+                        onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                       />
-                    )}
-                  </div>
-                );
-              })}
-              {/* Off-screen host for terminals that are NOT in the split.
-                  Keeps them mounted so their PTY buffer / scrollback
-                  survives — critical for the "compare" workflow where the
-                  user swaps a partner in and out of the tile. */}
-              <div className="hidden">
-                {terminals.filter(t => !splitTerminals.includes(t.id)).map(t => (
-                  <TerminalView
-                    key={t.id}
-                    sessionId={session.id}
-                    terminalId={t.id}
-                    disabled={status !== 'connected' || !!sessionEndedAudit}
-                    isActive={false}
-                    containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
-                    connectionEpoch={connectionEpoch}
-                    serverId={session.serverId}
-                    serverName={session.serverName}
-                    isProd={isProd}
-                    isLocal={session.isLocal}
-                    localShell={session?.localShell}
-                    onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
-                  />
-                ))}
+                      {inTile && (
+                        <>
+                            {/* Per-pane detach affordance — pulls the pane out of
+                                the split without killing the underlying terminal.
+                                Positioned top-right so it doesn't fight the
+                                divider (which lives on the pane's right/bottom
+                                edge). Hidden until pane hover, tiny hit area. */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSplitTerminals(prev => prev.filter(id => id !== t.id));
+                                setSplitRatios(prev => prev.filter((_, i) => i !== slotIdx));
+                                // If the focused pane left the split, hand focus
+                                // to whichever pane is left (or fall back to the
+                                // orphan terminal itself).
+                                if (isFocused) {
+                                  const remaining = splitTerminals.filter(id => id !== t.id);
+                                  setActiveTab(remaining[0] ?? t.id);
+                                }
+                              }}
+                              title="Remove this pane from the split (keeps the terminal)"
+                              className="absolute top-1 right-1 z-30 h-5 w-5 rounded flex items-center justify-center bg-black/40 border border-white/10 text-zinc-400 hover:text-white hover:bg-black/60 opacity-0 hover:opacity-100 group-hover/pane:opacity-100 transition-opacity"
+                            >
+                              <X size={11} />
+                            </button>
+                        </>
+                      )}
+                        {/* Divider between this pane and the next. Rendered
+                            only when there IS a next pane — otherwise a
+                            trailing divider would float in dead space. */}
+                        {notLast && (
+                          <div
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const container = e.currentTarget.parentElement?.parentElement;
+                              if (!container) return;
+                              const rect = container.getBoundingClientRect();
+                              const total = splitOrientation === "h" ? rect.width : rect.height;
+                              const startClient = splitOrientation === "h" ? e.clientX : e.clientY;
+                              const sumGrow = splitRatios.reduce((a, b) => a + (b || 0), 0) || splitTerminals.length;
+                              const pxPerUnit = total / sumGrow;
+                              const startA = splitRatios[slotIdx] ?? 1;
+                              const startB = splitRatios[slotIdx + 1] ?? 1;
+                              const move = (ev: MouseEvent) => {
+                                const client = splitOrientation === "h" ? ev.clientX : ev.clientY;
+                                const deltaUnits = (client - startClient) / pxPerUnit;
+                                // Redistribute between the two adjacent panes
+                                // only — the rest of the row stays untouched.
+                                // Clamp each so neither collapses below 0.3
+                                // units (≈15% of the pair's original span).
+                                const minPair = 0.3;
+                                const combined = startA + startB;
+                                const nextA = Math.max(minPair, Math.min(combined - minPair, startA + deltaUnits));
+                                const nextB = combined - nextA;
+                                setSplitRatios(prev => {
+                                  const copy = prev.slice();
+                                  copy[slotIdx] = nextA;
+                                  copy[slotIdx + 1] = nextB;
+                                  return copy;
+                                });
+                              };
+                              const up = () => {
+                                window.removeEventListener("mousemove", move);
+                                window.removeEventListener("mouseup", up);
+                              };
+                              window.addEventListener("mousemove", move);
+                              window.addEventListener("mouseup", up);
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              // Reset all panes to equal share, not just this
+                              // divider's pair — matches the "reset layout"
+                              // idiom users expect from tmux/tiling WMs.
+                              setSplitRatios(splitTerminals.map(() => 1));
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSplitOrientation(o => o === "h" ? "v" : "h");
+                            }}
+                            title="Drag to resize · double-click resets · right-click flips orientation"
+                            className={`absolute z-20 bg-white/5 hover:bg-primary/40 transition-colors ${
+                              splitOrientation === "h"
+                                ? "top-0 bottom-0 right-0 w-1 cursor-col-resize"
+                                : "left-0 right-0 bottom-0 h-1 cursor-row-resize"
+                            }`}
+                          />
+                        )}
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-          ) : (
-            terminals.map(t => (
-              <div key={t.id} className={`absolute inset-0 ${activeTab === t.id ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                <TerminalView
-                  sessionId={session.id}
-                  terminalId={t.id}
-                  disabled={status !== 'connected' || !!sessionEndedAudit}
-                  isActive={isSessionActive && activeTab === t.id && !(activeTool && isCompact)}
-                  containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
-                  connectionEpoch={connectionEpoch}
-                  serverId={session.serverId}
-                  serverName={session.serverName}
-                  isProd={isProd}
-                  isLocal={session.isLocal}
-                  localShell={session?.localShell}
-                  onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
-                />
-              </div>
-            ))
-          )}
+            );
+          })()}
         </div>
 
         {/* Resizable divider — only useful when both panes are visible. */}
