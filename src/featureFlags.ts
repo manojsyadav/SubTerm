@@ -47,6 +47,12 @@ export const FEATURES = [
     desc: "Record the commands you type (per server) for Ctrl+R history search. When off, nothing you type is saved. The production-server destructive-command warning still works.",
   },
   {
+    key: "sessionRecording",
+    group: "Terminal",
+    label: "Session recording",
+    desc: "Record a terminal session to an asciinema .cast file (or plain text) from the terminal's right-click menu. Keystrokes are only captured if you choose that option. When off, the menu entries do nothing and no recording can start.",
+  },
+  {
     key: "fleetWall",
     group: "Panels",
     label: "Session Wall",
