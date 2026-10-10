@@ -29,6 +29,18 @@ export const FEATURES = [
     desc: "Click a file path or file name in terminal output to open it in the editor, including relative paths (looked up in the shell's folder, your home folder, or by search on the server). When off, no path scanning or lookup runs.",
   },
   {
+    key: "terminalCommandBlocks",
+    group: "Terminal",
+    label: "Command blocks and quick actions",
+    desc: "Track each command's output and exit status and show the floating Copy Output / Explain bar. When off, no per-command tracking runs on terminal output.",
+  },
+  {
+    key: "commandHistory",
+    group: "Terminal",
+    label: "Command history capture",
+    desc: "Record the commands you type (per server) for Ctrl+R history search. When off, nothing you type is saved. The production-server destructive-command warning still works.",
+  },
+  {
     key: "panelTunnels",
     group: "Panels",
     label: "Ports panel",

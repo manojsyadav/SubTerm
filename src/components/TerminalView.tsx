@@ -619,6 +619,7 @@ const TerminalView = ({
     // OSC 133 Shell Integration handler (FinalTerm / iTerm / VS Code spec)
     try {
       term.parser.registerOscHandler(133, (data: string) => {
+        if (!isFeatureEnabled('terminalCommandBlocks')) return true; // swallow the marker, track nothing
         const parts = data.split(';');
         const action = parts[0]?.trim();
         const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
@@ -1014,7 +1015,9 @@ const TerminalView = ({
             setSafetyWarningCmd(line);
             return;
           }
-          if (line.length > 0 && !/^(exit|logout)$/i.test(line)) {
+          if (!isFeatureEnabled('terminalCommandBlocks')) {
+            // command blocks disabled: skip tracking
+          } else if (line.length > 0 && !/^(exit|logout)$/i.test(line)) {
             const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
             const newBlock = {
               command: line,
@@ -1033,7 +1036,7 @@ const TerminalView = ({
           // prompt — otherwise sudo/su/mysql -p/gpg secrets land verbatim in
           // searchable history. The onData handler can't see the PTY echo
           // mode, so we infer it from the remote output tail.
-          if (line.length >= 3 && !looksLikePasswordPrompt(recentOutputRef.current)) {
+          if (line.length >= 3 && isFeatureEnabled('commandHistory') && !looksLikePasswordPrompt(recentOutputRef.current)) {
             invoke('cmd_history_add', {
               serverId: serverId > 0 ? serverId : null,
               serverName: serverName || "",
@@ -1739,7 +1742,7 @@ const TerminalView = ({
       )}
 
       {/* Floating Command Output Quick Actions & OSC 133 Status */}
-      {lastCommand && (
+      {lastCommand && isFeatureEnabled('terminalCommandBlocks') && (
         <div
           className={`absolute ${showSearch ? 'top-12' : 'top-2'} right-2 z-20 flex items-center gap-1.5 p-1 bg-[#121217]/95 backdrop-blur-md border border-white/10 rounded-lg shadow-xl text-xs font-mono select-none animate-in fade-in slide-in-from-top-1 duration-150`}
         >
