@@ -42,13 +42,7 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
-- [ ] 🔴 **P1 · M** — **Syntax Highlighting in the Quick Editor (CodeMirror 6)**
-  - `QuickEditorModal.tsx` is a plain `<textarea>` with a hand-rolled line-number gutter; no editor library is in the project. Replace it with CodeMirror 6 (`@codemirror/state|view|commands|language|search` + `@codemirror/legacy-modes` for shell/nginx/properties/toml), importing only the languages we need to keep the bundle growth to roughly 150–250 KB.
-  - Pick the language from file name/extension (`.sh`/`.bashrc`, `.conf`, `.yml`, `.json`, `.toml`, `.py`, `.js/.ts`, `.service`/`.ini`, `Dockerfile`, `.env`); fall back to plain text. Dark theme matching the current `#0d0d11` look.
-  - Keep Ctrl+S / Esc, the 2 MB read cap, dirty-state tracking, and the Diff toggle working unchanged.
-  - **Validation:** open `.sh`, `.yml`, nginx `.conf`, `.json` over SFTP and locally — each highlights correctly; edit + save round-trips byte-identical content; unknown extensions open as plain text; `npm run build` passes.
-
-- [ ] 🔴 **P1 · S** — **"Hide Comments" Toggle in the Quick Editor** (depends on syntax highlighting above)
+- [ ] 🔴 **P1 · S** — **"Hide Comments" Toggle in the Quick Editor** (syntax highlighting has shipped — CodeMirror 6 in `src/editor/`; build this as a view decoration there and give it its own entry in `src/featureFlags.ts`)
   - Header button next to Diff; off by default, choice persisted in `localStorage`. Collapses comment-only lines/blocks into a single clickable `⋯ N comment lines hidden` marker; trailing comments on code lines stay visible.
   - Comment detection via the syntax tree for known languages, line-prefix fallback (`#`, `//`, `;`) for plain files.
   - View-only decoration — the document is never modified, so saving always writes the full file. Show "N lines hidden" in the status bar; auto-expand a block when the cursor enters it or an edit touches its boundary.
