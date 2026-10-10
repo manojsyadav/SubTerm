@@ -42,12 +42,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
-- [ ] 🔴 **P1 · S** — **"Hide Comments" Toggle in the Quick Editor** (syntax highlighting has shipped — CodeMirror 6 in `src/editor/`; build this as a view decoration there and give it its own entry in `src/featureFlags.ts`)
-  - Header button next to Diff; off by default, choice persisted in `localStorage`. Collapses comment-only lines/blocks into a single clickable `⋯ N comment lines hidden` marker; trailing comments on code lines stay visible.
-  - Comment detection via the syntax tree for known languages, line-prefix fallback (`#`, `//`, `;`) for plain files.
-  - View-only decoration — the document is never modified, so saving always writes the full file. Show "N lines hidden" in the status bar; auto-expand a block when the cursor enters it or an edit touches its boundary.
-  - **Validation:** toggling hides/shows comment blocks in `.sh`, `.yml`, `.conf`; saving with comments hidden leaves the file's comment lines intact; unit tests cover comment-line detection per language.
-
 - [ ] 🟡 **P2 · S** — **Regression test: splitting a terminal keeps scrollback**
   - Guards the fix in `fd99aeb` (terminals share one flat id-keyed list so split/unsplit never remounts a `TerminalView`). The repo has no component tests yet; add a minimal one (or a documented manual check in `docs/`) so the layout isn't re-split into separate trees later.
 

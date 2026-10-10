@@ -23,6 +23,12 @@ export const FEATURES = [
     desc: "Colour code in the Quick Editor (CodeMirror). When off, a plain text editor is used and the highlighting engine is never downloaded or started.",
   },
   {
+    key: "editorHideComments",
+    group: "Editor",
+    label: "Editor: hide comments button",
+    desc: "Adds a toggle in the Quick Editor that collapses comment lines into a marker (view only; the saved file is unchanged). Needs syntax highlighting.",
+  },
+  {
     key: "terminalFileLinks",
     group: "Terminal",
     label: "Open file in editor on click",
