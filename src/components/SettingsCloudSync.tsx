@@ -20,6 +20,7 @@ import {
 import { useConfirm, useTextPrompt } from "../ui/confirm";
 import { RoleBadge } from "./shareRoles";
 import { SyncConflictDiffModal } from "./SyncConflictDiffModal";
+import { SyncScopeControls } from "./SyncScopeControls";
 
 interface RecentEdit {
   name: string;
@@ -445,6 +446,8 @@ export function SettingsCloudSync({
             />
           </div>
         </div>
+
+        <SyncScopeControls />
 
         {/* Sync Metrics & Health Card */}
         {stats && (

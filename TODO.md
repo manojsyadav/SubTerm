@@ -45,10 +45,8 @@ This document tracks active development tasks, pending architectural optimizatio
 - [ ] 🟢 **P3 · M** — **Session Recording: remaining export formats**
   - Recording to `.cast`/text and the in-app player are done. Still open: animated SVG/GIF export for runbooks, and an optional "always record this server" setting for audit trails.
 
-- [ ] 🟡 **P2 · M** — **Cloud Sync Enhancements & Conflict Resolution** (first slice shipped)
-  - **Done**: read-only visual diffing for concurrent edits. `profile_sync_stats`'s out-of-sync list now carries each entity's uuid and push/pull direction; a new `sync_conflict_diff(uuid)` command decrypts and pretty-prints the local vs. cloud copy (secrets redacted) for a one-click diff view in **Settings → Cloud Sync**, reusing the existing `computeDiff` line-diff algorithm via a new `SyncConflictDiffModal.tsx`. This is visibility only — the underlying merge is still deterministic Last-Write-Wins by HLC stamp; nothing about the merge rule changed.
-  - **Not done (re-scope as its own follow-up)**: granular per-table push/pull selection (today a sync is all-or-nothing across all `SYNCED_TABLES`), and keyboard-shortcut sync — shortcuts (`src/shortcuts/useShortcutsStore.ts`) live entirely in `localStorage`, outside the vault/sync system; bringing them in needs a new table + triggers + `SYNCED_TABLES` entry + a migration off `localStorage`, which is its own well-scoped S/M task.
-  - Interactive conflict *resolution* (picking a field from each side rather than accepting LWW) was explicitly scoped out as true M/L work; the diff view above covers the more valuable half of the ask — seeing what's about to be overwritten — without touching the merge protocol.
+- [ ] 🟢 **P3 · S/M** — **Cloud Sync: keyboard-shortcut sync**
+  - Per-device "what to sync" selection and the read-only conflict diff are shipped. Still open: keyboard shortcuts (`src/shortcuts/useShortcutsStore.ts`) live entirely in `localStorage`, outside the vault/sync system; syncing them needs a new table + triggers + `SYNCED_TABLES`/`ENTITIES` entry + a vault schema migration and a one-time import from `localStorage`. Decide first whether per-OS key differences (Cmd vs Ctrl) make cross-device sync desirable at all.
 
 - [ ] 🟢 **P3 · XL** — **Dual-Pane Remote-to-Remote SFTP Sync**
   - Side-by-side split SFTP view (Commander / WinSCP style) allowing direct transfers between two distinct remote SSH servers.

@@ -211,7 +211,7 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
   - **Terminal Triggers & Alert Keywords**: Define keyword or regex patterns matched against live output in any session. Each trigger fires one of: a toast notification, the audible bell chime, the visual bell flash, or an entry in the Activity Log — useful for noticing `ERROR`/`FATAL`/`Exception` in a background session tab.
 - **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
-- **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization.
+- **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization. Under **What to sync on this device** you can leave out servers, credentials, saved commands or notes on this device only; unchecked data is neither uploaded nor downloaded.
 - **Profiles & Workspaces**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
 - **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
 - **Maintenance**: Reset UI preferences to factory defaults, and **Export Server List** to a portable JSON or CSV file (name, host, port, username, folder, proxy, notes — never passwords or keys) for backup or migration.

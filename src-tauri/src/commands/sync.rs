@@ -29,6 +29,54 @@ const SYNCED_TABLES: &[&str] = &[
     "folders", "ssh_keys", "credentials", "servers", "commands", "notes", "monitor_configs",
 ];
 
+/// User-facing groups of synced tables that can be switched off per device
+/// (Settings -> Cloud Sync). An excluded group is neither pushed nor pulled, and
+/// its tombstones are held back too, so the local copy and the cloud copy of
+/// that data simply stop talking to each other. Rows that point INTO an excluded
+/// group (a server's saved credential, say) lose that link when a remote copy
+/// is applied, exactly as for any referent that doesn't exist locally.
+pub(crate) const SYNC_CATEGORIES: &[(&str, &[&str])] = &[
+    ("servers", &["folders", "servers", "monitor_configs"]),
+    ("credentials", &["ssh_keys", "credentials"]),
+    ("commands", &["commands"]),
+    ("notes", &["notes"]),
+];
+
+const SYNC_EXCLUDED_KEY: &str = "sync_excluded";
+
+/// Category ids -> the table names they cover. Unknown ids are ignored.
+pub(crate) fn tables_for_categories(ids: &[String]) -> Vec<&'static str> {
+    SYNC_CATEGORIES
+        .iter()
+        .filter(|(id, _)| ids.iter().any(|i| i == id))
+        .flat_map(|(_, tables)| tables.iter().copied())
+        .collect()
+}
+
+/// The category ids this device has switched off (device-local `sync_meta`).
+pub(crate) fn read_excluded_categories(conn: &Connection) -> Vec<String> {
+    let raw: String = conn
+        .query_row("SELECT value FROM sync_meta WHERE key=?1", [SYNC_EXCLUDED_KEY], |r| r.get(0))
+        .unwrap_or_default();
+    raw.split(',')
+        .map(|x| x.trim())
+        .filter(|x| SYNC_CATEGORIES.iter().any(|(id, _)| id == x))
+        .map(|x| x.to_string())
+        .collect()
+}
+
+pub(crate) fn read_excluded_tables(conn: &Connection) -> Vec<&'static str> {
+    tables_for_categories(&read_excluded_categories(conn))
+}
+
+/// Drop every record (live or tombstone) belonging to an excluded table.
+pub(crate) fn retain_synced(records: Vec<SyncRecord>, excluded: &[&str]) -> Vec<SyncRecord> {
+    if excluded.is_empty() {
+        return records;
+    }
+    records.into_iter().filter(|r| !excluded.contains(&r.entity_type.as_str())).collect()
+}
+
 /// Opaque 128-bit hex id for a synced row. Not RFC-4122 formatted — we only
 /// need global uniqueness, and this matches the app's existing random-id idiom
 /// (see `app_temp_root`).
@@ -313,6 +361,87 @@ pub(crate) fn create_sync_triggers(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("[SYNC] UUID_INDEX {t}: {e}"))?;
     }
     Ok(())
+}
+
+/// Category ids this device does NOT sync (see `SYNC_CATEGORIES`).
+#[tauri::command]
+pub(crate) async fn get_sync_excluded(db_state: tauri::State<'_, DbState>) -> Result<Vec<String>, String> {
+    let conn_g = db_state.conn.lock().map_err(|_| "[STATE] LOCK_CONN")?;
+    let conn = conn_g.as_ref().ok_or("[STATE] DB_NOT_OPEN")?;
+    Ok(read_excluded_categories(conn))
+}
+
+/// Replace the set of categories this device keeps out of sync. Local-only
+/// (`sync_meta` never leaves the vault); unknown ids are dropped.
+#[tauri::command]
+pub(crate) async fn set_sync_excluded(db_state: tauri::State<'_, DbState>, categories: Vec<String>) -> Result<(), String> {
+    let kept: Vec<&str> = SYNC_CATEGORIES
+        .iter()
+        .map(|(id, _)| *id)
+        .filter(|id| categories.iter().any(|c| c == id))
+        .collect();
+    {
+        let conn_g = db_state.conn.lock().map_err(|_| "[STATE] LOCK_CONN")?;
+        let conn = conn_g.as_ref().ok_or("[STATE] DB_NOT_OPEN")?;
+        if kept.is_empty() {
+            conn.execute("DELETE FROM sync_meta WHERE key=?1", [SYNC_EXCLUDED_KEY])
+                .map_err(|e| format!("[SYNC] EXCLUDE_CLEAR: {e}"))?;
+        } else {
+            conn.execute(
+                "INSERT INTO sync_meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                rusqlite::params![SYNC_EXCLUDED_KEY, kept.join(",")],
+            )
+            .map_err(|e| format!("[SYNC] EXCLUDE_SET: {e}"))?;
+        }
+    }
+    save_vault_async(&db_state).await
+}
+
+#[cfg(test)]
+mod sync_category_tests {
+    use super::*;
+
+    fn rec(t: &str, deleted: bool) -> SyncRecord {
+        SyncRecord { uuid: format!("u-{t}"), entity_type: t.into(), updated_at: "1".into(), deleted, blob: None }
+    }
+
+    #[test]
+    fn categories_cover_only_real_synced_tables_exactly_once() {
+        let mut seen = std::collections::HashSet::new();
+        for (_, tables) in SYNC_CATEGORIES {
+            for t in *tables {
+                assert!(SYNCED_TABLES.contains(t), "{t} is not a synced table");
+                assert!(seen.insert(*t), "{t} appears in two categories");
+            }
+        }
+        for t in SYNCED_TABLES {
+            assert!(seen.contains(t), "{t} cannot be toggled");
+        }
+    }
+
+    #[test]
+    fn excluded_records_and_tombstones_are_dropped_everything_else_kept() {
+        let recs = vec![rec("notes", false), rec("notes", true), rec("servers", false), rec(ESCROW_ETYPE, false)];
+        let kept = retain_synced(recs.clone(), &["notes"]);
+        assert_eq!(kept.iter().map(|r| r.entity_type.as_str()).collect::<Vec<_>>(), vec!["servers", ESCROW_ETYPE]);
+        assert_eq!(retain_synced(recs, &[]).len(), 4);
+    }
+
+    #[test]
+    fn unknown_category_ids_are_ignored() {
+        let t = tables_for_categories(&["credentials".to_string(), "bogus".to_string()]);
+        assert_eq!(t, vec!["ssh_keys", "credentials"]);
+    }
+
+    #[test]
+    fn exclusion_round_trips_through_sync_meta() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE sync_meta(key TEXT PRIMARY KEY, value TEXT)", []).unwrap();
+        assert!(read_excluded_categories(&conn).is_empty());
+        conn.execute("INSERT INTO sync_meta VALUES('sync_excluded','notes, bogus,commands')", []).unwrap();
+        assert_eq!(read_excluded_categories(&conn), vec!["notes".to_string(), "commands".to_string()]);
+        assert_eq!(read_excluded_tables(&conn), vec!["commands", "notes"]);
+    }
 }
 
 #[cfg(test)]
@@ -925,7 +1054,7 @@ pub(crate) async fn sync_now(
     // hold the DEK via a sealed grant without ever knowing this vault's
     // password. The DEK is created + persisted at profile-open, so it already
     // exists here; get_or_create is a defensive fallback only.
-    let (records, dek, hlc, share, cloud_profile, master_key, salt) = {
+    let (records, dek, hlc, share, cloud_profile, master_key, salt, excluded) = {
         let conn_g = db_state.conn.lock().map_err(|_| "[STATE] LOCK_CONN")?;
         let conn = conn_g.as_ref().ok_or("[STATE] DB_NOT_OPEN")?;
         let hlc_g = db_state.hlc.lock().map_err(|_| "[STATE] LOCK_HLC")?;
@@ -941,7 +1070,8 @@ pub(crate) async fn sync_now(
             .map(|k| **k);
         let salt = *db_state.salt.lock().map_err(|_| "[STATE] LOCK_SALT")?;
         let (dek, _created) = get_or_create_dek(conn)?;
-        let records = collect_local_records(conn, &dek, "")?;
+        let excluded = read_excluded_tables(conn);
+        let records = retain_synced(collect_local_records(conn, &dek, "")?, &excluded);
         // If this profile is shared, sync_meta carries its share_id + my role;
         // that routes the exchange to /shares/sync instead of personal /sync.
         let share_id: Option<String> = conn
@@ -962,7 +1092,7 @@ pub(crate) async fn sync_now(
         // don't know". A viewer that should have been an editor is a visible,
         // fixable annoyance; an editor that should have been a viewer is not.
         let share = share_id.map(|s| (s, share_role.unwrap_or_else(|| "user".to_string())));
-        (records, dek, hlc, share, cloud_profile, master_key, salt)
+        (records, dek, hlc, share, cloud_profile, master_key, salt, excluded)
     };
 
     // Shared profile → /shares/sync (role-gated). A viewer ('user') pushes
@@ -987,6 +1117,8 @@ pub(crate) async fn sync_now(
             cloud::sync_exchange(&app, &cloud, &cloud_profile, "", &to_push, Some(profile.as_str())).await?;
         (remote, to_push.len())
     };
+    // Hold back anything the server sent for a group this device doesn't sync.
+    let remote = retain_synced(remote, &excluded);
     let pulled = remote.len();
 
     {
@@ -1058,11 +1190,12 @@ pub(crate) async fn profile_sync_stats(
 
     // Local snapshot under the lock: records, DEK, routing, recent edits, and a
     // uuid→name map for servers so the diff can name what's out of sync.
-    let (local, dek, share, cloud_profile, recent_edits, server_names) = {
+    let (local, dek, share, cloud_profile, recent_edits, server_names, excluded) = {
         let conn_g = db_state.conn.lock().map_err(|_| "[STATE] LOCK_CONN")?;
         let conn = conn_g.as_ref().ok_or("[STATE] DB_NOT_OPEN")?;
         let (dek, _created) = get_or_create_dek(conn)?;
-        let local = collect_local_records(conn, &dek, "")?;
+        let excluded = read_excluded_tables(conn);
+        let local = retain_synced(collect_local_records(conn, &dek, "")?, &excluded);
         let share_id: Option<String> = conn
             .query_row("SELECT value FROM sync_meta WHERE key='share_id'", [], |r| r.get(0))
             .ok();
@@ -1121,6 +1254,7 @@ pub(crate) async fn profile_sync_stats(
             cloud_profile,
             recent_edits,
             server_names,
+            excluded,
         )
     };
 
@@ -1142,6 +1276,7 @@ pub(crate) async fn profile_sync_stats(
         match pulled {
             Ok(server) => {
                 use std::collections::HashMap;
+                let server = retain_synced(server, &excluded);
                 let local_map: HashMap<&str, (&str, &str)> = local
                     .iter()
                     .map(|r| (r.uuid.as_str(), (r.updated_at.as_str(), r.entity_type.as_str())))
