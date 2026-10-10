@@ -9,7 +9,8 @@ import {
   Plus, Terminal, Keyboard, ChevronRight, Lock, ShieldCheck,
   Download, X,
 } from "lucide-react";
-import CloudPanel from "./CloudPanel";
+import { lazy, Suspense } from "react";
+const CloudPanel = lazy(() => import("./CloudPanel"));
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
@@ -648,7 +649,11 @@ const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: an
   return (
     <div className="space-y-6">
       <SettingsCloudSync settings={settings} setSettings={setSettings} onOpenCloudAccount={() => setCloudOpen(true)} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />
-      <CloudPanel isOpen={cloudOpen} onClose={() => setCloudOpen(false)} onLocalProfilesChanged={() => {}} />
+      {cloudOpen && (
+        <Suspense fallback={null}>
+          <CloudPanel isOpen={cloudOpen} onClose={() => setCloudOpen(false)} onLocalProfilesChanged={() => {}} />
+        </Suspense>
+      )}
     </div>
   );
 };

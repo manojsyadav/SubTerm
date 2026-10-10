@@ -71,6 +71,12 @@ export const FEATURES = [
     desc: "Bookmark button and quick-jump list in the file browser.",
   },
   {
+    key: "autoReconnect",
+    group: "Terminal",
+    label: "Auto-reconnect dropped sessions",
+    desc: "Retry automatically (with backoff, and immediately after sleep/resume or a network change) when an SSH session drops. When off, use the Reconnect button instead.",
+  },
+  {
     key: "panelTunnels",
     group: "Panels",
     label: "Ports panel",

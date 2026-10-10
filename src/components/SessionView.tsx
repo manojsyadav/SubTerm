@@ -979,7 +979,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       // bounce straight into auto-reconnect — the user explicitly asked
       // for the session to be dead. The "Reconnect" banner button is
       // still available if they change their mind.
-      if (!userInitiated) {
+      if (!userInitiated && isFeatureEnabled('autoReconnect')) {
         scheduleReconnect(1);
       } else {
         cancelReconnect();
@@ -998,12 +998,12 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       // reconnectAttemptRef > 0 is the authoritative "we're mid auto-retry
       // cycle" signal: it's reset to 0 on success, on an auth failure, and
       // on a user-initiated disconnect, so this can't fire in any of those.
-      if (!session?.isLocal && reconnectAttemptRef.current > 0) {
+      if (isFeatureEnabled('autoReconnect') && !session?.isLocal && reconnectAttemptRef.current > 0) {
         scheduleReconnect(reconnectAttemptRef.current, 0);
       }
     });
     const unlistenNetworkChanged = listen('network-changed', () => {
-      if (!session?.isLocal && reconnectAttemptRef.current > 0) {
+      if (isFeatureEnabled('autoReconnect') && !session?.isLocal && reconnectAttemptRef.current > 0) {
         scheduleReconnect(reconnectAttemptRef.current, 0);
       }
     });

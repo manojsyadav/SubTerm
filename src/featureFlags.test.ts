@@ -27,4 +27,14 @@ describe("featureFlags", () => {
     setFeatureEnabled("terminalFileLinks", true);
     expect(isFeatureEnabled("terminalFileLinks")).toBe(true);
   });
+
+  it("has unique keys and a label, description and group for every flag", () => {
+    const keys = FEATURES.map((f) => f.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const f of FEATURES) {
+      expect(f.label.length).toBeGreaterThan(0);
+      expect(f.desc.length).toBeGreaterThan(0);
+      expect(["Editor", "Terminal", "Panels", "AI"]).toContain(f.group);
+    }
+  });
 });
