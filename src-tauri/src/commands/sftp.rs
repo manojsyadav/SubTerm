@@ -2284,6 +2284,79 @@ pub async fn sftp_exec_command(
 }
 
 #[derive(serde::Serialize)]
+pub struct ResolvedPath {
+    /// "file" | "dir" | "ambiguous" | "notfound"
+    pub kind: String,
+    /// The resolved absolute path (empty for "ambiguous"/"notfound").
+    pub path: String,
+    /// Candidate absolute paths when `kind == "ambiguous"`.
+    pub candidates: Vec<String>,
+}
+
+/// Resolve a path clicked in the terminal to an absolute remote path.
+///
+/// SFTP resolves relative paths against the SFTP start dir (usually $HOME),
+/// not the shell's cwd, so a bare `config.yaml` or `src/main.rs` can't be
+/// opened directly. Resolution order: absolute / `~` expansion, the shell's
+/// cwd (when known), $HOME, then a bounded `find` for the file name — so the
+/// file still opens when the cwd couldn't be tracked.
+#[tauri::command]
+pub async fn sftp_resolve_path(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    path: String,
+    cwd: Option<String>,
+) -> Result<ResolvedPath, String> {
+    let q = crate::docker::shq;
+    let script = format!(
+        r#"P={p}; C={c}
+case "$P" in "~") P="$HOME";; "~/"*) P="$HOME/${{P#\~/}}";; esac
+case "$C" in "~") C="$HOME";; "~/"*) C="$HOME/${{C#\~/}}";; esac
+try() {{
+  [ -e "$1" ] || return 1
+  if [ -d "$1" ]; then echo "DIR:$(cd "$1" && pwd -P)"
+  else echo "FILE:$(cd "$(dirname "$1")" && pwd -P)/$(basename "$1")"; fi
+  exit 0
+}}
+case "$P" in
+  /*) try "$P";;
+  *) [ -n "$C" ] && try "$C/$P"; try "$HOME/$P";;
+esac
+B=$(basename "$P")
+find "${{C:-$HOME}}" "$HOME" -maxdepth 5 \( -name node_modules -o -name .git \) -prune -o -type f -name "$B" -print 2>/dev/null | head -50
+"#,
+        p = q(path.trim()),
+        c = q(cwd.as_deref().unwrap_or("").trim()),
+    );
+    let output = exec_ssh_cmd(&state, &session_id, &format!("sh -c {}", q(&script))).await?;
+
+    for line in output.lines() {
+        let line = line.trim_end_matches('\r');
+        if let Some(p) = line.strip_prefix("FILE:") {
+            return Ok(ResolvedPath { kind: "file".into(), path: p.into(), candidates: vec![] });
+        }
+        if let Some(p) = line.strip_prefix("DIR:") {
+            return Ok(ResolvedPath { kind: "dir".into(), path: p.into(), candidates: vec![] });
+        }
+    }
+
+    // Fell through to the name search. For `dir/file` style input keep only
+    // hits whose path actually ends with the requested relative path.
+    let rel = path.trim().trim_start_matches("./");
+    let mut candidates: Vec<String> = Vec::new();
+    for line in output.lines().map(|l| l.trim_end_matches('\r')) {
+        if !line.starts_with('/') || candidates.iter().any(|c| c == line) { continue; }
+        if rel.contains('/') && !line.ends_with(&format!("/{}", rel)) { continue; }
+        candidates.push(line.to_string());
+    }
+    Ok(match candidates.len() {
+        0 => ResolvedPath { kind: "notfound".into(), path: String::new(), candidates },
+        1 => ResolvedPath { kind: "file".into(), path: candidates.remove(0), candidates: vec![] },
+        _ => ResolvedPath { kind: "ambiguous".into(), path: String::new(), candidates },
+    })
+}
+
+#[derive(serde::Serialize)]
 pub struct LocalFileEntry {
     pub name: String,
     pub path: String,

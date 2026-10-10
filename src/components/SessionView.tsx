@@ -595,9 +595,43 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         return;
       }
 
-      let cleanPath = p.trim().replace(/:\d+$/, '').replace(/[:,\s"'`]+$/, '').replace(/^["'`]+/, '');
-      if (!cleanPath.startsWith('/') && !cleanPath.startsWith('~') && cwd) {
-        cleanPath = cwd.endsWith('/') ? `${cwd}${cleanPath}` : `${cwd}/${cleanPath}`;
+      // Strip trailing punctuation and a grep/compiler-style `:line[:col]` suffix.
+      let cleanPath = p.trim().replace(/[:,\s"'`]+$/, '').replace(/:\d+(:\d+)?$/, '').replace(/^["'`]+/, '');
+      if (!cleanPath.startsWith('/')) {
+        // SFTP resolves relative paths against its start dir (~), not the
+        // shell's cwd, so resolve on the server: cwd (if tracked) -> $HOME ->
+        // bounded name search. That last step is what makes clicks work even
+        // when the shell never reported its cwd (no OSC 7 / unusual prompt).
+        try {
+          const r = await invoke<{ kind: string; path: string; candidates: string[] }>('sftp_resolve_path', {
+            sessionId: session.id, path: cleanPath, cwd: cwd || null,
+          });
+          if (r.kind === 'dir') {
+            setActiveTool('sftp');
+            window.dispatchEvent(new CustomEvent(`submarine-navigate-path-${session.id}`, { detail: { path: r.path } }));
+            return;
+          }
+          if (r.kind === 'file') {
+            setEditorFile({ path: r.path, name: r.path.split('/').filter(Boolean).pop() || r.path });
+            return;
+          }
+          if (r.kind === 'ambiguous') {
+            // Several matches: let the user choose, starting in the shallowest hit's folder.
+            const best = [...r.candidates].sort((a, b) => a.split('/').length - b.split('/').length)[0];
+            setFilePickerPath(best.slice(0, best.lastIndexOf('/')) || '/');
+            setFilePickerOpen(true);
+            return;
+          }
+          // notfound: fall back to the picker at the shell's cwd.
+          setFilePickerPath(cwd || '');
+          setFilePickerOpen(true);
+          return;
+        } catch {
+          // Resolver unavailable — fall through to the legacy cwd join.
+          if (!cleanPath.startsWith('~') && cwd) {
+            cleanPath = cwd.endsWith('/') ? `${cwd}${cleanPath}` : `${cwd}/${cleanPath}`;
+          }
+        }
       }
 
       // If clicked path ends with slash, it is a directory — open in SFTP

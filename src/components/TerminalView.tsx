@@ -781,6 +781,37 @@ const TerminalView = ({
             }
           }
 
+          // 2b. Relative paths (./x, ../x, dir/file.ext, dir/sub/) with an optional
+          // :line[:col] suffix. Resolved against the shell's cwd (or searched
+          // for) by the editor-open handler, so no cwd is needed here.
+          const relRegex = /(?:^|[\s"'`(])((?:\.{1,2}\/|[\w@.-]+\/)(?:[\w@.-]+\/)*[\w@.-]*(?::\d+(?::\d+)?)?)/g;
+          while ((match = relRegex.exec(lineText)) !== null) {
+            const relPath = match[1];
+            if (relPath.length < 3 || relPath.includes('://')) continue;
+            const startX = match.index + (match[0].length - relPath.length) + 1;
+            const endX = startX + relPath.length - 1;
+            const overlapsAbs = links.some(
+              (l) =>
+                l.range.start.y === bufferLineNumber &&
+                !(endX < l.range.start.x || startX > l.range.end.x)
+            );
+            if (overlapsAbs) continue;
+            links.push({
+              range: {
+                start: { x: startX, y: bufferLineNumber },
+                end: { x: endX, y: bufferLineNumber },
+              },
+              text: relPath,
+              activate: (_ev, pathText) => {
+                window.dispatchEvent(
+                  new CustomEvent(`submarine-open-editor-${sessionId}`, {
+                    detail: { path: pathText, cwd: currentCwdRef.current },
+                  })
+                );
+              },
+            });
+          }
+
           // 3. Standalone filenames with recognizable text/code/config extensions (e.g. services.yaml, config.json, Dockerfile)
           const fileRegex = /(?:^|[\s"'`])([a-zA-Z0-9_.-]+\.(?:ya?ml|json|toml|ini|conf|cfg|txt|md|sh|bash|env|py|jsx?|tsx?|html?|css|scss|xml|sql|rs|go|c|cpp|h|hpp|log|properties|lock|service)|Dockerfile|Makefile|docker-compose\.ya?ml)\b/gi;
           while ((match = fileRegex.exec(lineText)) !== null) {
