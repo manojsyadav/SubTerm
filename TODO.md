@@ -70,11 +70,9 @@ This document tracks active development tasks, pending architectural optimizatio
   - Keyboard-interactive (2FA) auth specifically also wasn't exercised live this session (the smoke test only covers publickey auth) — worth including in the same manual pass.
   - To re-run the smoke test: stand up any local `sshd` with a throwaway keypair in its `authorized_keys`, then `SMOKE_SSH_PORT=<port> SMOKE_SSH_KEY=<path> SMOKE_SSH_USER=<user> cargo run --example russh_smoke_test [--features full-ssh-algos]` from `src-tauri`.
 
-- [ ] 🟡 **P2 · M** — **Further `DesktopApp.tsx` decomposition (wall view, session-tab sidebar)**
-  - This session's decomposition pass pulled the Library (commands/notes), Logins (passwords/SSH keys), and Logs (Activity) views out into `src/components/{LibraryView,LoginsView,LogsView}.tsx` — pure UI extractions, state stays lifted in `DesktopApp.tsx`, zero behavior change, each verified independently (`typecheck`/`lint`/`build`). File went 2,991 → 2,659 lines.
-  - Still well short of the original <400-line aspiration. The remaining bulk is the Fleet Wall view (~235 lines) and the session-tab sidebar/drag-reorder/tiling logic — both read/write `activeView` state and session refs throughout, making them visibly more entangled than the three views already pulled out. Deliberately deferred rather than rushed, since a slip here breaks live SSH sessions, not just a static view.
-  - No component-level test coverage exists yet — each further cut still needs manual click-through verification, not just `npm run typecheck`.
-  - **Validation:** `npm run typecheck` passes; all tabs, wall, and vault operations behave identically; manual click-through of whatever view is touched.
+- [ ] 🟡 **P2 · M** — **Further `DesktopApp.tsx` decomposition (session-tab sidebar)**
+  - Library, Logins, Logs and (now) the Fleet Wall are separate components (`src/components/{LibraryView,LoginsView,LogsView,WallView}.tsx`); `DesktopApp.tsx` is ~2,480 lines, down from 2,991. `WallView` has jsdom component tests.
+  - Still in `DesktopApp.tsx`: the session-tab sidebar / drag-reorder / tiling logic. It reads and writes `activeView` and session refs throughout, and a slip breaks live SSH sessions, so cut it only with a manual click-through (tab switch, drag-reorder, split, close, reconnect) after each step.
 
 - [ ] 🟡 **P2 · S** — **Manual click-through for session-only verified features**
   - Several features this session were validated by `typecheck`/`lint`/`build`/unit tests only, not live interaction — bundling as one follow-up pass rather than one line each:
