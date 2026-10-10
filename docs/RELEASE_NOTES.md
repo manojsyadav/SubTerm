@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(rdp)` — Remote Desktop inside SubTerm (beta)**:
+  **Settings → Remote Desktop (RDP)** lets RDP servers open inside SubTerm instead of the system client. A full-window view asks for the password (used for that connection only, never saved), connects with TLS and network-level authentication, and shows the remote screen with keyboard, mouse and scroll-wheel input, plus a **Ctrl+Alt+Del** button and **Disconnect**. Not included yet: clipboard, audio, file sharing, resizing the remote screen after connecting, and certificate pinning (the server's self-signed certificate is accepted without a prompt, as is common for RDP). The protocol code runs in a separate helper program, `subterm-rdp-helper`, shipped next to SubTerm (the portable zip now contains both files); installer builds do not include it yet. The default stays the system client.
+
 - **`feat(rdp)` — RDP servers (opens your system Remote Desktop client)**:
   The server form has a new **Connection type**: SSH / SFTP or **Remote Desktop (RDP)**. An RDP server keeps a name, folder, colour, host, port (3389 by default) and optional username; the SSH-only options (login method, proxy, jump host, port forwarding, mirrors, run-on-connect) are hidden for it. Clicking it, or choosing it in the command palette, opens Windows Remote Desktop (`mstsc`), Microsoft Remote Desktop on macOS, or FreeRDP (`xfreerdp`) on Linux, which asks for the password itself — SubTerm never stores or sends an RDP password. RDP servers show an **RDP** badge, sync between devices like other servers (older app versions show them as SSH servers), are skipped by autostart and Fleet-open, and the whole feature has its own toggle in Settings → Feature Toggles. This is the first step; an RDP session tab inside SubTerm is still on the backlog.
 

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { QuickAuth } from "../components/QuickConnectModal";
 import type { Server } from "../types";
 import { isFeatureEnabled } from "../featureFlags";
+import { getRdpOpenMode } from "../rdp/openMode";
 
 export type Session = {
   id: string;
@@ -30,6 +31,8 @@ interface UseSessionManagerOptions {
   onSessionClosed?: (sessionId: string) => void;
   onAddLog?: (msg: string, type?: string) => void;
   onQuickNodeSaved?: () => void;
+  /** Show an RDP server inside SubTerm instead of launching the system client. */
+  onOpenRdpEmbedded?: (server: Server) => void;
 }
 
 export function useSessionManager(options?: UseSessionManagerOptions) {
@@ -107,6 +110,10 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   const launchRdp = useCallback((server: Server) => {
     if (!isFeatureEnabled("rdpServers")) {
       options?.onAddLog?.("RDP servers are turned off in Settings > Feature Toggles.", "error");
+      return;
+    }
+    if (getRdpOpenMode() === "embedded" && options?.onOpenRdpEmbedded) {
+      options.onOpenRdpEmbedded(server);
       return;
     }
     invoke("launch_rdp", { id: server.id })

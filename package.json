@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build:rdp-helper": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-rdp-helper.ps1",
     "build:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable.ps1",
     "preview": "vite preview",
     "tauri": "tauri",
