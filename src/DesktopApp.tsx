@@ -45,6 +45,7 @@ import { LoginsView } from "./components/LoginsView";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
 import { publishOpenSessions } from "./fs/sessionRegistry";
+const RdpSessionView = lazy(() => import("./components/RdpSessionView"));
 
 const appWindow = getCurrentWindow();
 
@@ -143,7 +144,10 @@ function DesktopApp() {
 
   const vaultRef = useRef<ReturnType<typeof useProfileVault> | null>(null);
 
+  const [rdpView, setRdpView] = useState<{ id: number; name: string } | null>(null);
+
   const sessionManager = useSessionManager({
+    onOpenRdpEmbedded: (s) => setRdpView({ id: s.id, name: s.name }),
     onSessionClosed: (sid) => {
       broadcast.removeSession(sid);
       unpinSessionFromWall(sid);
@@ -2335,6 +2339,12 @@ function DesktopApp() {
         onClose={() => setIsQuickConnectOpen(false)}
         onConnect={openQuickConnect}
       />
+
+      {rdpView && (
+        <Suspense fallback={null}>
+          <RdpSessionView key={rdpView.id} serverId={rdpView.id} serverName={rdpView.name} onClose={() => setRdpView(null)} />
+        </Suspense>
+      )}
 
       {recordingEnabled && isRecordingPlayerOpen && (
         <Suspense fallback={null}>

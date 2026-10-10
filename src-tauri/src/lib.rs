@@ -231,6 +231,7 @@ pub fn run() {
     builder
         .manage(DbState { conn: std::sync::Arc::new(StdMutex::new(None)), master_key: StdMutex::new(None), salt: StdMutex::new(None), db_path: StdMutex::new(None), active_profile: StdMutex::new(None), hlc: StdMutex::new(None), session_password: StdMutex::new(None) })
         .manage(SshState::new())
+        .manage(commands::rdp_session::RdpSessions::default())
         // Docker live-log stream registry — keyed by frontend-issued stream id,
         // values are tokio AbortHandles so the user can stop tailing on demand.
         .manage(docker::DockerStreams::new())
@@ -308,6 +309,9 @@ pub fn run() {
             commands::sync::get_sync_excluded,
             commands::profile::save_text_file,
             commands::rdp::launch_rdp,
+            commands::rdp_session::rdp_connect,
+            commands::rdp_session::rdp_send_input,
+            commands::rdp_session::rdp_disconnect,
             commands::servers::set_server_protocol,
             commands::sftp_remote_copy::sftp_copy_between_sessions,
             commands::sync::set_sync_excluded,
