@@ -39,8 +39,8 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🌐 Network, Protocols & Multi-Platform
 
-- [ ] 🟢 **P3 · XL** — **RDP Functionality (Remote Desktop Protocol)**
-  - Native Remote Desktop Protocol (RDP) session tabs alongside SSH, SFTP, and Docker for managing Windows infrastructure.
+- [ ] 🟢 **P3 · XL** — **RDP: embedded session tab**
+  - Launching the system Remote Desktop client from a saved RDP server is done. Still open: an RDP session tab drawn inside SubTerm (candidate: the pure-Rust IronRDP crate streaming frames to a canvas, plus keyboard, mouse and clipboard). Needs an RDP server to test against and a decision on binary size and dependencies; start with view-only login and display.
 
 - [ ] 🟢 **P3 · XL** — **iOS / iPadOS Support**
   - Target compilation and packaging for iPadOS and iOS devices, pairing with SubTerm's mobile accessory keybar.

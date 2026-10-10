@@ -307,6 +307,8 @@ pub fn run() {
             commands::sync::set_editor_label,
             commands::sync::get_sync_excluded,
             commands::profile::save_text_file,
+            commands::rdp::launch_rdp,
+            commands::servers::set_server_protocol,
             commands::sftp_remote_copy::sftp_copy_between_sessions,
             commands::sync::set_sync_excluded,
             commands::servers::add_server, commands::servers::save_quick_connect_node, commands::servers::edit_server, commands::servers::delete_server, commands::servers::add_mirror_to_server, commands::servers::get_servers, commands::servers::get_ssh_keys, commands::servers::set_server_color, commands::servers::set_folder_color, commands::servers::set_server_notes, commands::servers::set_server_run_on_connect, commands::servers::set_server_jump_host, commands::servers::set_server_is_production, commands::servers::set_server_icon, commands::servers::update_server_os_info, commands::servers::reorder_servers, commands::servers::clone_server, commands::servers::reveal_server_password, commands::servers::reveal_credential_password, commands::servers::reveal_ssh_key,

@@ -1009,6 +1009,11 @@ pub(crate) async fn setup_master_db_inner(
             // property of a reusable saved login, so it lives on `servers`
             // only, orthogonal to auth_type/credential_id.
             "ALTER TABLE servers ADD COLUMN forward_agent INTEGER NOT NULL DEFAULT 0",
+            // Connection protocol: NULL / 'ssh' = SSH (every row that existed
+            // before this column), 'rdp' = launch the system Remote Desktop
+            // client. Nullable on purpose: it is a synced column, and a record
+            // from an older peer omits it - NULL must read as plain SSH.
+            "ALTER TABLE servers ADD COLUMN protocol TEXT DEFAULT 'ssh'",
             // Server-specific snippets: NULL server_id keeps a command in the
             // global library (today's only behavior); set it to scope a
             // command to one server's Command Palette / library view. tags is

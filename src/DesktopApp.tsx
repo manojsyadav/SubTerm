@@ -477,6 +477,7 @@ function DesktopApp() {
     is_production: false,
     icon: "server",
     forward_agent: false,
+    protocol: "ssh",
   };
 
   // Live width-based "narrow viewport" flag. Replaces a one-shot UA check
@@ -630,6 +631,7 @@ function DesktopApp() {
       is_production: Boolean(server.is_production),
       icon: server.icon || "server",
       forward_agent: Boolean(server.forward_agent),
+      protocol: server.protocol === "rdp" ? "rdp" : "ssh",
     });
     setIsPanelOpen(true);
   };
@@ -2292,6 +2294,11 @@ function DesktopApp() {
               await invoke("set_server_is_production", { id: savedId, value: !!newNode.is_production });
             } catch (e) {
               addLog(`SAVE_IS_PRODUCTION_FAILED: ${e}`, "error");
+            }
+            try {
+              await invoke("set_server_protocol", { id: savedId, value: newNode.protocol === "rdp" ? "rdp" : "ssh" });
+            } catch (e) {
+              addLog(`SAVE_PROTOCOL_FAILED: ${e}`, "error");
             }
             try {
               await invoke("set_server_icon", { id: savedId, icon: newNode.icon || "server" });

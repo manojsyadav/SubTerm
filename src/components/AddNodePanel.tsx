@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useFeatureFlag } from "../featureFlags";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal, Plus } from "lucide-react";
@@ -86,6 +87,8 @@ export interface NodeFormState {
   is_production: boolean;
   icon: string;
   forward_agent: boolean;
+  /** "ssh" (default) or "rdp" - RDP servers launch the system Remote Desktop client. */
+  protocol?: string;
   wol_mac?: string;
   knock_ports?: string;
 }
@@ -111,6 +114,19 @@ interface AddNodePanelProps {
 
 const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credentials, sshKeys, refreshSshKeys, folders, refreshFolders, refreshServers, servers, isEditMode, formError, isMobile, initialImportOpen }: AddNodePanelProps) => {
   const textPrompt = useTextPrompt();
+  const rdpEnabled = useFeatureFlag("rdpServers");
+  const isRdp = newNode.protocol === "rdp";
+  // Switching connection type also swaps the stock port (22 <-> 3389) unless the
+  // user already typed a custom one, and RDP keeps no SSH key / saved-login link.
+  const switchProtocol = (next: "ssh" | "rdp") => {
+    if (next === (isRdp ? "rdp" : "ssh")) return;
+    setNewNode((n) => ({
+      ...n,
+      protocol: next,
+      port: next === "rdp" ? (n.port === 22 ? 3389 : n.port) : (n.port === 3389 ? 22 : n.port),
+      ...(next === "rdp" ? { authType: "custom_pass", credentialId: "", keyId: "", password: "" } : {}),
+    }));
+  };
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
 
@@ -346,6 +362,32 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
               <input type="text" className="w-full h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-[#232328] transition-all shadow-inner" placeholder="e.g. Work server" value={newNode.name} onChange={e => setNewNode({ ...newNode, name: e.target.value })} />
             </div>
 
+            {(rdpEnabled || isRdp) && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-400 ml-1">Connection type</label>
+                <div role="radiogroup" aria-label="Connection type" className="inline-flex rounded-lg border border-white/10 overflow-hidden">
+                  {([
+                    { id: "ssh", label: "SSH / SFTP" },
+                    { id: "rdp", label: "Remote Desktop (RDP)" },
+                  ] as const).map((o) => {
+                    const on = (isRdp ? "rdp" : "ssh") === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => switchProtocol(o.id)}
+                        className={`h-8 px-3 text-[11px] font-semibold transition-all ${on ? "bg-primary/20 text-primary" : "bg-[#1a1a1e] text-zinc-400 hover:text-zinc-200"}`}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-400 ml-1">Folder</label>
               {!isCreatingFolder ? (
@@ -443,6 +485,21 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
 
           </div>
 
+          {isRdp ? (
+            <div className="pt-5 border-t border-white/5 space-y-1.5">
+              <label className="text-[11px] font-bold text-zinc-400 ml-1">Username (optional)</label>
+              <input
+                type="text"
+                className="w-full h-9 bg-[#1a1a1e] rounded-lg px-3 text-[12px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-[#232328] transition-all shadow-inner"
+                placeholder="e.g. Administrator or DOMAIN\\user"
+                value={newNode.username}
+                onChange={(e) => setNewNode({ ...newNode, username: e.target.value })}
+              />
+              <p className="text-[11px] text-zinc-500 ml-1 leading-relaxed">
+                Opens your system's Remote Desktop client. The password is asked there; SubTerm does not store or send one.
+              </p>
+            </div>
+          ) : (
           <div className="pt-5 border-t border-white/5 space-y-4">
             <div className="flex justify-between items-center">
               <label className="text-[11px] font-bold text-zinc-400">How to log in</label>
@@ -543,8 +600,10 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
               </div>
             )}
           </div>
+          )}
 
           <div className="pt-5 border-t border-white/5 space-y-4">
+            {!isRdp && (<>
             <div className="flex justify-between items-center">
               <label className="text-[11px] font-bold text-zinc-400">Proxy</label>
               <select className="bg-transparent text-[12px] font-bold text-zinc-300 outline-none cursor-pointer" value={newNode.proxyType} onChange={e => setNewNode({ ...newNode, proxyType: e.target.value })}>
@@ -891,6 +950,8 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
               </button>
             </div>
 
+            </>)}
+
             {/* Production Environment Toggle */}
             <div className="flex items-center justify-between gap-3 pt-2 pb-1 border-t border-white/5">
               <div className="min-w-0">
@@ -957,7 +1018,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
             {/* On-connect commands — auto-typed into the FIRST terminal the
                 first time you connect to this server (not on reconnects, not
                 on extra shells you open later). One command per line. */}
-            <div className="space-y-1.5 pt-1">
+            {!isRdp && (<div className="space-y-1.5 pt-1">
               <label className="text-[11px] font-bold text-zinc-400 ml-1 flex items-center gap-2">
                 <span>Run on connect</span>
                 <span className="text-[10px] text-zinc-600 font-normal normal-case tracking-normal">
@@ -972,7 +1033,7 @@ const AddNodePanel = ({ isOpen, onClose, newNode, setNewNode, onSave, credential
                 spellCheck={false}
                 className="w-full bg-[#1a1a1e] rounded-lg p-3 text-[12px] text-white border border-white/10 outline-none focus:border-primary/50 focus:bg-[#232328] transition-all shadow-inner font-mono leading-relaxed resize-y"
               />
-            </div>
+            </div>)}
           </div>
         </div>
 

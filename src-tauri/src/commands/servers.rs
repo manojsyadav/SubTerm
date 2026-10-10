@@ -652,6 +652,19 @@ pub async fn set_server_icon(state: tauri::State<'_, DbState>, id: i32, icon: Op
     Ok(())
 }
 
+/// Switch a server between SSH and RDP. Anything but "rdp" is stored as "ssh".
+#[tauri::command]
+pub async fn set_server_protocol(state: tauri::State<'_, DbState>, id: i32, value: String) -> Result<(), String> {
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    let protocol = if value == "rdp" { "rdp" } else { "ssh" };
+    conn.execute("UPDATE servers SET protocol=?1 WHERE id=?2", rusqlite::params![protocol, id])
+        .map_err(|e| format!("[DATABASE] SERVER_PROTOCOL_FAILED: {}", e))?;
+    drop(conn_guard);
+    save_vault_internal(&state)?;
+    Ok(())
+}
+
 /// Duplicate a server row verbatim — including credentials linkage, tunnels,
 /// mirrors, proxy config, colour. The clone gets a "{name} (copy)" suffix so
 /// it shows up beside the original in the grid; everything else is identical
@@ -662,8 +675,8 @@ pub async fn clone_server(state: tauri::State<'_, DbState>, id: i32) -> Result<i
     let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
     let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
     let affected = conn.execute(
-        "INSERT INTO servers (name, host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, autostart, mirrors, color, notes, run_on_connect, jump_host_id, is_production, icon)
-         SELECT name || ' (copy)', host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, 0, mirrors, color, notes, run_on_connect, jump_host_id, is_production, icon
+        "INSERT INTO servers (name, host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, autostart, mirrors, color, notes, run_on_connect, jump_host_id, is_production, icon, protocol)
+         SELECT name || ' (copy)', host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, 0, mirrors, color, notes, run_on_connect, jump_host_id, is_production, icon, protocol
          FROM servers WHERE id = ?1",
         rusqlite::params![id],
     ).map_err(|e| format!("[DATABASE] SERVER_CLONE_FAILED: {}", e))?;
@@ -723,7 +736,7 @@ pub async fn get_servers(state: tauri::State<'_, DbState>) -> Result<Vec<serde_j
     // ORDER BY (position, id): `position` is the manual drag-to-reorder rank
     // (default 0 for never-reordered rows), and id breaks ties so the order is
     // stable and, before any reorder, identical to the old rowid order.
-    let mut stmt = conn.prepare("SELECT id, name, host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, autostart, mirrors, color, notes, run_on_connect, jump_host_id, updated_at, edited_by, position, is_production, icon, os_info, forward_agent FROM servers ORDER BY position, id")
+    let mut stmt = conn.prepare("SELECT id, name, host, port, username, password, credential_id, folder_id, proxy_type, proxy_host, proxy_port, tunnels, auth_type, key_id, autostart, mirrors, color, notes, run_on_connect, jump_host_id, updated_at, edited_by, position, is_production, icon, os_info, forward_agent, protocol FROM servers ORDER BY position, id")
         .map_err(|e| format!("[DATABASE] PREPARE_FAILED: {}", e))?;
 
     let rows = stmt.query_map([], |row| {
@@ -758,6 +771,7 @@ pub async fn get_servers(state: tauri::State<'_, DbState>) -> Result<Vec<serde_j
             "icon": row.get::<_, Option<String>>(24)?.unwrap_or_else(|| "server".to_string()),
             "os_info": row.get::<_, Option<String>>(25)?.unwrap_or_default(),
             "forward_agent": row.get::<_, Option<i32>>(26)?.unwrap_or(0) != 0,
+            "protocol": row.get::<_, Option<String>>(27)?.unwrap_or_else(|| "ssh".to_string()),
         }))
     }).map_err(|e| format!("[DATABASE] QUERY_MAPPING_FAILED: {}", e))?;
 

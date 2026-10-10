@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(rdp)` — RDP servers (opens your system Remote Desktop client)**:
+  The server form has a new **Connection type**: SSH / SFTP or **Remote Desktop (RDP)**. An RDP server keeps a name, folder, colour, host, port (3389 by default) and optional username; the SSH-only options (login method, proxy, jump host, port forwarding, mirrors, run-on-connect) are hidden for it. Clicking it, or choosing it in the command palette, opens Windows Remote Desktop (`mstsc`), Microsoft Remote Desktop on macOS, or FreeRDP (`xfreerdp`) on Linux, which asks for the password itself — SubTerm never stores or sends an RDP password. RDP servers show an **RDP** badge, sync between devices like other servers (older app versions show them as SSH servers), are skipped by autostart and Fleet-open, and the whole feature has its own toggle in Settings → Feature Toggles. This is the first step; an RDP session tab inside SubTerm is still on the backlog.
+
 - **`feat(sftp)` — Server-to-server copy (dual remote panes)**:
   A new **Server to server** tab in the SFTP panel shows two open servers side by side. Pick a server for each side, select files or folders, and use **Copy to <server>** (selection bar or right-click) or drag from one side to the other. The data goes straight from one SSH connection to the other, in memory — nothing is saved on this computer. Large files use up to four streams at once, progress and Cancel appear in the usual transfers bar, existing items ask before being replaced, and a cancelled or failed copy removes the partial file. Folder copies skip symbolic links. Needs two connected servers; has its own toggle in Settings → Feature Toggles.
 
