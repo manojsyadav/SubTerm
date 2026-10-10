@@ -19,6 +19,7 @@ This document tracks active development tasks, pending architectural optimizatio
 ---
 
 ## 🏗️ Engineering Health: Architecture, Testing & CI
+
 - [ ] 🟢 **P3 · L** — **Reduce `any` / `as any` in the TypeScript Frontend**
   - 239 occurrences across `src/**/*.tsx`/`*.ts` with no lint rule currently flagging new ones.
   - Backfill proper types incrementally, starting with session/file-path handling code where a mistyped value has real consequences.
