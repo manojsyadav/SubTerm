@@ -156,10 +156,10 @@ futures-util = { version = "0.3.31", default-features = false, features = ["std"
 # (tauri-plugin-window-state — mobile windows aren't resizable/movable;
 # open — opening a file in the user's "default desktop app" doesn't map to
 # Android's intent system). Their call sites in `lib.rs` and `about.rs` are
-# wrapped in `#[cfg(not(target_os = "android"))]`, so the Android build
-# doesn't need any of these to compile.
+# wrapped in `#[cfg(desktop)]` (tauri-build defines `desktop` / `mobile`), so the
+# Android and iOS builds don't need any of these to compile.
 # ---------------------------------------------------------------------------
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"
 rfd = "0.14"
 open = "5.1"

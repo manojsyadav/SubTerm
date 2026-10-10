@@ -106,12 +106,12 @@ pub async fn rdp_connect(
     height: u32,
     on_event: EventChannel,
 ) -> Result<String, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         let _ = (state, sessions, id, password, width, height, on_event);
-        return Err("Embedded RDP is not available on Android.".into());
+        return Err("Embedded RDP is not available on phones and tablets.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let (host, port, username) = {
             let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;

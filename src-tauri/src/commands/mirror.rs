@@ -55,11 +55,11 @@ pub(crate) async fn list_mirrors(
 /// Native OS folder picker. Used by MirrorsPanel to fill in `local`.
 #[tauri::command]
 pub(crate) async fn pick_local_directory() -> Result<Option<String>, String> {
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     {
         return Err("Folder picker not available on Android.".into());
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(desktop)]
     {
         let path = rfd::AsyncFileDialog::new().pick_folder().await;
         Ok(path.map(|p| p.path().to_string_lossy().into_owned()))

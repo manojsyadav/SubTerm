@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions } from "../ui/confirm";
-import { IS_ANDROID } from "../util/platform";
+import { IS_MOBILE_OS } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
 import { SftpBookmarksPopover, loadSftpBookmarks } from "./SftpBookmarksPopover";
 import { archiveKind } from "../fs/archive";
@@ -999,7 +999,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     let dest = destDir || getOppositeDir?.();
     if (!dest) {
       try {
-        dest = IS_ANDROID
+        dest = IS_MOBILE_OS
           ? ((await invoke<string>("android_default_local_dir")) || undefined)
           : ((await invoke<string | null>("select_local_folder")) || undefined);
       } catch (err) { notify(`Pick folder failed: ${err}`, "error"); return; }
@@ -1546,7 +1546,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           {provider.id === "local" && (
             <button
               onClick={async () => {
-                if (IS_ANDROID) {
+                if (IS_MOBILE_OS) {
                   // First open pulls the quick-dir list; subsequent opens
                   // reuse the cached list so scoped-storage probes don't
                   // rerun on every click.
@@ -1575,7 +1575,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               <FolderSearch size={11} />
             </button>
           )}
-          {IS_ANDROID && androidPickerOpen && androidQuickDirs && (
+          {IS_MOBILE_OS && androidPickerOpen && androidQuickDirs && (
             <div className="absolute top-[24px] right-0 z-50 min-w-[180px] bg-[#0c0c0e]/95 border border-white/10 rounded-lg shadow-2xl p-1 backdrop-blur-md font-mono text-[11px]">
               {androidQuickDirs.length === 0 ? (
                 <div className="p-2 text-zinc-400 text-[10.5px]">
@@ -1840,7 +1840,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                     setEditorEntry(entry);
                     return;
                   }
-                  if (IS_ANDROID) return;
+                  if (IS_MOBILE_OS) return;
                   if (isRemote) liveEditEntry(entry);
                   else openLocalEntry(entry);
                 }}
@@ -2003,7 +2003,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                   filesystem watcher. Android has none of those in a form we
                   can bridge, so the backend command returns an error there
                   — hide the menu item entirely rather than surface it. */}
-              {!multi && !contextMenu.entry.isDir && !IS_ANDROID && (
+              {!multi && !contextMenu.entry.isDir && !IS_MOBILE_OS && (
                 <button onClick={() => { setContextMenu(null); liveEditEntry(contextMenu.entry); }}
                   className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
                   <ExternalLink size={11} className="text-indigo-400" /><span>Edit (auto-upload)</span>
@@ -2011,7 +2011,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               )}
             </>
           ) : (
-            !multi && !contextMenu.entry.isDir && !IS_ANDROID && (
+            !multi && !contextMenu.entry.isDir && !IS_MOBILE_OS && (
               <button onClick={() => { setContextMenu(null); openLocalEntry(contextMenu.entry); }}
                 className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
                 <ExternalLink size={11} className="text-indigo-400" /><span>Open</span>
@@ -2094,7 +2094,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             </button>
           )}
 
-          {!isRemote && !multi && !IS_ANDROID && (
+          {!isRemote && !multi && !IS_MOBILE_OS && (
             <button onClick={() => { setContextMenu(null); revealLocalEntry(contextMenu.entry); }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
               <FolderSearch size={11} className="text-emerald-300" /><span>Reveal in Explorer</span>
