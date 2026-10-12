@@ -9,6 +9,7 @@ import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { tags as t } from "@lezer/highlight";
 import { detectLanguage, loadLanguage } from "./language";
 import { hideCommentsExtension, setHideComments } from "./hideComments";
+import { readEditorPrefs } from "./editorPrefs";
 
 const theme = EditorView.theme(
   {
@@ -61,6 +62,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileNam
 
   useEffect(() => {
     if (!hostRef.current) return;
+    const prefs = readEditorPrefs();
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({
@@ -69,7 +71,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileNam
           lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(),
           history(), indentOnInput(), bracketMatching(), highlightSelectionMatches(),
           syntaxHighlighting(highlight), theme, langRef.current.of([]), hideCommentsExtension,
-          EditorState.tabSize.of(4),
+          EditorState.tabSize.of(prefs.tabSize),
+          EditorView.theme({ "&": { fontSize: `${prefs.fontSize}px` }, ".cm-scroller": { lineHeight: `${Math.round(prefs.fontSize * 1.65)}px` } }),
+          ...(prefs.wordWrap ? [EditorView.lineWrapping] : []),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           EditorView.updateListener.of((u) => { if (u.docChanged) onChangeRef.current(u.state.doc.toString()); }),
         ],

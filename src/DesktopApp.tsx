@@ -130,6 +130,9 @@ function DesktopApp() {
     terminalBell: localStorage.getItem('subterm-terminal-bell') || 'visual',
     terminalFontFamily: localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
     terminalLineHeight: parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15'),
+    editorTabSize: Math.min(8, Math.max(1, parseInt(localStorage.getItem('subterm-editor-tab-size') || '4', 10) || 4)),
+    editorWordWrap: localStorage.getItem('subterm-editor-word-wrap') === 'true',
+    editorFontSize: Math.min(24, Math.max(9, parseInt(localStorage.getItem('subterm-editor-font-size') || '12', 10) || 12)),
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -670,6 +673,9 @@ function DesktopApp() {
     localStorage.setItem('subterm-auto-lock-min', String(appSettings.autoLockMin ?? 0));
     localStorage.setItem('subterm-lock-on-minimize', appSettings.lockOnMinimize ? 'true' : 'false');
     localStorage.setItem('subterm-clear-clipboard-on-lock', appSettings.clearClipboardOnLock ? 'true' : 'false');
+    localStorage.setItem('subterm-editor-tab-size', String(appSettings.editorTabSize ?? 4));
+    localStorage.setItem('subterm-editor-word-wrap', appSettings.editorWordWrap ? 'true' : 'false');
+    localStorage.setItem('subterm-editor-font-size', String(appSettings.editorFontSize ?? 12));
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));

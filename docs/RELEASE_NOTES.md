@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(editor)` — Quick Editor preferences**:
+  Settings > Appearance > Quick Editor sets font size, tab width (was fixed at 4) and line wrapping, for both the syntax-highlighted editor and the plain text fallback.
+
 - **`feat(ssh)` — SSH connection settings**:
   Settings > Terminal > SSH Connection adds a strict host-key policy (refuse unknown keys instead of asking; default is still to ask), a connection timeout, a limit on auto-reconnect attempts and the longest wait between retries (defaults keep today's behaviour: 10 s, retry forever, 30 s), and default port, username and agent forwarding for new servers.
 

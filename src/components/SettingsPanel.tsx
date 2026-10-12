@@ -196,6 +196,29 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
         </Row>
       </SectionCard>
     )}
+    <SectionCard id="quick-editor" title="Quick Editor" subtitle="For files opened in the built-in editor. Changes apply the next time you open a file.">
+      <Row id="editor-font-size" label="Font size">
+        <select
+          value={settings.editorFontSize ?? 12}
+          onChange={(e) => setSettings({ ...settings, editorFontSize: parseInt(e.target.value, 10) || 12 })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          {[10, 11, 12, 13, 14, 16, 18, 20].map((n) => <option key={n} value={n}>{n} px{n === 12 ? " (default)" : ""}</option>)}
+        </select>
+      </Row>
+      <Row id="editor-tab-size" label="Tab width">
+        <select
+          value={settings.editorTabSize ?? 4}
+          onChange={(e) => setSettings({ ...settings, editorTabSize: parseInt(e.target.value, 10) || 4 })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          {[2, 3, 4, 8].map((n) => <option key={n} value={n}>{n} spaces{n === 4 ? " (default)" : ""}</option>)}
+        </select>
+      </Row>
+      <Row id="editor-word-wrap" label="Wrap long lines" desc="Off keeps one line per row and scrolls sideways">
+        <Toggle checked={!!settings.editorWordWrap} onChange={() => setSettings({ ...settings, editorWordWrap: !settings.editorWordWrap })} />
+      </Row>
+    </SectionCard>
     <SectionCard id="background" title="Background Theme">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs text-zinc-500">App background colour preset</span>
@@ -1184,6 +1207,10 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
   { id: "ui-zoom", page: "appearance", label: "Interface Zoom", keywords: "zoom scale size dpi large small interface ui" },
   { id: "ui-zoom-row", page: "appearance", label: "Zoom level", keywords: "zoom scale size dpi" },
+  { id: "quick-editor", page: "appearance", label: "Quick Editor", keywords: "editor font tab wrap file edit" },
+  { id: "editor-font-size", page: "appearance", label: "Editor font size", keywords: "editor font size text" },
+  { id: "editor-tab-size", page: "appearance", label: "Editor tab width", keywords: "editor tab indent spaces" },
+  { id: "editor-word-wrap", page: "appearance", label: "Editor wrap long lines", keywords: "editor wrap word lines" },
   { id: "background", page: "appearance", label: "Background Theme", keywords: "background colour color dark" },
   { id: "display", page: "appearance", label: "Display & Theme", keywords: "terminal display theme font cursor" },
   { id: "theme", page: "appearance", label: "Terminal Color Scheme", keywords: "theme palette ansi colors import" },

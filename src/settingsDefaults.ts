@@ -17,6 +17,9 @@ export const SETTING_DEFAULTS = {
   terminalFontSize: 14,
   terminalLineHeight: 1.15,
   uiZoom: 100,
+  editorTabSize: 4,
+  editorWordWrap: false,
+  editorFontSize: 12,
   autoLockMin: 0,
   lockOnMinimize: false,
   clearClipboardOnLock: false,
@@ -64,6 +67,9 @@ export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
   "font-size": "terminalFontSize",
   "line-height": "terminalLineHeight",
   "ui-zoom": "uiZoom",
+  "editor-tab-size": "editorTabSize",
+  "editor-word-wrap": "editorWordWrap",
+  "editor-font-size": "editorFontSize",
   "auto-lock": "autoLockMin",
   "lock-on-minimize": "lockOnMinimize",
   "clear-clipboard": "clearClipboardOnLock",
@@ -99,7 +105,7 @@ export type ResettablePage = "general" | "appearance" | "terminal" | "features";
 
 const PAGE_ROWS: Record<ResettablePage, string[]> = {
   general: ["startup-view", "local-shell", "enable-monitoring", "auto-lock", "lock-on-minimize", "clear-clipboard"],
-  appearance: ["accent", "background", "ui-zoom", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-color", "terminal-padding", "cursor-blink", "webgl", "bell"],
+  appearance: ["accent", "background", "ui-zoom", "editor-font-size", "editor-tab-size", "editor-word-wrap", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-color", "terminal-padding", "cursor-blink", "webgl", "bell"],
   terminal: ["right-click", "copy-on-select", "open-links", "paste-review", "word-separators", "scroll-on-input", "auto-copy-output", "auto-close", "audit-download", "keepalive", "connect-timeout", "host-key-policy", "reconnect-attempts", "reconnect-delay", "default-port", "default-user", "default-agent", "command-widget"],
   features: ["ssh-mode", ...FEATURES.map((f) => f.key as string)],
 };

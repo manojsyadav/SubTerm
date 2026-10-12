@@ -32,6 +32,11 @@ export interface AppSettings {
   terminalLineHeight: number;
   /** Whole-UI zoom in percent (webview zoom). */
   uiZoom: number;
+  /** Quick Editor: spaces per tab (1-8). */
+  editorTabSize: number;
+  editorWordWrap: boolean;
+  /** Quick Editor font size in px (9-24). */
+  editorFontSize: number;
   /** Minutes without input before the vault locks; 0 = never. */
   autoLockMin: number;
   /** Lock as soon as the window is minimised or hidden. */
