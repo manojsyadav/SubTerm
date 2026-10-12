@@ -92,9 +92,9 @@ export function SettingsKnownHosts() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <>
       {/* Header card */}
-      <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl">
+      <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl break-inside-avoid">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
@@ -158,7 +158,7 @@ export function SettingsKnownHosts() {
       </div>
 
       {/* Table Card */}
-      <div className="bg-[#121215] border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-[#121215] border border-white/5 rounded-2xl overflow-hidden shadow-xl break-inside-avoid">
         {filteredHosts.length === 0 ? (
           <div className="py-16 text-center px-4">
             <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-zinc-600 mx-auto mb-3">
@@ -233,6 +233,6 @@ export function SettingsKnownHosts() {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }

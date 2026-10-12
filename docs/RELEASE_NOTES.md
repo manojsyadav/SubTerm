@@ -42,6 +42,9 @@
 - **Behaviour changes to know about**:
   A local shell no longer opens at launch unless **Settings > General > On Startup** is *New Local Terminal* (the app lands on the server list). Right-click now defaults to *Smart* (copy selection, else paste; Shift+Right-Click for the menu), and links in terminal output need Ctrl/Cmd+Click (**Settings > Terminal > Open Links** restores plain click). Existing saved choices for these settings are kept.
 
+- **`fix(settings)` — Consistent layout on Quick Access, Accounts & Sync and System**:
+  These three pages used a narrow single column with a tab strip, unlike every other settings page. They now show their sections as cards in the same wide two/three-column layout, with no tabs.
+
 - **`feat(servers)` — Cleaner Servers page**:
   The search box is now quick connect: type an IP, `user@ip` or `host:port` and press Enter to connect (a single saved match opens instead; Quick Connect asks for the password), and a lightning button inside the box opens the Quick Connect dialog. Add server and Import SSH config are one split button at the right end of the search row. Local Shell moved out (use **Local** in the sidebar) and Network Tools moved to the sidebar under Snippets.
 

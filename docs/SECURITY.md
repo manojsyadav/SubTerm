@@ -70,10 +70,10 @@ The Settings interface organizes configurations into 7 pages, enforcing access c
 - **Appearance**: Colours, terminal theme, fonts, cursor, interface zoom.
 - **Terminal**: Mouse and clipboard behaviour, sessions, SSH connection options, command widget, triggers.
 - **Features**: Optional feature switches.
-- **Quick Access** (partly): the *Keyboard Shortcuts* tab. The *Pinned Servers* and *Quick Commands* tabs of the same page are locked.
+- **Quick Access** (partly): the *Keyboard Shortcuts* card. The *Pinned Servers* and *Quick Commands* cards of the same page are replaced by an unlock prompt while locked.
 
 ### 3.2 Locked Categories (Requires Master Password)
-- **Quick Access, Pinned Servers and Quick Commands tabs**: pinned server names and addresses; snippets and maintenance scripts (which often contain credentials).
+- **Quick Access, Pinned Servers and Quick Commands cards**: pinned server names and addresses; snippets and maintenance scripts (which often contain credentials).
 - **Accounts & Sync**: workspace creation, renaming and deletion, master password changes, cloud account credentials, sync endpoints, invite tokens.
 - **System**: Known Hosts, Maintenance (database resets, preference clearing, server export) and the Activity Log (connection histories, timestamps, diagnostic audit logs).
 

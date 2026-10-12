@@ -80,9 +80,9 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 | Appearance | — | Accent color, background theme, terminal theme, fonts, cursor, WebGL, bell |
 | Terminal | — | Right-click, copy on select, link opening, sessions, SSH keep-alive, command widget, triggers |
 | Features | — | Optional feature toggles with their options nested underneath |
-| Quick Access | Partly | Tabs for pinned servers and quick commands (**unlock required**: names/IPs and commands may be sensitive) and keyboard shortcuts (no unlock) |
-| Accounts & Sync | **Yes** | Tabs for Profiles (create, rename, delete workspaces; change master password) and Cloud & Sync (API endpoint, auth, push/pull sync) |
-| System | **Yes** | Tabs for Known Hosts (trusted SSH host keys and fingerprints, revocation), Maintenance (reset preferences, cache purge, export) and Activity Log (session diagnostics timeline) |
+| Quick Access | Partly | Cards for pinned servers and quick commands (**unlock required**: names/IPs and commands may be sensitive) and keyboard shortcuts (no unlock) |
+| Accounts & Sync | **Yes** | Profiles (create, rename, delete workspaces; change master password) and Cloud & Sync (API endpoint, auth, push/pull sync) |
+| System | **Yes** | Known Hosts (trusted SSH host keys and fingerprints, revocation), Maintenance (reset preferences, cache purge, export) and Activity Log (session diagnostics timeline) |
 
 ---
 

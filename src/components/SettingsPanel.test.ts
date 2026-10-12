@@ -129,33 +129,35 @@ describe("SettingsPanel layout", () => {
     expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ rightClickAction: "smart", linkOpenMode: "ctrl-click" }));
   });
 
-  it("merges pinned servers, quick commands and keyboard shortcuts into one Quick Access page", () => {
-    const labels = [...host.querySelectorAll("nav button")].map((b) => b.textContent);
-    expect(labels.some((l) => l?.includes("Quick Access"))).toBe(true);
-    expect(labels.some((l) => l?.includes("Quick Commands"))).toBe(false);
-    expect(labels.some((l) => l?.includes("Keyboard Shortcuts"))).toBe(false);
+  it("shows pinned servers, quick commands and keyboard shortcuts as cards on one Quick Access page", () => {
+    const labels = [...host.querySelectorAll("nav button")].map((b) => b.textContent ?? "");
+    expect(labels.some((l) => l.includes("Quick Access"))).toBe(true);
+    expect(labels.some((l) => l.includes("Quick Commands"))).toBe(false);
+    expect(labels.some((l) => l.includes("Keyboard Shortcuts"))).toBe(false);
     click(nav("Quick Access"));
-    const tabs = [...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
-    expect(tabs).toEqual(["Pinned Servers", "Quick Commands", "Keyboard Shortcuts"]);
+    expect(host.querySelector('[role="tab"]')).toBeNull();
+    for (const text of ["Pinned Servers", "Quick Commands by OS", "Keyboard Shortcuts"]) {
+      expect(host.textContent, text).toContain(text);
+    }
   });
 
-  it("keeps the shortcuts tab usable while the vault is locked", () => {
+  it("keeps keyboard shortcuts usable and asks to unlock the rest while the vault is locked", () => {
     act(() => { root.render(panel({ isUnlocked: false })); });
     click(nav("Quick Access"));
-    const selected = host.querySelector('[role="tab"][aria-selected="true"]');
-    expect(selected?.textContent).toContain("Keyboard Shortcuts");
-    click([...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent?.includes("Pinned")));
-    expect(host.textContent).toContain("Vault is locked");
+    expect(host.textContent).toContain("Keyboard Shortcuts");
+    expect(host.textContent).toContain("need the vault unlocked");
+    expect(host.textContent).not.toContain("Quick Commands by OS");
   });
 
-  it("merges known hosts, maintenance and the activity log into one System page", () => {
+  it("shows known hosts, maintenance and the activity log as cards on one System page", () => {
     const labels = [...host.querySelectorAll("nav button")].map((b) => b.textContent ?? "");
     expect(labels.some((l) => l.includes("System"))).toBe(true);
     for (const old of ["Known Hosts", "Maintenance", "Activity Log"]) expect(labels.some((l) => l.includes(old)), old).toBe(false);
     click(nav("System"));
-    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Known Hosts", "Maintenance", "Activity Log"]);
-    click([...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent === "Maintenance"));
-    expect(host.textContent).toContain("Reset Preferences");
+    expect(host.querySelector('[role="tab"]')).toBeNull();
+    for (const text of ["Reset Preferences", "Export Server List", "Activity Log"]) {
+      expect(host.textContent, text).toContain(text);
+    }
   });
 
   it("locks the whole System page while the vault is locked", () => {
@@ -177,8 +179,19 @@ describe("SettingsPanel layout", () => {
     expect(ssh.querySelector('[data-setting="keepalive"]')).toBeTruthy();
   });
 
-  it("combines Profiles and Cloud & Sync as tabs and locks the page", () => {
+  it("shows profiles and cloud sync together on Accounts & Sync", () => {
     click(nav("Accounts & Sync"));
-    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Profiles", "Cloud & Sync"]);
+    expect(host.querySelector('[role="tab"]')).toBeNull();
+    expect(host.textContent).toContain("Profile & Workspace Management");
+    expect(host.textContent).toContain("Cloud Sync & Collaboration");
+  });
+
+  it("uses the same wide multi-column layout on every page", () => {
+    for (const label of ["General", "Appearance", "Terminal", "Features", "Quick Access", "Accounts & Sync", "System"]) {
+      click(nav(label));
+      const container = host.querySelector("main > div") as HTMLElement;
+      expect(container.className, label).toContain("max-w-[2000px]");
+      expect(container.querySelector(".xl\\:columns-2"), label).toBeTruthy();
+    }
   });
 });
