@@ -193,7 +193,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   );
 
   const openQuickConnect = useCallback(
-    (auth: QuickAuth, opts?: { save?: boolean }) => {
+    (auth: QuickAuth, opts?: { save?: boolean; initialTool?: Session["initialTool"] }) => {
       const sessionId = `session-quick-${Date.now()}`;
       const displayName = `${auth.username}@${auth.host}:${auth.port}`;
       setSessions((prev) => [
@@ -203,6 +203,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
           serverId: 0,
           serverName: displayName,
           quickAuth: auth,
+          initialTool: opts?.initialTool ?? null,
         },
       ]);
       setActiveView(sessionId);

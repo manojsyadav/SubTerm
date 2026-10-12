@@ -481,12 +481,10 @@ function DesktopApp() {
   // Quick Connect that can also open the SFTP panel once the session mounts
   // (used when the target came from an `sftp` command typed in a local shell).
   const connectQuick = useCallback((auth: QuickAuth) => {
-    const sessionId = openQuickConnect(auth, { save: pendingSaveRef.current });
-    if (pendingSftpRef.current && sessionId) {
-      window.setTimeout(() => {
-        window.dispatchEvent(new CustomEvent(`subterm-toggle-tool-${sessionId}`, { detail: { tool: "sftp" } }));
-      }, 800);
-    }
+    openQuickConnect(auth, {
+      save: pendingSaveRef.current,
+      initialTool: pendingSftpRef.current ? "sftp" : null,
+    });
     pendingSftpRef.current = false;
     pendingSaveRef.current = true;
     setQuickConnectPrefill(null);
