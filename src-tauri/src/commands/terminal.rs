@@ -329,6 +329,16 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn local shell ({shell_cmd}): {e}"))?;
 
+    // On Windows (ConPTY) the PTY reader does not hit EOF when the shell exits
+    // while we still hold the master, so `exit` would leave the tab hanging.
+    // Wait on the child directly and signal the pump loop when it ends.
+    let mut killer = child.clone_killer();
+    let (exit_tx, mut exit_rx) = tokio::sync::oneshot::channel::<()>();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        let _ = exit_tx.send(());
+    });
+
     drop(pair.slave);
 
     let master = pair.master;
@@ -399,6 +409,16 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
                     send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
                     flush_timer.as_mut().reset(park());
                 }
+                _ = &mut exit_rx => {
+                    // Shell exited: let the reader flush its last output, then close.
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    while let Ok(data) = pty_out_rx.try_recv() {
+                        out_buf.extend_from_slice(&data);
+                    }
+                    clean_exit = true;
+                    send_terminal_batch(&output_channels, &terminal_id_clone, &mut out_buf).await;
+                    break;
+                }
                 opt_cmd = rx.recv() => {
                     match opt_cmd {
                         Some(cmd) => match cmd {
@@ -428,8 +448,7 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
             }
         }
 
-        let _ = child.kill();
-        let _ = child.wait();
+        let _ = killer.kill();
 
         let _ = app_clone.emit(&format!("terminal-closed-{}", terminal_id_clone), serde_json::json!({
             "clean_exit": clean_exit
