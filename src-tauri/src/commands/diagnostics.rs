@@ -552,3 +552,35 @@ pub fn set_ui_zoom(webview_window: tauri::WebviewWindow, factor: f64) -> Result<
         Ok(())
     }
 }
+
+/// Whether SubTerm is registered to start when the user signs in (Settings > General). The OS owns
+/// this state (Run key / LaunchAgent / autostart entry), so it is read live, not stored by the app.
+#[tauri::command]
+pub fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+        app.autolaunch().is_enabled().map_err(|e| format!("Could not read the startup setting: {e}"))
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = app;
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+        let launcher = app.autolaunch();
+        let res = if enabled { launcher.enable() } else { launcher.disable() };
+        res.map_err(|e| format!("Could not change the startup setting: {e}"))
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = (app, enabled);
+        Err("Not available on this platform".into())
+    }
+}

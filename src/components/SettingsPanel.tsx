@@ -261,6 +261,23 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
     window.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, sync);
     return () => window.removeEventListener(FEATURE_FLAGS_CHANGED_EVENT, sync);
   }, []);
+  // Start on login: the OS holds this state, so it is read from the backend rather than stored as a setting.
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [autostartErr, setAutostartErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (part !== 'general' || IS_MOBILE_OS) return;
+    invoke<boolean>('get_autostart').then((v) => setAutostart(v === true)).catch(() => setAutostart(null));
+  }, [part]);
+  const toggleAutostart = async () => {
+    const next = !(autostart === true);
+    setAutostartErr(null);
+    try {
+      await invoke('set_autostart', { enabled: next });
+      setAutostart(next);
+    } catch (e) {
+      setAutostartErr(String(e));
+    }
+  };
   const [localShells, setLocalShells] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
     if (part !== 'general' || IS_MOBILE_OS) return;
@@ -638,6 +655,12 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
                 {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
               </select>
             </Row>
+            {!IS_MOBILE_OS && autostart !== null && (
+              <Row id="autostart" label="Start when I sign in" desc="Launch SubTerm automatically when you sign in to this computer. It opens to the unlock screen.">
+                <Toggle checked={autostart === true} onChange={() => { void toggleAutostart(); }} />
+              </Row>
+            )}
+            {autostartErr && <p role="alert" className="text-[11px] text-rose-400 pb-2">{autostartErr}</p>}
             {!IS_MOBILE_OS && (
               <Row id="local-shell" label="Default local shell" desc="Opened by the Local item and Ctrl+Alt+T. Automatic picks PowerShell 7, else Windows PowerShell (or $SHELL on macOS/Linux).">
                 <select
@@ -1275,6 +1298,7 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 // Search index: one entry per settings row/section that carries a data-setting id.
 export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
   { id: "startup", page: "general", label: "Startup", keywords: "launch open start" },
+  { id: "autostart", page: "general", label: "Start when I sign in", keywords: "startup login boot autostart launch sign in windows" },
   { id: "local-shell", page: "general", label: "Default local shell", keywords: "powershell pwsh cmd bash wsl git shell terminal local" },
   { id: "backup", page: "general", label: "Backup & Restore", keywords: "export import preferences settings backup restore migrate move" },
   { id: "backup-actions", page: "general", label: "Preferences file", keywords: "export import preferences backup" },

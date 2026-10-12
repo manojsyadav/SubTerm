@@ -223,6 +223,10 @@ pub fn run() {
     // not us, and the plugin's crate isn't compiled into the Android target.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    // Start-on-login (Settings > General). Driven only from Rust (`get_autostart` / `set_autostart`),
+    // so no plugin permission is granted to the webview.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None));
     // Cross-platform URL opener — Android (Intent.ACTION_VIEW), Windows
     // (start), macOS (open), Linux (xdg-open). about.rs's open_external_url
     // dispatches through this so the same code path works in the desktop
@@ -309,6 +313,8 @@ pub fn run() {
             commands::sync::get_sync_excluded,
             commands::profile::save_text_file,
             commands::diagnostics::set_ui_zoom,
+            commands::diagnostics::get_autostart,
+            commands::diagnostics::set_autostart,
             commands::rdp::launch_rdp,
             commands::rdp_session::rdp_connect,
             commands::rdp_session::rdp_send_input,

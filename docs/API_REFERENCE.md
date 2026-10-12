@@ -208,6 +208,11 @@ This document provides a technical reference for all Tauri IPC commands register
 - **Input Arguments**: `{ maxEntries: number; maxAgeDays: number }`
 - **Return Type**: `Result<(), String>`
 
+### `get_autostart` / `set_autostart`
+- **Description**: Read or change whether SubTerm launches at sign-in, through `tauri-plugin-autostart` (Windows Run key, macOS LaunchAgent, Linux autostart entry). The OS owns the state, so it is not stored in preferences. No-op or error on mobile.
+- **Input Arguments**: `get_autostart`: none. `set_autostart`: `{ enabled: boolean }`
+- **Return Type**: `Result<bool, String>` / `Result<(), String>`
+
 ### `set_ssh_connect_timeout`
 - **Description**: Sets how long the initial TCP connect (direct, SOCKS5 or HTTP proxy) may take. Clamped to 3 to 120 seconds; applies to the next connection.
 - **Input Arguments**: `{ secs: number }`

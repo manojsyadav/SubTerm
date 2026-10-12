@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(startup)` — Start on login**:
+  Settings > General > Start when I sign in launches SubTerm automatically at sign-in (desktop). The switch reflects the operating system's own state.
+
 - **`feat(a11y)` — Reduce motion**:
   Settings > Appearance > Accessibility can turn off animations and transitions, following the OS setting by default.
 
