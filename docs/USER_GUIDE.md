@@ -66,6 +66,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 8a. **ssh / sftp from a Local Terminal**:
    - When you type a plain `ssh [user@]host` or `sftp host` in a **local** terminal, a bar appears at the bottom of the pane.
+   - The command is read from the line as the shell shows it, so Tab completion and history recall (Up arrow) use the completed host. Text after the cursor, such as inline predictions, is ignored.
    - **Saved server**: if the host (or its `~/.ssh/config` alias) matches a saved server, the bar offers to open it with its stored settings. If you typed `user@`, the saved user must match; otherwise any user does. `sftp` also opens the file panel.
    - **Not saved**: choose **Save & open** (adds it to your server list) or **Quick Connect** (opens it without saving). With no readable, unencrypted key (`-i` or the config's `IdentityFile`) the Quick Connect form opens pre-filled so you only type the password. Passwords are never read from the terminal.
    - Accepting stops the shell's own `ssh` (Ctrl+C), so only the native session remains. **Settings > Features > When you type ssh / sftp** can instead open a single matching saved server automatically; unknown hosts still ask.

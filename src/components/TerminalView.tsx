@@ -20,7 +20,7 @@ const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ defa
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
-import { parseSshCommand, sshTargetKey, SshTarget, SSH_ENDED_RE } from '../terminal/sshCommand';
+import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { playTerminalBellChime } from '../terminal/bell';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
@@ -477,6 +477,8 @@ const TerminalView = ({
   // (closed / refused / unreachable / auth failure). While set, typed lines go to the remote
   // shell, so ssh typed there must not trigger an offer. Best effort: it is cleared from output text.
   const sshForegroundRef = useRef(false);
+  // Tab / escape sequences seen on the current line: the keystroke buffer no longer matches what the shell shows.
+  const lineEditedRef = useRef(false);
   const clearSshOfferTimer = () => {
     if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
   };
@@ -526,6 +528,25 @@ const TerminalView = ({
   };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  // The logical command line as rendered (wrapped rows joined), cut at the cursor.
+  const readScreenCommand = (): string => {
+    const term = xtermRef.current;
+    if (!term) return '';
+    const buf = term.buffer.active;
+    let y = buf.baseY + buf.cursorY;
+    const last = buf.getLine(y);
+    if (!last) return '';
+    const parts = [last.translateToString(false, 0, buf.cursorX)];
+    let row = last;
+    while (row.isWrapped && y > 0) {
+      y -= 1;
+      const prev = buf.getLine(y);
+      if (!prev) break;
+      parts.unshift(prev.translateToString(false));
+      row = prev;
+    }
+    return parts.join('');
+  };
   const openMenuAt = (x: number, y: number) => {
     const term = xtermRef.current;
     if (!term) return;
@@ -1153,9 +1174,14 @@ const TerminalView = ({
             setLastCommand(null);
           }
           commandBufRef.current = "";
+          lineEditedRef.current = false;
           // Local shell only: offer to save/open a typed ssh/sftp target natively.
           if (isLocal && isFeatureEnabled('sshDetect') && !sshForegroundRef.current && !looksLikePasswordPrompt(recentOutputRef.current)) {
-            const target = parseSshCommand(line);
+            // Prefer what the shell shows (Tab completion, history recall); the keystroke
+            // buffer is only trusted when the line was typed plainly. Cut at the cursor so
+            // inline predictions (PSReadLine, zsh-autosuggestions) are not read as typed.
+            const edited = lineEditedRef.current;
+            const target = parseSshFromScreen(readScreenCommand(), line, edited) ?? (edited ? null : parseSshCommand(line));
             if (target) {
               sshForegroundRef.current = true;
               if (!sshDismissedRef.current.has(sshTargetKey(target))) void handleSshTyped(target);
@@ -1177,7 +1203,11 @@ const TerminalView = ({
         } else if (ch === 0x03 /* Ctrl+C */ || ch === 0x15 /* Ctrl+U */) {
           // Reset the buffer — the shell just cleared the line.
           commandBufRef.current = "";
+          lineEditedRef.current = false;
+        } else if (ch === 0x09 /* Tab — shell completion */) {
+          lineEditedRef.current = true;
         } else if (ch === 0x1b /* ESC — arrow keys etc. */) {
+          lineEditedRef.current = true;
           // Skip the whole ESC sequence rather than treating the following
           // bytes as literal characters. Simple heuristic:
           //   ESC [ ... <final>   → CSI, final byte is 0x40-0x7e

@@ -133,3 +133,33 @@ export function sshTargetKey(t: SshTarget): string {
 /** Output that means the ssh/sftp client has returned to the local shell. */
 export const SSH_ENDED_RE =
   /Connection to .+ closed|Connection closed by|Connection (?:refused|reset|timed out)|Could not resolve hostname|Permission denied|No route to host|Host key verification failed|Network is unreachable|^logout$/im;
+
+const isSshBinary = (tok: string) => /^(?:.*[\/])?(?:ssh|sftp)(?:\.exe)?$/i.test(tok);
+
+/**
+ * Detect ssh/sftp from the command line as the shell actually shows it, not as
+ * keystrokes were seen: Tab completion and history recall (Up arrow) change the
+ * line without a matching keystroke, so the typed buffer alone yields partial or
+ * stale hosts. `screenLine` is the visible command line up to the cursor
+ * (prompt included); `typed` is the keystroke buffer; `edited` is true when the
+ * line used Tab or an escape sequence (completion, history, cursor keys).
+ *
+ * The prompt is skipped by taking the first token boundary from which a plain
+ * ssh/sftp command parses. To avoid reading `echo ssh host` as ssh, the typed
+ * buffer must start like ssh/sftp (or be absent/edited, where it cannot be trusted).
+ */
+export function parseSshFromScreen(screenLine: string, typed: string, edited: boolean): SshTarget | null {
+  const t = typed.trim();
+  if (t && !edited) {
+    const first = t.split(/\s+/)[0];
+    if (!isSshBinary(first)) return null;
+  }
+  const text = screenLine.replace(/\s+$/, "");
+  for (let i = 0; i < text.length; i++) {
+    if (i > 0 && !/[\s>$#%]/.test(text[i - 1])) continue;
+    if (/\s/.test(text[i])) continue;
+    const target = parseSshCommand(text.slice(i));
+    if (target) return target;
+  }
+  return null;
+}

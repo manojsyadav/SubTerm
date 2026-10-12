@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSshCommand, SSH_ENDED_RE } from "./sshCommand";
+import { parseSshCommand, parseSshFromScreen, SSH_ENDED_RE } from "./sshCommand";
 
 describe("parseSshCommand", () => {
   it("parses user@host", () => {
@@ -55,5 +55,33 @@ describe("SSH_ENDED_RE", () => {
       "logout\r\n",
     ]) expect(SSH_ENDED_RE.test(t), t).toBe(true);
     expect(SSH_ENDED_RE.test("total 8\r\ndrwxr-xr-x  2 root root")).toBe(false);
+  });
+});
+
+describe("parseSshFromScreen", () => {
+  it("skips the prompt and reads the command as shown", () => {
+    expect(parseSshFromScreen("PS C:\Users\me> ssh 10.0.0.11", "ssh 10.0.0.11", false)).toMatchObject({ host: "10.0.0.11" });
+    expect(parseSshFromScreen("me@box:~$ ssh -p 2222 bob@srv", "ssh -p 2222 bob@srv", false)).toMatchObject({ host: "srv", username: "bob", port: 2222 });
+  });
+
+  it("uses the completed host when Tab changed the line", () => {
+    // typed "ssh 10.0." then Tab completed it
+    expect(parseSshFromScreen("$ ssh 10.0.0.11", "ssh 10.0.", true)).toMatchObject({ host: "10.0.0.11" });
+    // typed "ss" then Tab completed the command name too
+    expect(parseSshFromScreen("$ ssh prod-db", "ss", true)).toMatchObject({ host: "prod-db" });
+  });
+
+  it("handles a command recalled from history (nothing typed)", () => {
+    expect(parseSshFromScreen("PS> ssh me@files", "", true)).toMatchObject({ host: "files", username: "me" });
+    expect(parseSshFromScreen("PS> ssh me@files", "", false)).toMatchObject({ host: "files" });
+  });
+
+  it("does not read ssh out of another command", () => {
+    expect(parseSshFromScreen("$ echo ssh box", "echo ssh box", false)).toBeNull();
+    expect(parseSshFromScreen("$ git log", "git log", false)).toBeNull();
+  });
+
+  it("still rejects complex invocations", () => {
+    expect(parseSshFromScreen("$ ssh host ls", "ssh host ls", false)).toBeNull();
   });
 });
