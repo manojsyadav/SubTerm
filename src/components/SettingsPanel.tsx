@@ -24,7 +24,7 @@ import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
 import { TerminalTrigger, TriggerAction, getTerminalTriggers, saveTerminalTriggers, newTrigger } from "../terminal/triggers";
 
-type CategoryId = "general" | "appearance" | "terminal" | "features" | "quick" | "monitoring" | "cloud" | "profile" | "security" | "maintenance" | "logs";
+type CategoryId = "general" | "appearance" | "terminal" | "features" | "quick" | "monitoring" | "cloud" | "profile" | "system";
 
 interface Category {
   id: CategoryId;
@@ -35,7 +35,7 @@ interface Category {
 
 // Categories that require the vault to be unlocked before use.
 // "quick" is not listed: its keyboard-shortcuts tab works while locked, and the page gates its other tabs itself.
-const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "security", "maintenance", "logs"];
+const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "system"];
 
 const CATEGORIES: Category[] = [
   { id: "general",       label: "General",            icon: <SlidersHorizontal size={16} />, description: "Startup and remote desktop" },
@@ -46,9 +46,7 @@ const CATEGORIES: Category[] = [
   { id: "monitoring",    label: "Monitoring",         icon: <Activity size={16} />,    description: "Resource polling and alerts" },
   { id: "cloud",         label: "Cloud and Sync",     icon: <Cloud size={16} />,       description: "Cloud account and sync settings" },
   { id: "profile",       label: "Profile",            icon: <User size={16} />,        description: "Manage and switch profiles" },
-  { id: "security",      label: "Known Hosts",        icon: <ShieldCheck size={16} />, description: "Trusted host keys and fingerprints" },
-  { id: "maintenance",   label: "Maintenance",        icon: <RefreshCw size={16} />,   description: "Reset defaults and diagnostics" },
-  { id: "logs",          label: "Activity Log",       icon: <List size={16} />,        description: "Session diagnostics timeline" },
+  { id: "system",        label: "System",             icon: <ShieldCheck size={16} />, description: "Known hosts, maintenance and the activity log" },
 ];
 
 // â”€â”€â”€ Reusable primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -822,6 +820,25 @@ const PageProfile = ({ onUnlocked, activeProfile, onSwitchProfile, isUnlocked, o
 );
 
 
+const SegmentedTabs = <T extends string>({ tabs, value, onChange }: {
+  tabs: { id: T; label: string; locked?: boolean }[]; value: T; onChange: (id: T) => void;
+}) => (
+  <div role="tablist" className="flex flex-wrap gap-1 p-1 rounded-xl bg-black/30 border border-white/5 w-fit">
+    {tabs.map((t) => (
+      <button
+        key={t.id}
+        role="tab"
+        aria-selected={value === t.id}
+        onClick={() => onChange(t.id)}
+        className={`px-3.5 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${value === t.id ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
+      >
+        {t.label}
+        {t.locked && <Lock size={10} className="text-amber-500/70" />}
+      </button>
+    ))}
+  </div>
+);
+
 type QuickTab = "servers" | "commands" | "shortcuts";
 
 // Pinned servers, quick commands and keyboard shortcuts share one page behind a
@@ -839,20 +856,7 @@ const PageQuick = ({ settings, setSettings, servers, isUnlocked, onRequestUnlock
   const current = tabs.find((t) => t.id === tab)!;
   return (
     <div className="space-y-6">
-      <div role="tablist" className="flex flex-wrap gap-1 p-1 rounded-xl bg-black/30 border border-white/5 w-fit">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-3.5 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${tab === t.id ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            {t.label}
-            {t.locked && <Lock size={10} className="text-amber-500/70" />}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} />
       {current.locked ? (
         <LockedPage label={current.label} onRequestUnlock={onRequestUnlock} />
       ) : tab === "servers" ? (
@@ -923,6 +927,32 @@ const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: 
         {servers.length === 0 && <p className="text-xs text-zinc-500 italic mt-2">No saved servers to export.</p>}
         {exportMsg && <p className="text-xs text-zinc-400 mt-2">{exportMsg}</p>}
       </SectionCard>
+    </div>
+  );
+};
+
+type SystemTab = "hosts" | "maintenance" | "log";
+
+// Known hosts, maintenance and the activity log are all occasional housekeeping, so they
+// share one page with a segmented control. The whole category sits behind the vault lock.
+const PageSystemTabs = ({ settings, setSettings, servers, folders, onOpenLogs }: SettingsPageProps & {
+  servers: ServerRecord[]; folders: Folder[]; onOpenLogs?: () => void;
+}) => {
+  const [tab, setTab] = useState<SystemTab>("hosts");
+  return (
+    <div className="space-y-6">
+      <SegmentedTabs
+        tabs={[
+          { id: "hosts" as SystemTab, label: "Known Hosts" },
+          { id: "maintenance" as SystemTab, label: "Maintenance" },
+          { id: "log" as SystemTab, label: "Activity Log" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === "hosts" && <SettingsKnownHosts />}
+      {tab === "maintenance" && <PageMaintenance settings={settings} setSettings={setSettings} servers={servers} folders={folders} />}
+      {tab === "log" && <PageLogs onOpenLogs={onOpenLogs} />}
     </div>
   );
 };
@@ -1033,9 +1063,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       case "monitoring":    return <PageMonitoring settings={settings} setSettings={setSettings} />;
       case "cloud":         return <PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />;
       case "profile":       return <PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />;
-      case "security":      return <SettingsKnownHosts />;
-      case "maintenance":   return <PageMaintenance settings={settings} setSettings={setSettings} servers={servers} folders={folders} />;
-      case "logs":          return <PageLogs onOpenLogs={onOpenLogs} />;
+      case "system":        return <PageSystemTabs settings={settings} setSettings={setSettings} servers={servers} folders={folders} onOpenLogs={onOpenLogs} />;
       default:              return null;
     }
   };

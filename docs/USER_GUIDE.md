@@ -213,7 +213,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 ## 3. Configuration & Customization
 
-SubTerm includes a **Settings Panel** with 11 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
+SubTerm includes a **Settings Panel** with 9 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
 
 - **General**: **On Startup** chooses what opens after you unlock a profile: *Server List* (default), *Reopen Last Session* (saved servers and local shells; Quick Connect sessions fall back to the list) or *New Local Terminal*. Servers marked **Autostart** always open first. **Remote Desktop (RDP)** chooses where RDP servers open.
 - **Appearance**: Accent color, background, and the terminal theme, font, line height, scrollback, cursor, WebGL and bell options listed below.
@@ -238,9 +238,10 @@ SubTerm includes a **Settings Panel** with 11 pages and a search box that jumps 
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization. Under **What to sync on this device** you can leave out servers, credentials, saved commands or notes on this device only; unchecked data is neither uploaded nor downloaded.
 - **Profiles & Workspaces**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
-- **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
+- **System**: one page with three tabs, all behind the vault lock.
+  - **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
 - **Changed-from-default markers**: on the General, Appearance, Terminal and Features pages a small dot appears beside any setting you have changed; click it to restore that one setting. **Reset this page to defaults** under the page title restores the whole page.
-- **Maintenance**: Reset UI preferences to factory defaults, and **Export Server List** to a portable JSON or CSV file (name, host, port, username, folder, proxy, notes — never passwords or keys) for backup or migration.
+  - **Maintenance**: Reset UI preferences to factory defaults, and **Export Server List** to a portable JSON or CSV file (name, host, port, username, folder, proxy, notes — never passwords or keys) for backup or migration.
 
 ---
 
@@ -250,7 +251,7 @@ SubTerm includes a **Settings Panel** with 11 pages and a search box that jumps 
 On the first connection to any server, SubTerm displays the server's public key fingerprint (SHA256). Verify that this fingerprint matches your server's fingerprint to protect against Man-in-the-Middle (MITM) attacks before clicking **Trust & Connect**.
 
 ### Q: How do I remove a revoked or changed SSH host key?
-If a remote server's OS was re-installed or its SSH host key was rotated, navigate to **Settings (`Ctrl+,`) > Known Hosts**, find the entry for that host/port, and click **Revoke**. When you reconnect to the server, SubTerm will display a fresh fingerprint prompt to trust the new key.
+If a remote server's OS was re-installed or its SSH host key was rotated, navigate to **Settings (`Ctrl+,`) > System > Known Hosts**, find the entry for that host/port, and click **Revoke**. When you reconnect to the server, SubTerm will display a fresh fingerprint prompt to trust the new key.
 
 ### Q: "No common key algorithm" or connection fails on older Linux servers?
 If you are connecting to older servers that only support legacy RSA host keys (`ssh-rsa`), ensure your SubTerm build was compiled with the `full-ssh-algos` feature:
@@ -266,4 +267,4 @@ Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar
 SubTerm detects both and retries automatically — you don't need to manually reconnect. A sleep/resume cycle or a network change (Wi-Fi roam, VPN toggle, cable unplug) triggers an immediate reconnect attempt instead of waiting for the passive connection-health check to notice. If the server is still unreachable, retries continue with increasing backoff (2s, 4s, 8s, up to 30s) until it comes back, shown as a "Reconnecting · attempt N" banner. A connection you disconnected yourself (right-click → Disconnect) never auto-reconnects — click **Reconnect** on the banner when you're ready.
 
 ### Q: Why are some settings categories showing a lock screen?
-Sensitive settings categories (Profiles, Cloud Sync, the Pinned Servers and Quick Commands tabs of Quick Access, Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
+Sensitive settings categories (Profiles, Cloud Sync, the Pinned Servers and Quick Commands tabs of Quick Access, System (Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.

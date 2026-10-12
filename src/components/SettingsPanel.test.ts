@@ -13,6 +13,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const { default: SettingsPanel, SETTINGS_INDEX } = await import("./SettingsPanel");
 const { FEATURES } = await import("../featureFlags");
+const { ConfirmProvider } = await import("../ui/confirm");
+
+// Some tabs (Known Hosts) use the app-wide confirm dialog.
+const panel = (props: Record<string, unknown>) =>
+  createElement(ConfirmProvider as never, null, createElement(SettingsPanel as never, { settings, setSettings, ...props }));
 
 let host: HTMLDivElement;
 let root: Root;
@@ -33,7 +38,7 @@ beforeEach(() => {
 
 function render() {
   act(() => {
-    root.render(createElement(SettingsPanel as never, { settings, setSettings, isUnlocked: true }));
+    root.render(panel({ isUnlocked: true }));
   });
 }
 
@@ -135,11 +140,28 @@ describe("SettingsPanel layout", () => {
   });
 
   it("keeps the shortcuts tab usable while the vault is locked", () => {
-    act(() => { root.render(createElement(SettingsPanel as never, { settings, setSettings, isUnlocked: false })); });
+    act(() => { root.render(panel({ isUnlocked: false })); });
     click(nav("Quick Access"));
     const selected = host.querySelector('[role="tab"][aria-selected="true"]');
     expect(selected?.textContent).toContain("Keyboard Shortcuts");
     click([...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent?.includes("Pinned")));
     expect(host.textContent).toContain("Vault is locked");
+  });
+
+  it("merges known hosts, maintenance and the activity log into one System page", () => {
+    const labels = [...host.querySelectorAll("nav button")].map((b) => b.textContent ?? "");
+    expect(labels.some((l) => l.includes("System"))).toBe(true);
+    for (const old of ["Known Hosts", "Maintenance", "Activity Log"]) expect(labels.some((l) => l.includes(old)), old).toBe(false);
+    click(nav("System"));
+    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Known Hosts", "Maintenance", "Activity Log"]);
+    click([...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent === "Maintenance"));
+    expect(host.textContent).toContain("Reset Preferences");
+  });
+
+  it("locks the whole System page while the vault is locked", () => {
+    act(() => { root.render(panel({ isUnlocked: false })); });
+    click(nav("System"));
+    expect(host.textContent).toContain("Vault is locked");
+    expect(host.querySelector('[role="tab"]')).toBeNull();
   });
 });

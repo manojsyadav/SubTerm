@@ -68,7 +68,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Parameterized Snippets Engine**: Runbook automation with `{{variable:defaultValue}}` placeholders and interactive variable prompting.
 - **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
 - **Activity Sidebar**: Local (opens your default shell: PowerShell, CMD, Git Bash, WSL, or `$SHELL`), Servers, SFTP (full-width file browser for any server), RDP, Credentials, Snippets and Monitor, each one click away.
-- **VS Code-Style Settings Panel**: 11 focused pages (General, Appearance, Terminal, Features and more) with a vertical left-sidebar navigator, a settings search box and vault-gated security screens.
+- **VS Code-Style Settings Panel**: 9 focused pages (General, Appearance, Terminal, Features and more) with a vertical left-sidebar navigator, a settings search box and vault-gated security screens.
 
 ---
 
@@ -84,9 +84,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 | Quick Access | Partly | Tabs for pinned servers and quick commands (**unlock required**: names/IPs and commands may be sensitive) and keyboard shortcuts (no unlock) |
 | Cloud & Sync | **Yes** | Cloud API endpoint, auth, push/pull sync operations |
 | Profile | **Yes** | Create, rename, delete workspaces; change master password |
-| Known Hosts | **Yes** | Trusted SSH host keys and fingerprints, fingerprint revocation |
-| Maintenance | **Yes** | Reset preferences to factory defaults, cache purge |
-| Activity Log | **Yes** | Session diagnostics timeline and connection logs |
+| System | **Yes** | Tabs for Known Hosts (trusted SSH host keys and fingerprints, revocation), Maintenance (reset preferences, cache purge, export) and Activity Log (session diagnostics timeline) |
 
 ---
 
