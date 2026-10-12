@@ -14,8 +14,8 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 
 ### 1.2 The Sidebar Pages
 The left sidebar (bottom bar on narrow windows) has one entry per activity:
-- **Servers**: your saved servers and folders (the home page).
 - **Local**: opens a local terminal with your default shell, or switches to the one already open. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL). The tab strip's shell menu still opens any other shell.
+- **Servers**: your saved servers and folders (the home page).
 - **SFTP**: a searchable list of your SSH servers. Click one to open its file browser across the whole window, with this computer's files on one side and the server's on the other (drag to transfer). Close the file browser (the **x** in its header) to return to the terminal; the terminal keeps running behind it.
 - **RDP**: a searchable list of your Remote Desktop servers with a **New RDP server** button. Connect opens it inside SubTerm or in the system client, as set under **Settings > General > Remote Desktop**. Hidden when the RDP feature is turned off.
 - **Credentials** (formerly *Logins*): saved passwords and SSH keys.

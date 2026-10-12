@@ -150,8 +150,8 @@ export const Sidebar = ({
   // Logins, Library, Monitor) so it isn't padded with a workflow that
   // only makes sense while sessions are open.
   const items = [
-    { id: 'nodes', icon: Server, label: 'Servers' },
     { id: 'local', icon: Terminal, label: 'Local' },
+    { id: 'nodes', icon: Server, label: 'Servers' },
     { id: 'sftp', icon: FolderOpen, label: 'SFTP' },
     ...(showRdp ? [{ id: 'rdp', icon: Monitor, label: 'RDP' }] : []),
     { id: 'vault', icon: KeyRound, label: 'Credentials' },
