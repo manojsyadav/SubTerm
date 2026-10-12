@@ -432,6 +432,33 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
             <option value="bar">Bar (Vertical Line)</option>
           </select>
         </Row>
+        <Row id="cursor-color" label="Cursor Colour" desc="Override the theme's cursor colour">
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={/^#[0-9a-f]{6}$/i.test(settings.terminalCursorColor || "") ? settings.terminalCursorColor : "#ffffff"}
+              onChange={(e) => setSettings({ ...settings, terminalCursorColor: e.target.value })}
+              className="w-6 h-6 rounded-md bg-transparent cursor-pointer border-none p-0"
+            />
+            <button
+              type="button"
+              disabled={!settings.terminalCursorColor}
+              onClick={() => setSettings({ ...settings, terminalCursorColor: "" })}
+              className="px-2 h-6 rounded text-[10px] font-bold text-zinc-400 hover:text-white disabled:opacity-40"
+            >
+              {settings.terminalCursorColor ? "Use theme colour" : "Theme colour"}
+            </button>
+          </div>
+        </Row>
+        <Row id="terminal-padding" label="Terminal Padding" desc="Space between the window edge and the text">
+          <select
+            value={settings.terminalPadding ?? 0}
+            onChange={(e) => setSettings({ ...settings, terminalPadding: parseInt(e.target.value, 10) || 0 })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            {[0, 4, 8, 12, 16, 24].map((px) => <option key={px} value={px}>{px === 0 ? "None" : `${px} px`}</option>)}
+          </select>
+        </Row>
         <Row id="cursor-blink" label="Cursor Blinking" desc="Animate cursor blinking when the terminal is focused">
           <Toggle
             checked={settings.terminalCursorBlink !== false}
@@ -591,6 +618,29 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
                 <option value="ctrl-click">Ctrl/Cmd + Click</option>
                 <option value="click">Plain Click</option>
               </select>
+            </Row>
+            <Row id="paste-review" label="Review multi-line paste" desc="Ask before pasting this many lines or more (guards against pasting a script by accident)">
+              <select
+                value={settings.pasteReviewLines ?? 3}
+                onChange={(e) => setSettings({ ...settings, pasteReviewLines: parseInt(e.target.value, 10) || 0 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={0}>Never ask</option>
+                {[2, 3, 5, 10, 20].map((n) => <option key={n} value={n}>{n} lines{n === 3 ? " (default)" : ""}</option>)}
+              </select>
+            </Row>
+            <Row id="word-separators" label="Word separators" desc="Characters that end a word when you double-click to select">
+              <input
+                type="text"
+                value={settings.wordSeparators ?? ""}
+                onChange={(e) => setSettings({ ...settings, wordSeparators: e.target.value })}
+                spellCheck={false}
+                aria-label="Word separators"
+                className="w-40 h-8 bg-black/60 border border-white/10 rounded-lg px-2 text-xs font-mono text-white outline-none focus:border-primary/50"
+              />
+            </Row>
+            <Row id="scroll-on-input" label="Scroll to bottom on typing" desc="Jump back to the newest output when you type while scrolled up">
+              <Toggle checked={settings.scrollOnInput !== false} onChange={() => setSettings({ ...settings, scrollOnInput: settings.scrollOnInput === false })} />
             </Row>
             <Row id="auto-copy-output" label="Auto-copy command output" desc="Copy a command's output to the clipboard when it finishes">
               <Toggle checked={!!settings.autoCopyOutput} onChange={() => setSettings({ ...settings, autoCopyOutput: !settings.autoCopyOutput })} />
@@ -1006,12 +1056,17 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "font-size", page: "appearance", label: "Font Size", keywords: "text size zoom" },
   { id: "line-height", page: "appearance", label: "Line Height", keywords: "spacing" },
   { id: "scrollback", page: "appearance", label: "Scrollback Buffer", keywords: "history lines memory" },
+  { id: "cursor-color", page: "appearance", label: "Cursor Colour", keywords: "cursor colour color caret" },
+  { id: "terminal-padding", page: "appearance", label: "Terminal Padding", keywords: "padding margin spacing" },
   { id: "cursor-style", page: "appearance", label: "Cursor Style", keywords: "block underline bar" },
   { id: "cursor-blink", page: "appearance", label: "Cursor Blinking", keywords: "blink" },
   { id: "webgl", page: "appearance", label: "WebGL Acceleration", keywords: "gpu rendering performance" },
   { id: "bell", page: "appearance", label: "Terminal Bell", keywords: "beep sound notification" },
   { id: "mouse", page: "terminal", label: "Mouse & Clipboard", keywords: "mouse clipboard copy paste links" },
   { id: "sessions", page: "terminal", label: "Sessions", keywords: "session exit close keep alive audit" },
+  { id: "paste-review", page: "terminal", label: "Review multi-line paste", keywords: "paste lines confirm script safety" },
+  { id: "word-separators", page: "terminal", label: "Word separators", keywords: "double click select word" },
+  { id: "scroll-on-input", page: "terminal", label: "Scroll to bottom on typing", keywords: "scroll keypress output" },
   { id: "right-click", page: "terminal", label: "Right-Click", keywords: "paste copy context menu mouse smart" },
   { id: "copy-on-select", page: "terminal", label: "Copy on select", keywords: "clipboard selection" },
   { id: "open-links", page: "terminal", label: "Open Links", keywords: "ctrl click url file path hyperlink" },

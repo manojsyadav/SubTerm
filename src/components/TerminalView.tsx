@@ -22,6 +22,7 @@ import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
 import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
+import { withCursorColor } from '../terminal/cursorColor';
 import { playTerminalBellChime } from '../terminal/bell';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
 
@@ -711,9 +712,12 @@ const TerminalView = ({
       fontFamily,
       lineHeight,
       scrollback,
-      theme: getTerminalTheme(themeId),
+      theme: withCursorColor(getTerminalTheme(themeId)),
+      wordSeparator: localStorage.getItem('subterm-word-separators') ?? undefined,
+      scrollOnUserInput: localStorage.getItem('subterm-scroll-on-input') !== 'false',
       allowProposedApi: true
     });
+    if (terminalRef.current) terminalRef.current.style.padding = `${Math.max(0, parseInt(localStorage.getItem('subterm-terminal-padding') || '0', 10) || 0)}px`;
 
     const fitAddon = new FitAddon();
     fitAddonRef.current = fitAddon;
@@ -1331,7 +1335,9 @@ const TerminalView = ({
       }
 
       const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-      if (lines.length >= 3 && !pasteSafetyBypass) {
+      // 0 turns the review off; the default of 3 matches the old fixed limit.
+      const reviewAt = Math.max(0, parseInt(localStorage.getItem('subterm-paste-review-lines') || '3', 10) || 0);
+      if (reviewAt > 0 && lines.length >= reviewAt && !pasteSafetyBypass) {
         setScriptPasteModal({ text, lines });
         return;
       }
@@ -1694,7 +1700,15 @@ const TerminalView = ({
         term.options.scrollback = newScrollback;
       }
       const newThemeId = localStorage.getItem('subterm-terminal-theme') || 'subterm-dark';
-      term.options.theme = getTerminalTheme(newThemeId);
+      term.options.theme = withCursorColor(getTerminalTheme(newThemeId));
+      const newSeparators = localStorage.getItem('subterm-word-separators');
+      if (newSeparators !== null && term.options.wordSeparator !== newSeparators) term.options.wordSeparator = newSeparators;
+      term.options.scrollOnUserInput = localStorage.getItem('subterm-scroll-on-input') !== 'false';
+      const newPadding = Math.max(0, parseInt(localStorage.getItem('subterm-terminal-padding') || '0', 10) || 0);
+      if (terminalRef.current && terminalRef.current.style.padding !== `${newPadding}px`) {
+        terminalRef.current.style.padding = `${newPadding}px`;
+        needsFit = true;
+      }
       const newCursorStyle = (localStorage.getItem('subterm-terminal-cursor-style') || 'block') as 'block' | 'underline' | 'bar';
       term.options.cursorStyle = newCursorStyle;
       const newCursorBlink = localStorage.getItem('subterm-terminal-cursor-blink') !== 'false';

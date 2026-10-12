@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(terminal)` — More terminal settings**:
+  New options: review multi-line paste threshold (was fixed at 3 lines; 0 turns it off), word separators for double-click selection, scroll-to-bottom on typing, cursor colour override and terminal padding. All apply to open terminals immediately.
+
 - **Behaviour changes to know about**:
   A local shell no longer opens at launch unless **Settings > General > On Startup** is *New Local Terminal* (the app lands on the server list). Right-click now defaults to *Smart* (copy selection, else paste; Shift+Right-Click for the menu), and links in terminal output need Ctrl/Cmd+Click (**Settings > Terminal > Open Links** restores plain click). Existing saved choices for these settings are kept.
 

@@ -255,6 +255,8 @@ The Settings interface (`src/components/SettingsPanel.tsx`) uses a 7-page vertic
 
 `src/settingsDefaults.ts` holds the factory values for these pages and the row-id to setting-key map. It drives the changed-from-default dot (`SettingsMetaContext` in `SettingsPanel.tsx`), per-row reset and **Reset this page**. Feature flags count as changed when disabled. Keep `SETTING_DEFAULTS` in step with the fallbacks in `DesktopApp.tsx`.
 
+Terminal options (`subterm-paste-review-lines`, `-word-separators`, `-scroll-on-input`, `-cursor-color`, `-terminal-padding`) are read by `TerminalView` from storage at creation and again on `subterm-settings-changed`, so changes reach open terminals without a restart. `withCursorColor` (`src/terminal/cursorColor.ts`) layers the cursor override on the active theme.
+
 Settings are stored one `localStorage` key per value (`subterm-*`), written from `DesktopApp.tsx`; a few are also pushed to the backend at runtime.
 
 ### Sidebar pages

@@ -129,6 +129,11 @@ function DesktopApp() {
     terminalBell: localStorage.getItem('subterm-terminal-bell') || 'visual',
     terminalFontFamily: localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
     terminalLineHeight: parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15'),
+    pasteReviewLines: Math.max(0, parseInt(localStorage.getItem('subterm-paste-review-lines') || '3', 10) || 0),
+    wordSeparators: localStorage.getItem('subterm-word-separators') ?? " ()[]{}',\"`",
+    scrollOnInput: localStorage.getItem('subterm-scroll-on-input') !== 'false',
+    terminalCursorColor: localStorage.getItem('subterm-cursor-color') || '',
+    terminalPadding: Math.max(0, parseInt(localStorage.getItem('subterm-terminal-padding') || '0', 10) || 0),
     terminalScrollback: parseInt(localStorage.getItem('subterm-terminal-scrollback') || '5000', 10),
     sshKeepaliveSec: parseInt(localStorage.getItem('subterm-ssh-keepalive-sec') || '20', 10),
     quickAccessServerIds: (() => {
@@ -631,6 +636,11 @@ function DesktopApp() {
     localStorage.setItem('subterm-terminal-cursor-blink', appSettings.terminalCursorBlink !== false ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-bell', appSettings.terminalBell || 'visual');
     localStorage.setItem('subterm-terminal-font-family', appSettings.terminalFontFamily || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace');
+    localStorage.setItem('subterm-paste-review-lines', String(appSettings.pasteReviewLines ?? 3));
+    localStorage.setItem('subterm-word-separators', appSettings.wordSeparators ?? " ()[]{}',\"`");
+    localStorage.setItem('subterm-scroll-on-input', appSettings.scrollOnInput === false ? 'false' : 'true');
+    localStorage.setItem('subterm-cursor-color', appSettings.terminalCursorColor || '');
+    localStorage.setItem('subterm-terminal-padding', String(appSettings.terminalPadding ?? 0));
     localStorage.setItem('subterm-terminal-line-height', String(appSettings.terminalLineHeight || 1.15));
     localStorage.setItem('subterm-terminal-scrollback', String(appSettings.terminalScrollback || 5000));
     localStorage.setItem('subterm-ssh-keepalive-sec', String(appSettings.sshKeepaliveSec || 20));
