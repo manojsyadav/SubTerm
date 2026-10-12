@@ -61,10 +61,13 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Typography, Line Height & Scrollback Customization**: Font family presets (*JetBrains Mono*, *Fira Code*, *Cascadia Code*, *Consolas*, *Monaco*, *Source Code Pro*) with custom font support, interactive line-height slider (1.00x–1.60x), and configurable scrollback memory retention (1,000–50,000 lines).
 - **Terminal Bell & Pro Search Widget**: Configurable visual screen flash / Web Audio chime on ASCII bell, plus enhanced `Ctrl+F` search with match counts, case matching (`Aa`), whole words (`\b`), and regex (`.*`).
 - **Terminal Context Menu & Buffer Export**: Glassmorphic right-click menu with Copy, Paste, Select All, Find, Clear, Reset, 1-click buffer export to `.log`, configurable right-click behavior (Context Menu vs PuTTY-style immediate paste), and automatic copy-on-select.
+- **Smart Right-Click & Ctrl+Click Links**: Right-click copies a selection, otherwise pastes; Shift+Right-Click opens the full menu. URLs and file paths in output open on Ctrl/Cmd+Click so a stray click never launches anything. Both are settings (Settings > Terminal > Mouse & Clipboard).
+- **ssh / sftp from a Local Terminal**: Type `ssh host` in a local shell and SubTerm opens the matching saved server, or offers to save the host or Quick Connect it. Aliases from `~/.ssh/config`, `-p`, `-l` and `-i` are honoured; passwords are never read. Choose Ask First or automatic for saved servers, or turn it off under Settings > Features.
+- **Startup View**: Choose what opens after unlock: the server list (default), your last session, or a new local terminal.
 - **Multi-Tab Fleet Broadcast**: Concurrently fan out keystrokes and commands across multiple server sessions with live session targeting and armed safety banners.
 - **Parameterized Snippets Engine**: Runbook automation with `{{variable:defaultValue}}` placeholders and interactive variable prompting.
 - **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
-- **VS Code-Style Settings Panel**: 11 focused category pages with a vertical left-sidebar navigator and vault-gated security screens.
+- **VS Code-Style Settings Panel**: 13 focused pages (General, Appearance, Terminal, Features and more) with a vertical left-sidebar navigator, a settings search box and vault-gated security screens.
 
 ---
 
@@ -72,8 +75,10 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 
 | Category | Requires Unlock | Primary Contents |
 |---|:---:|---|
-| Appearance | — | Accent color, background theme, interface zoom |
-| Terminal | — | Font size/family, session behaviour, command widget |
+| General | — | Startup view, Remote Desktop (RDP) mode |
+| Appearance | — | Accent color, background theme, terminal theme, fonts, cursor, WebGL, bell |
+| Terminal | — | Right-click, copy on select, link opening, sessions, SSH keep-alive, command widget, triggers |
+| Features | — | Optional feature toggles with their options nested underneath |
 | Monitoring | — | Enable/disable resource polling, intervals |
 | Keyboard Shortcuts | — | Rebind global keyboard shortcuts and shortcuts recorder |
 | Quick Access Servers | **Yes** | Pinned servers (exposes server names/IPs) |

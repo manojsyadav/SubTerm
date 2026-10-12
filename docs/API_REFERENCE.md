@@ -182,6 +182,22 @@ This document provides a technical reference for all Tauri IPC commands register
 
 ---
 
+### `resolve_ssh_target`
+- **Description**: Resolves what was typed in a local shell (`ssh [-p N] [-i key] [user@]host`) against `~/.ssh/config`. Command-line values win; the config fills alias to HostName, User, Port and IdentityFile. Returns an error for hosts that use `ProxyJump`. The identity file is read only when it exists and is not passphrase-protected.
+- **Input Arguments**:
+  ```typescript
+  { host: string; username?: string | null; port?: number | null; identityFile?: string | null }
+  ```
+- **Return Type**: `Result<{ host: string; port: number; username: string; private_key: string | null; user_explicit: boolean }, String>`. `user_explicit` is false when `username` is only the local-account fallback.
+
+### `find_saved_servers`
+- **Description**: Saved SSH servers a typed target refers to: same port, and host equal to the resolved host or the typed alias (or alias equal to the node name), case-insensitive. When `username` is given the node's user must match unless the node stores none. RDP nodes are excluded.
+- **Input Arguments**:
+  ```typescript
+  { host: string; alias?: string | null; port: number; username?: string | null }
+  ```
+- **Return Type**: `Result<{ id: number; name: string; host: string; port: number; username: string }[], String>`
+
 ## 3. SSH Credentials & Private Keys
 
 ### `get_credentials`

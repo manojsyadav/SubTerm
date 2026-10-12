@@ -239,12 +239,14 @@ The frontend listens for both events and, for any session currently mid-backoff 
 
 ## 5. Settings Panel Architecture
 
-The Settings interface (`src/components/SettingsPanel.tsx`) uses an 11-category vertical sidebar model:
+The Settings interface (`src/components/SettingsPanel.tsx`) uses a 13-page vertical sidebar model with a search box:
 
 | Category ID | Display Name | Protection Level | Primary Operations |
 |---|---|---|---|
-| `appearance` | Appearance | Unrestricted | UI themes, accent colors, zoom levels |
-| `terminal` | Terminal | Unrestricted | Font family/size, scrollback, command widget |
+| `general` | General | Unrestricted | Startup view, RDP mode |
+| `appearance` | Appearance | Unrestricted | Accent/background colors, terminal theme, fonts, cursor, WebGL, bell |
+| `terminal` | Terminal | Unrestricted | Right-click, copy on select, link opening, session behaviour, command widget, triggers |
+| `features` | Features | Unrestricted | Feature flags (`src/featureFlags.ts`) with per-feature options nested beneath |
 | `monitoring` | Monitoring | Unrestricted | Polling toggles, interval configurations |
 | `shortcuts` | Keyboard Shortcuts | Unrestricted | Global keybinding customizer & recorder |
 | `quickaccess` | Quick Access Servers | **Vault Locked** | Pin/unpin top-bar nodes, host/IP display |
@@ -254,5 +256,13 @@ The Settings interface (`src/components/SettingsPanel.tsx`) uses an 11-category 
 | `security` | Known Hosts | **Vault Locked** | Trusted SSH host keys and fingerprints, revocation |
 | `maintenance` | Maintenance | **Vault Locked** | Factory reset preferences, storage cleanup |
 | `activity` | Activity Log | **Vault Locked** | Session audits, connection diagnostic timeline |
+
+`general`, `appearance`, `terminal` and `features` are four views of one component, `PageTerminal`, selected by its `part` prop, because they share state (theme list, flags, triggers). Rows and sections carry a `data-setting` id; `SETTINGS_INDEX` (plus the `FEATURES` list) feeds the sidebar search, which switches page and scrolls to that id. A new row only shows up in search once it has an id and an index entry.
+
+Settings are stored one `localStorage` key per value (`subterm-*`), written from `DesktopApp.tsx`; a few are also pushed to the backend at runtime.
+
+### Local-terminal ssh detection
+
+`TerminalView` inspects each line typed in a local session (only when the `sshDetect` flag is on and the PTY is not at a password prompt). `parseSshCommand` (`src/terminal/sshCommand.ts`) accepts only a plain connect to one host. `resolve_ssh_target` applies `~/.ssh/config` (alias, HostName, User, Port, IdentityFile; command-line values win) and reads an unencrypted identity file; `find_saved_servers` matches saved SSH nodes by host/alias/name and port (and user when given). The terminal then dispatches `subterm-open-ssh-target`, which `DesktopApp` turns into `openServer` (saved), or Quick Connect with or without saving. The shell's own `ssh` is stopped with Ctrl+C. Quick Connect is reused rather than adding a credential path of its own, so passwords are never read from the PTY.
 
 Protected categories evaluate the application's `isUnlocked` state. If locked, the category renders a unified `LockedPage` gate requiring user unlock before sensitive configurations or credentials can be inspected or mutated.

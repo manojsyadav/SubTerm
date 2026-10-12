@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **Behaviour changes to know about**:
+  A local shell no longer opens at launch unless **Settings > General > On Startup** is *New Local Terminal* (the app lands on the server list). Right-click now defaults to *Smart* (copy selection, else paste; Shift+Right-Click for the menu), and links in terminal output need Ctrl/Cmd+Click (**Settings > Terminal > Open Links** restores plain click). Existing saved choices for these settings are kept.
+
 - **`feat(settings)` — Reorganised Settings with search**:
   Settings now has **General** (startup, Remote Desktop), **Appearance** (colours plus terminal theme and fonts), **Terminal** (mouse and clipboard, sessions, command widget, triggers) and **Features** pages. A feature's own options sit under its toggle and grey out while it is off, and a search box jumps straight to any setting.
 

@@ -46,7 +46,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - **Unsplit**: Click the `Unsplit` button in the active split pill or click the `X` button on any pane's top-right corner to detach it.
    - **Multi-Session Splits**: Select multiple sessions from the top bar or session menu to tile multiple servers side-by-side or stacked in a unified canvas.
 6. **Hardware Acceleration (WebGL)**:
-   - GPU-accelerated rendering is enabled by default. To toggle or check status, navigate to **Settings (`Ctrl+,`) > Terminal > Display > WebGL Hardware Acceleration**.
+   - GPU-accelerated rendering is enabled by default. To toggle or check status, navigate to **Settings (`Ctrl+,`) > Appearance > Display & Theme > WebGL Hardware Acceleration**.
 
 7. **Fleet Broadcast (Cluster Mode)**:
    - When 2 or more server sessions are open, a Broadcast button (`Radio` icon) appears in the top navigation bar.
@@ -60,8 +60,16 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - **Paste Saved Password**: For sessions that connected with a saved password, this entry writes it straight into an interactive `[sudo] password for user:` prompt — the password is injected on the backend and never passes through the frontend.
    - **Record and replay a session**: Right-click > **Start recording** captures everything the terminal shows (plus window resizes) with timing; **Start recording with keystrokes** also captures what you type, so use it only when you are not typing secrets. Stop from the same menu (or click the red **REC** badge) and choose where to save in the Save dialog: a `.cast` file (asciinema v2) or a plain-text `.log`. Cancelling the dialog keeps the recording running. Open the command palette (`Ctrl+Shift+P`) and choose **Play Session Recording** to replay a `.cast` file with play/pause, a seek slider, speed (0.5x-8x) and Skip idle. Switch the feature off under Settings > Feature Toggles.
    - **Export Buffer to .log**: Click **Export Buffer** in the context menu and pick a location in the Save dialog to write the complete scrollback history to a `.log` file (e.g., `terminal-serverName-YYYY-MM-DDTHH-mm-ss.log`) for offline analysis or audit trails.
-    - **Right-Click Action Preference**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, choose between **Open Context Menu** or **Paste Immediately (PuTTY style)**.
-    - **Copy on Select**: Under **Settings (`Ctrl+,`) > Terminal > Session Behaviour**, toggle **Copy on select** to automatically copy highlighted terminal text to your system clipboard without pressing any key.
+    - **Right-Click**: Under **Settings (`Ctrl+,`) > Terminal > Mouse & Clipboard**, choose **Smart** (default: right-click copies the selection if there is one, otherwise pastes; **Shift+Right-Click** always opens the menu), **Open Context Menu**, or **Paste Immediately (PuTTY style)**. The terminal keeps keyboard focus after a right-click and after the menu closes, so split panes stay where you clicked.
+    - **Copy on Select**: Under **Settings > Terminal > Mouse & Clipboard**, toggle **Copy on select** to copy highlighted text without pressing any key.
+    - **Open Links**: URLs and file paths in output open on **Ctrl+Click** (**Cmd+Click** on macOS) by default; a tooltip says so on hover. Pick **Plain Click** under **Settings > Terminal > Mouse & Clipboard > Open Links** for the old behaviour. Touch devices always open on tap.
+
+8a. **ssh / sftp from a Local Terminal**:
+   - When you type a plain `ssh [user@]host` or `sftp host` in a **local** terminal, a bar appears at the bottom of the pane.
+   - **Saved server**: if the host (or its `~/.ssh/config` alias) matches a saved server, the bar offers to open it with its stored settings. If you typed `user@`, the saved user must match; otherwise any user does. `sftp` also opens the file panel.
+   - **Not saved**: choose **Save & open** (adds it to your server list) or **Quick Connect** (opens it without saving). With no readable, unencrypted key (`-i` or the config's `IdentityFile`) the Quick Connect form opens pre-filled so you only type the password. Passwords are never read from the terminal.
+   - Accepting stops the shell's own `ssh` (Ctrl+C), so only the native session remains. **Settings > Features > When you type ssh / sftp** can instead open a single matching saved server automatically; unknown hosts still ask.
+   - Ignored on purpose: commands with a remote command (`ssh host ls`), `-J`/`ProxyJump`, `ProxyCommand`, port forwarding, pipes and `scp`. Turn the whole feature off under **Settings > Features > Offer to save ssh/sftp targets**.
 
 9. **Tab Strip Context Menu & Session Management**:
    - Right-click any open session tab in the top tab strip to access the session menu:
@@ -81,7 +89,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 11. **Configurable SSH Keep-Alive Settings**:
     - Prevent SSH session timeouts and dropped connections caused by NAT gateways, corporate firewalls, and cloud load balancers.
-    - Navigate to **Settings (`Ctrl+,`) > Terminal > Session Behaviour > SSH Connection Keep-Alive Interval**.
+    - Navigate to **Settings (`Ctrl+,`) > Terminal > Sessions > SSH Keep-Alive**.
     - Choose between **Disabled**, **15 seconds** (recommended for strict NATs/firewalls), **30 seconds**, **60 seconds**, or **120 seconds**.
     - Changes take effect dynamically across all active and newly spawned SSH connections.
 
@@ -193,9 +201,11 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 ## 3. Configuration & Customization
 
-SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon or `Ctrl+,`):
+SubTerm includes a **Settings Panel** with 13 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
 
-- **Appearance**: Select your preferred accent color and dark/light UI theme.
+- **General**: **On Startup** chooses what opens after you unlock a profile: *Server List* (default), *Reopen Last Session* (saved servers and local shells; Quick Connect sessions fall back to the list) or *New Local Terminal*. Servers marked **Autostart** always open first. **Remote Desktop (RDP)** chooses where RDP servers open.
+- **Appearance**: Accent color, background, and the terminal theme, font, line height, scrollback, cursor, WebGL and bell options listed below.
+- **Features**: On/off switches for optional features (editor highlighting, command blocks, command history, session recording, Session Wall, ssh/sftp detection and more). A feature's own options, such as clickable file types or the ssh Ask/Auto mode, sit under its switch and grey out while it is off.
 - **Terminal**:
   - **Curated Color Schemes & Custom Theme Importer**:
     - Select from 8 curated themes (*SubTerm Dark*, *Dracula*, *One Dark Pro*, *Nord*, *Catppuccin Macchiato*, *Tokyo Night*, *Monokai Pro*, *Solarized Dark*) with full 16-color ANSI rendering and live preview swatches.
@@ -209,7 +219,7 @@ SubTerm includes an 11-category **Settings Panel** (accessible via the gear icon
   - **Terminal Bell Alerts**: Choose between *Visual Flash* (amber border glow), *Audible Chime* (pure Web Audio synthesizer), *Both*, or *Disabled* when an ASCII Bell (`\a` or `BEL`) is triggered by completed builds or shell alerts.
   - **Pro Terminal Search (`Ctrl+F`)**: Floating search widget featuring live match counter badge (`3 of 15` / `No matches`), case-sensitive matching (`Aa`), whole-word boundaries (`\b`), regular expressions (`.*`), and navigation arrows.
   - **Font Size & WebGL Acceleration**: Real-time font size adjustment (8px–24px) and WebGL GPU rasterization toggle.
-  - **Clipboard & Mouse Behavior**: Choose between glassmorphic Context Menu or instant PuTTY-style paste on right-click, and toggle automatic Copy on Select.
+  - **Clipboard & Mouse Behavior**: Right-click mode (Smart, Context Menu or PuTTY-style paste), Copy on Select and whether links open on Ctrl+Click or plain click.
   - **SSH Keep-Alive Interval**: Configure keep-alive ping frequency (Disabled, 15s, 30s, 60s, 120s) to keep remote SSH tunnels and terminal sessions resilient across unstable networks and strict NAT firewalls.
   - **Terminal Triggers & Alert Keywords**: Define keyword or regex patterns matched against live output in any session. Each trigger fires one of: a toast notification, the audible bell chime, the visual bell flash, or an entry in the Activity Log — useful for noticing `ERROR`/`FATAL`/`Exception` in a background session tab.
 - **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
@@ -237,7 +247,7 @@ npm run tauri dev -- --features full-ssh-algos
 The pure-Rust default build intentionally disables legacy RSA host keys to reduce attack surface and build dependencies.
 
 ### Q: How do I open a native local terminal on my computer?
-Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar. On Windows, this launches PowerShell or Command Prompt via ConPTY. On Linux/macOS, it launches your default `$SHELL`.
+Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar. SubTerm no longer opens a local shell at launch by default; set **Settings > General > On Startup** to *New Local Terminal* if you want that. Typing `exit` closes the tab. On Windows, this launches PowerShell or Command Prompt via ConPTY. On Linux/macOS, it launches your default `$SHELL`.
 
 ### Q: What happens if my laptop sleeps or I switch networks mid-session?
 SubTerm detects both and retries automatically — you don't need to manually reconnect. A sleep/resume cycle or a network change (Wi-Fi roam, VPN toggle, cable unplug) triggers an immediate reconnect attempt instead of waiting for the passive connection-health check to notice. If the server is still unreachable, retries continue with increasing backoff (2s, 4s, 8s, up to 30s) until it comes back, shown as a "Reconnecting · attempt N" banner. A connection you disconnected yourself (right-click → Disconnect) never auto-reconnects — click **Reconnect** on the banner when you're ready.
