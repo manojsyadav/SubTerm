@@ -1290,6 +1290,10 @@ pub struct ResolvedSshTarget {
     /// PEM body of the identity file, only when it exists and is not
     /// passphrase-protected; otherwise the UI asks for a password.
     pub private_key: Option<String>,
+    /// True when the user typed a user name (`user@`/`-l`) or `~/.ssh/config` sets one;
+    /// false when `username` is only the local-account fallback. Saved-server matching
+    /// ignores the user in that case.
+    pub user_explicit: bool,
 }
 
 /// Resolve what the user typed in a local shell (`ssh [-p N] [-i key] [user@]host`)
@@ -1315,9 +1319,11 @@ pub fn resolve_ssh_target(
 
     let real_host = cfg.as_ref().map(|c| c.hostname.clone()).unwrap_or_else(|| host.clone());
     let port = port.or_else(|| cfg.as_ref().map(|c| c.port)).unwrap_or(22);
-    let username = username
+    let explicit_user = username
         .filter(|u| !u.trim().is_empty())
-        .or_else(|| cfg.as_ref().map(|c| c.user.clone()).filter(|u| !u.trim().is_empty()))
+        .or_else(|| cfg.as_ref().map(|c| c.user.clone()).filter(|u| !u.trim().is_empty()));
+    let user_explicit = explicit_user.is_some();
+    let username = explicit_user
         .or_else(|| std::env::var("USERNAME").or_else(|_| std::env::var("USER")).ok())
         .unwrap_or_else(|| "root".to_string());
 
@@ -1337,5 +1343,49 @@ pub fn resolve_ssh_target(
         (looks_valid && !encrypted && validate_ssh_private_key(&pem).is_ok()).then_some(pem)
     });
 
-    Ok(ResolvedSshTarget { host: real_host, port: port as i32, username, private_key })
+    Ok(ResolvedSshTarget { host: real_host, port: port as i32, username, private_key, user_explicit })
+}
+
+#[derive(serde::Serialize)]
+pub struct SavedServerMatch {
+    pub id: i32,
+    pub name: String,
+    pub host: String,
+    pub port: i32,
+    pub username: String,
+}
+
+/// Saved SSH servers that a typed `ssh` target refers to: same port and the host
+/// equals the resolved host or the typed alias (or the alias equals the node's
+/// name), case-insensitively. When `username` is given the node's user must match
+/// too, unless the node stores none (credential-based). RDP nodes are excluded.
+#[tauri::command]
+pub async fn find_saved_servers(
+    state: tauri::State<'_, DbState>,
+    host: String,
+    alias: Option<String>,
+    port: i32,
+    username: Option<String>,
+) -> Result<Vec<SavedServerMatch>, String> {
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    let alias = alias.unwrap_or_else(|| host.clone());
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, host, port, COALESCE(username,'') FROM servers              WHERE deleted = 0 AND COALESCE(protocol,'ssh') != 'rdp' AND port = ?1                AND (LOWER(host) = LOWER(?2) OR LOWER(host) = LOWER(?3) OR LOWER(name) = LOWER(?3))              ORDER BY position, id",
+        )
+        .map_err(|e| format!("[DATABASE] SAVED_LOOKUP_FAILED: {}", e))?;
+    let rows = stmt
+        .query_map(rusqlite::params![port, host, alias], |r| {
+            Ok(SavedServerMatch { id: r.get(0)?, name: r.get(1)?, host: r.get(2)?, port: r.get(3)?, username: r.get(4)? })
+        })
+        .map_err(|e| format!("[DATABASE] SAVED_LOOKUP_FAILED: {}", e))?;
+    let want = username.filter(|u| !u.trim().is_empty());
+    Ok(rows
+        .filter_map(|r| r.ok())
+        .filter(|m| match &want {
+            Some(u) => m.username.is_empty() || m.username == *u,
+            None => true,
+        })
+        .collect())
 }

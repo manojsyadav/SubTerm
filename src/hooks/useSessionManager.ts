@@ -193,7 +193,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   );
 
   const openQuickConnect = useCallback(
-    (auth: QuickAuth) => {
+    (auth: QuickAuth, opts?: { save?: boolean }) => {
       const sessionId = `session-quick-${Date.now()}`;
       const displayName = `${auth.username}@${auth.host}:${auth.port}`;
       setSessions((prev) => [
@@ -208,6 +208,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
       setActiveView(sessionId);
       options?.onAddLog?.(`Quick connect → ${displayName}`, "info");
 
+      if (opts?.save === false) return sessionId;
       invoke("save_quick_connect_node", { auth })
         .then(() => {
           options?.onQuickNodeSaved?.();

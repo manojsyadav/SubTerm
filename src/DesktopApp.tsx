@@ -118,6 +118,7 @@ function DesktopApp() {
     rightClickAction: localStorage.getItem('subterm-right-click-action') || 'smart',
     linkOpenMode: localStorage.getItem('subterm-link-open-mode') || 'ctrl-click',
     startupView: localStorage.getItem('subterm-startup-view') || 'servers',
+    sshDetectMode: localStorage.getItem('subterm-ssh-detect-mode') || 'prompt',
     copyOnSelect: localStorage.getItem('subterm-copy-on-select') !== 'false',
     terminalTheme: localStorage.getItem('subterm-terminal-theme') || 'subterm-dark',
     terminalCursorStyle: localStorage.getItem('subterm-terminal-cursor-style') || 'block',
@@ -475,26 +476,40 @@ function DesktopApp() {
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [quickConnectPrefill, setQuickConnectPrefill] = useState<{ host: string; port: number; username: string } | null>(null);
   const pendingSftpRef = useRef(false);
+  const pendingSaveRef = useRef(true);
 
   // Quick Connect that can also open the SFTP panel once the session mounts
   // (used when the target came from an `sftp` command typed in a local shell).
   const connectQuick = useCallback((auth: QuickAuth) => {
-    const sessionId = openQuickConnect(auth);
+    const sessionId = openQuickConnect(auth, { save: pendingSaveRef.current });
     if (pendingSftpRef.current && sessionId) {
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent(`subterm-toggle-tool-${sessionId}`, { detail: { tool: "sftp" } }));
       }, 800);
     }
     pendingSftpRef.current = false;
+    pendingSaveRef.current = true;
     setQuickConnectPrefill(null);
   }, [openQuickConnect]);
 
   // A local terminal detected `ssh`/`sftp <target>` and the user accepted the offer.
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const d = (e as CustomEvent<{ host: string; port: number; username: string; private_key: string | null; openSftp: boolean }>).detail;
+      const d = (e as CustomEvent<{
+        host: string; port: number; username: string; private_key: string | null;
+        openSftp: boolean; how: "saved" | "save" | "quick"; serverId?: number;
+      }>).detail;
       if (!d) return;
+      if (d.how === "saved") {
+        const srv = servers.find((x) => x.id === d.serverId);
+        if (srv) {
+          openServer(srv, d.openSftp ? "sftp" : undefined);
+          return;
+        }
+        // Saved server vanished from the list: fall through to a plain quick connect.
+      }
       pendingSftpRef.current = !!d.openSftp;
+      pendingSaveRef.current = d.how === "save";
       if (d.private_key) {
         connectQuick({ host: d.host, port: d.port, username: d.username, private_key: d.private_key });
       } else {
@@ -505,7 +520,7 @@ function DesktopApp() {
     };
     window.addEventListener("subterm-open-ssh-target", onOpen);
     return () => window.removeEventListener("subterm-open-ssh-target", onOpen);
-  }, [connectQuick]);
+  }, [connectQuick, servers, openServer]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
   const [editCommandData, setEditCommandData] = useState<{ id: number | null, title: string, content: string, serverId: number | null, tags: string }>({ id: null, title: "", content: "", serverId: null, tags: "" });
@@ -600,6 +615,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-right-click-action', appSettings.rightClickAction || 'smart');
     localStorage.setItem('subterm-link-open-mode', appSettings.linkOpenMode || 'ctrl-click');
     localStorage.setItem('subterm-startup-view', appSettings.startupView || 'servers');
+    localStorage.setItem('subterm-ssh-detect-mode', appSettings.sshDetectMode || 'prompt');
     localStorage.setItem('subterm-copy-on-select', appSettings.copyOnSelect !== false ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-theme', appSettings.terminalTheme || 'subterm-dark');
     localStorage.setItem('subterm-terminal-cursor-style', appSettings.terminalCursorStyle || 'block');
@@ -2418,7 +2434,7 @@ function DesktopApp() {
 
       <QuickConnectModal
         isOpen={isQuickConnectOpen}
-        onClose={() => { setIsQuickConnectOpen(false); setQuickConnectPrefill(null); pendingSftpRef.current = false; }}
+        onClose={() => { setIsQuickConnectOpen(false); setQuickConnectPrefill(null); pendingSftpRef.current = false; pendingSaveRef.current = true; }}
         onConnect={connectQuick}
         prefill={quickConnectPrefill}
       />

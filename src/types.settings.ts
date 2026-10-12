@@ -20,6 +20,7 @@ export interface AppSettings {
   rightClickAction: string;
   linkOpenMode: string;
   startupView: string;
+  sshDetectMode: string;
   copyOnSelect: boolean;
   terminalTheme: string;
   terminalCursorStyle: string;

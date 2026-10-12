@@ -463,32 +463,60 @@ const TerminalView = ({
     toastTimerRef.current = window.setTimeout(() => setToast(null), 1400);
   };
 
-  // "Save and open natively" offer shown after `ssh`/`sftp` is typed in a local shell.
-  const [sshOffer, setSshOffer] = useState<SshTarget | null>(null);
+  // Offer shown after `ssh`/`sftp` is typed in a local shell: open the matching saved
+  // server, or save the host / quick-connect it.
+  interface SshOffer {
+    target: SshTarget;
+    resolved: { host: string; port: number; username: string; private_key: string | null; user_explicit: boolean };
+    matches: { id: number; name: string }[];
+  }
+  const [sshOffer, setSshOffer] = useState<SshOffer | null>(null);
   const sshOfferTimerRef = useRef<number | null>(null);
   const sshDismissedRef = useRef<Set<string>>(new Set());
-  const dismissSshOffer = () => {
+  const clearSshOfferTimer = () => {
     if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
+  };
+  const dismissSshOffer = () => {
+    clearSshOfferTimer();
     setSshOffer((cur) => {
-      if (cur) sshDismissedRef.current.add(sshTargetKey(cur));
+      if (cur) sshDismissedRef.current.add(sshTargetKey(cur.target));
       return null;
     });
   };
-  const acceptSshOffer = async () => {
-    const offer = sshOffer;
-    if (!offer) return;
-    if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
+  // Stop the shell's own ssh (still running when the user accepts) so only the native session remains.
+  const interruptShellSsh = () => {
+    invoke('write_terminal_data', { terminalId, data: [0x03] }).catch(() => {});
+  };
+  // `how`: 'saved' opens a matching saved server, 'save' saves + opens, 'quick' opens without saving.
+  const openSshOffer = (offer: SshOffer, how: 'saved' | 'save' | 'quick', serverId?: number) => {
+    clearSshOfferTimer();
     setSshOffer(null);
-    sshDismissedRef.current.add(sshTargetKey(offer));
+    sshDismissedRef.current.add(sshTargetKey(offer.target));
+    interruptShellSsh();
+    window.dispatchEvent(new CustomEvent('subterm-open-ssh-target', {
+      detail: { ...offer.resolved, openSftp: offer.target.kind === 'sftp', how, serverId },
+    }));
+  };
+  // Resolve + match a typed target, then either auto-open (mode "auto" with exactly one
+  // saved match) or show the offer bar.
+  const handleSshTyped = async (target: SshTarget) => {
     try {
-      const r = await invoke<{ host: string; port: number; username: string; private_key: string | null }>(
-        'resolve_ssh_target',
-        { host: offer.host, username: offer.username ?? null, port: offer.port ?? null, identityFile: offer.identityFile ?? null },
-      );
-      window.dispatchEvent(new CustomEvent('subterm-open-ssh-target', { detail: { ...r, openSftp: offer.kind === 'sftp' } }));
-    } catch (e) {
-      notify(String(e), 'err');
-    }
+      const resolved = await invoke<SshOffer['resolved']>('resolve_ssh_target', {
+        host: target.host, username: target.username ?? null, port: target.port ?? null, identityFile: target.identityFile ?? null,
+      });
+      const matches = await invoke<SshOffer['matches']>('find_saved_servers', {
+        host: resolved.host, alias: target.host, port: resolved.port,
+        username: resolved.user_explicit ? resolved.username : null,
+      });
+      const offer: SshOffer = { target, resolved, matches };
+      if ((localStorage.getItem('subterm-ssh-detect-mode') || 'prompt') === 'auto' && matches.length === 1) {
+        openSshOffer(offer, 'saved', matches[0].id);
+        return;
+      }
+      setSshOffer(offer);
+      clearSshOfferTimer();
+      sshOfferTimerRef.current = window.setTimeout(() => dismissSshOffer(), 20000);
+    } catch { /* ProxyJump host or lookup failure: stay out of the way */ }
   };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -1117,11 +1145,7 @@ const TerminalView = ({
           // Local shell only: offer to save/open a typed ssh/sftp target natively.
           if (isLocal && isFeatureEnabled('sshDetect') && !looksLikePasswordPrompt(recentOutputRef.current)) {
             const target = parseSshCommand(line);
-            if (target && !sshDismissedRef.current.has(sshTargetKey(target))) {
-              setSshOffer(target);
-              if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
-              sshOfferTimerRef.current = window.setTimeout(() => dismissSshOffer(), 15000);
-            }
+            if (target && !sshDismissedRef.current.has(sshTargetKey(target))) void handleSshTyped(target);
           }
           // Do NOT persist what was typed at a no-echo password/passphrase
           // prompt — otherwise sudo/su/mysql -p/gpg secrets land verbatim in
@@ -1930,18 +1954,46 @@ const TerminalView = ({
         />
       )}
       {sshOffer && (
-        <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-white/10 shadow-xl text-[11px] font-sans text-zinc-200">
-          <span>
-            Save <b className="text-white">{sshOffer.username ? `${sshOffer.username}@` : ''}{sshOffer.host}</b> to your servers and open it
-            {sshOffer.kind === 'sftp' ? ' with the file panel' : ''}?
-          </span>
-          <button
-            type="button"
-            onClick={() => { void acceptSshOffer(); }}
-            className="px-2 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary font-bold hover:bg-primary/30"
-          >
-            Open
-          </button>
+        <div className="absolute bottom-3 left-3 right-3 sm:right-auto z-20 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-white/10 shadow-xl text-[11px] font-sans text-zinc-200">
+          {sshOffer.matches.length > 0 ? (
+            <>
+              <span>
+                <b className="text-white">{sshOffer.resolved.host}</b> is a saved server. Open it
+                {sshOffer.target.kind === 'sftp' ? ' with the file panel' : ''}?
+              </span>
+              {sshOffer.matches.slice(0, 3).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => openSshOffer(sshOffer, 'saved', m.id)}
+                  className="px-2 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary font-bold hover:bg-primary/30"
+                >
+                  {m.name}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <span>
+                <b className="text-white">{sshOffer.resolved.username}@{sshOffer.resolved.host}</b> is not saved. Add it to your servers
+                {sshOffer.target.kind === 'sftp' ? ' (opens the file panel)' : ''}?
+              </span>
+              <button
+                type="button"
+                onClick={() => openSshOffer(sshOffer, 'save')}
+                className="px-2 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary font-bold hover:bg-primary/30"
+              >
+                Save &amp; open
+              </button>
+              <button
+                type="button"
+                onClick={() => openSshOffer(sshOffer, 'quick')}
+                className="px-2 py-0.5 rounded border border-white/15 text-zinc-200 hover:bg-white/10"
+              >
+                Quick Connect
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={dismissSshOffer}

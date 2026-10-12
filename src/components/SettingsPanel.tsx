@@ -586,6 +586,16 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
           {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
         </select>
       </Row>
+      <Row label="ssh in Local Terminal" desc="When you type ssh/sftp in a local terminal (turn the feature off under Feature Toggles). Ask: show a bar, and stop the shell's ssh if you accept. Auto: a saved server is opened at once and the shell's ssh is stopped; unknown hosts still ask.">
+        <select
+          value={settings.sshDetectMode || 'prompt'}
+          onChange={(e) => setSettings({ ...settings, sshDetectMode: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="prompt">Ask First</option>
+          <option value="auto">Open Saved Servers Automatically</option>
+        </select>
+      </Row>
       <Row label="Open Links" desc="How URLs and file paths in terminal output are opened (touch devices always use tap)">
         <select
           value={settings.linkOpenMode || 'ctrl-click'}
