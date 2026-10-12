@@ -52,6 +52,8 @@ export interface AppSettings {
   sshKeepaliveSec: number;
   /** Seconds the first TCP connect (direct or to a proxy) may take. */
   sshConnectTimeoutSec: number;
+  /** "ask" (default) prompts for unknown host keys; "strict" refuses any key not already trusted. */
+  hostKeyPolicy: string;
   /** Auto-reconnect attempts before giving up; 0 = retry forever. */
   reconnectMaxAttempts: number;
   /** Ceiling of the auto-reconnect backoff, in seconds. */

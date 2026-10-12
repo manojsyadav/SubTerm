@@ -282,6 +282,16 @@ pub struct ClientHandler {
     pub agent_forward_socket: Option<String>,
 }
 
+/// Strict host-key policy (Settings > Terminal > SSH Connection): servers whose key is not already
+/// trusted are refused without prompting, so nothing new can be trusted by a stray click. The
+/// default is to ask.
+pub static HOST_KEY_STRICT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether a key that is not already trusted must be refused outright instead of prompting.
+pub(crate) fn host_key_refused_by_policy(strict: bool, is_known: bool) -> bool {
+    strict && !is_known
+}
+
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
 
@@ -393,6 +403,19 @@ impl client::Handler for ClientHandler {
                 "msg": "Host fingerprint is unknown. Waiting for user approval...",
                 "type": "warn"
             }));
+        }
+
+        if host_key_refused_by_policy(HOST_KEY_STRICT.load(std::sync::atomic::Ordering::Relaxed), is_known) {
+            let _ = self.app.emit(&format!("session-log-{}", self.session_id), serde_json::json!({
+                "msg": if mismatch {
+                    "Host key changed and the strict host-key policy is on, so the connection was refused. Check Known Hosts, or set the policy to Ask in Settings > Terminal > SSH Connection."
+                } else {
+                    "Host key is not on file and the strict host-key policy is on, so the connection was refused. Set the policy to Ask in Settings > Terminal > SSH Connection to trust it once."
+                },
+                "type": "error"
+            }));
+            self.fp_outcome.store(0, std::sync::atomic::Ordering::SeqCst);
+            return Ok(false);
         }
 
         let _ = self.app.emit(&format!("fingerprint-prompt-{}", self.session_id), serde_json::json!({
@@ -568,3 +591,19 @@ impl client::Handler for ClientHandler {
     }
 }
 
+#[cfg(test)]
+mod host_key_policy_tests {
+    use super::host_key_refused_by_policy;
+
+    #[test]
+    fn ask_mode_never_refuses() {
+        assert!(!host_key_refused_by_policy(false, false));
+        assert!(!host_key_refused_by_policy(false, true));
+    }
+
+    #[test]
+    fn strict_mode_refuses_only_untrusted_keys() {
+        assert!(host_key_refused_by_policy(true, false));
+        assert!(!host_key_refused_by_policy(true, true));
+    }
+}

@@ -49,7 +49,12 @@ See `src-tauri/src/vault.rs` (`VAULT_MAGIC`, `VAULT_VERSION`, `HEADER_LEN`) for 
    - The session password is removed from memory (`DbState.session_password = None`).
    - No credentials, server passwords, or SSH private keys remain unencrypted in memory.
 
-2. **Vault Unlocked**:
+2. **Automatic locking** (Settings > General > Security, all off by default):
+   - *Auto-lock when idle* locks after 1 to 60 minutes with no mouse, keyboard, wheel or touch input (terminal output does not count as activity), and *Lock when the window is hidden* locks on minimise.
+   - Both go through the same path as a manual lock but never prompt, because nobody may be present to answer: the vault closes and open SSH sessions are disconnected; local terminals stay open.
+   - *Clear clipboard on lock* empties the clipboard at lock time. It is best effort: the webview only allows clipboard writes while focused.
+
+3. **Vault Unlocked**:
    - The SQLite database resides strictly in memory (`sqlite3_deserialize`).
    - Data is never written to disk unencrypted or placed in temporary files.
    - Changes are immediately re-encrypted and flushed to disk via `persist_vault`.
@@ -58,21 +63,21 @@ See `src-tauri/src/vault.rs` (`VAULT_MAGIC`, `VAULT_VERSION`, `HEADER_LEN`) for 
 
 ## 3. Settings Panel Security & Access Gates
 
-The Settings interface organizes configurations into 10 categories, enforcing access control based on vault lock state:
+The Settings interface organizes configurations into 7 pages, enforcing access control based on vault lock state:
 
 ### 3.1 Unrestricted Categories
-- **Appearance**: Color themes, accent colors, zoom levels.
-- **Terminal**: Font family, font size, scrollback buffer, command widget visibility.
-- **Monitoring**: Host resource polling toggles and intervals.
-- **Keyboard Shortcuts**: User keybinding preferences.
+- **General**: Startup view, default local shell, security options (auto-lock), backup and restore of preferences, monitoring switch, Remote Desktop mode.
+- **Appearance**: Colours, terminal theme, fonts, cursor, interface zoom.
+- **Terminal**: Mouse and clipboard behaviour, sessions, SSH connection options, command widget, triggers.
+- **Features**: Optional feature switches.
+- **Quick Access** (partly): the *Keyboard Shortcuts* tab. The *Pinned Servers* and *Quick Commands* tabs of the same page are locked.
 
 ### 3.2 Locked Categories (Requires Master Password)
-- **Quick Access Servers**: Displays pinned server names and addresses.
-- **Cloud & Sync**: Cloud account credentials, sync endpoints, invite tokens.
-- **Profiles & Vault**: Creation, renaming, deletion of workspaces; master password modification.
-- **Quick Commands**: Snippets and pre-configured maintenance scripts (which often contain credentials).
-- **Maintenance**: Database resets and preference clearing.
-- **Activity Log**: Connection histories, timestamps, and diagnostic audit logs.
+- **Quick Access, Pinned Servers and Quick Commands tabs**: pinned server names and addresses; snippets and maintenance scripts (which often contain credentials).
+- **Accounts & Sync**: workspace creation, renaming and deletion, master password changes, cloud account credentials, sync endpoints, invite tokens.
+- **System**: Known Hosts, Maintenance (database resets, preference clearing, server export) and the Activity Log (connection histories, timestamps, diagnostic audit logs).
+
+The preferences backup (General > Backup & Restore) is available while locked. It contains only preferences: biometric unlock handles, the last workspace and session, pinned server ids, connection history and anything credential-like are excluded on export and refused on import.
 
 When locked, navigating to any protected category renders the unified `LockedPage` gate. Unlocking requires entering the master password, which verifies the decryption key before access is granted.
 
@@ -129,7 +134,8 @@ SubTerm does not ship or trust any CA or fixed host-key list — every server's 
 - **Returning connection (known host)**: if the offered fingerprint matches any stored row for that host:port, the connection proceeds with no prompt — logged as "Host fingerprint found in known_hosts database. Verified."
 - **Key changed (likely MITM, or legitimate rotation)**: if a *different* fingerprint shows up for the same host:port **and the same key algorithm** already on file, that's treated as a change, not a new host — the modal switches to a loud warning ("This is what a man-in-the-middle attack looks like — but it can also mean the server admin rotated the key"), lists every previously-trusted fingerprint for comparison, and still requires explicit accept before proceeding. A server presenting an *additional* algorithm it didn't have before (e.g. adding ed25519 alongside an existing RSA key) is **not** treated as a change — that's normal key-rotation hygiene on the server's side, so it falls through to the ordinary first-time prompt for that algorithm instead of a false MITM alarm.
 - **Storage**: accepted fingerprints live in the `known_hosts` table inside the same encrypted vault blob described in §1 — AES-256-GCM, unlocked only with the master password. There is no separate plaintext `known_hosts` file on disk the way OpenSSH keeps one; a stolen vault file is useless without the password, same as every other table in it. Rows are keyed by `(host, port, key_type)`, matching OpenSSH's own per-host-per-algorithm semantics.
-- **Revocation / management**: Settings → Known Hosts (`src/components/SettingsKnownHosts.tsx`, backed by `get_known_hosts` / `delete_known_host`) lists every trusted fingerprint with its host, port, and key type, and lets the user delete any entry directly — forcing the next connection to that host through the first-connection TOFU prompt again. This is the manual equivalent of `ssh-keygen -R <host>`.
+- **Strict policy (optional)**: **Settings > Terminal > SSH Connection > Unknown host keys > Refuse (strict)** makes the client refuse any key that is not already on file, whether unknown or changed, without showing the prompt (`HOST_KEY_STRICT` in `ssh_manager.rs`, set through `set_host_key_policy`). It removes the chance of trusting a new key with a stray click; the first connection to a server must be made in the default Ask mode.
+- **Revocation / management**: Settings → System → Known Hosts (`src/components/SettingsKnownHosts.tsx`, backed by `get_known_hosts` / `delete_known_host`) lists every trusted fingerprint with its host, port, and key type, and lets the user delete any entry directly — forcing the next connection to that host through the first-connection TOFU prompt again. This is the manual equivalent of `ssh-keygen -R <host>`.
 - **Failure-closed on DB errors**: if the known-hosts lock is poisoned (a prior panic left the mutex in a bad state), the handshake is refused outright rather than silently falling back to "unknown host" — which would otherwise re-prompt the user and could mask a real key-change warning behind a plain first-time prompt.
 
 ## 9. Vault Format & KDF Rotation Strategy

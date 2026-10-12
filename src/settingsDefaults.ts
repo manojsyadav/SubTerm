@@ -38,6 +38,7 @@ export const SETTING_DEFAULTS = {
   downloadAuditOnExit: false,
   sshKeepaliveSec: 20,
   sshConnectTimeoutSec: 10,
+  hostKeyPolicy: "ask",
   reconnectMaxAttempts: 0,
   reconnectMaxDelaySec: 30,
   defaultSshPort: 22,
@@ -84,6 +85,7 @@ export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
   "audit-download": "downloadAuditOnExit",
   keepalive: "sshKeepaliveSec",
   "connect-timeout": "sshConnectTimeoutSec",
+  "host-key-policy": "hostKeyPolicy",
   "reconnect-attempts": "reconnectMaxAttempts",
   "reconnect-delay": "reconnectMaxDelaySec",
   "default-port": "defaultSshPort",
@@ -98,7 +100,7 @@ export type ResettablePage = "general" | "appearance" | "terminal" | "features";
 const PAGE_ROWS: Record<ResettablePage, string[]> = {
   general: ["startup-view", "local-shell", "enable-monitoring", "auto-lock", "lock-on-minimize", "clear-clipboard"],
   appearance: ["accent", "background", "ui-zoom", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-color", "terminal-padding", "cursor-blink", "webgl", "bell"],
-  terminal: ["right-click", "copy-on-select", "open-links", "paste-review", "word-separators", "scroll-on-input", "auto-copy-output", "auto-close", "audit-download", "keepalive", "connect-timeout", "reconnect-attempts", "reconnect-delay", "default-port", "default-user", "default-agent", "command-widget"],
+  terminal: ["right-click", "copy-on-select", "open-links", "paste-review", "word-separators", "scroll-on-input", "auto-copy-output", "auto-close", "audit-download", "keepalive", "connect-timeout", "host-key-policy", "reconnect-attempts", "reconnect-delay", "default-port", "default-user", "default-agent", "command-widget"],
   features: ["ssh-mode", ...FEATURES.map((f) => f.key as string)],
 };
 

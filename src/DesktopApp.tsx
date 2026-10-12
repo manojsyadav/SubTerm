@@ -141,6 +141,7 @@ function DesktopApp() {
     terminalPadding: Math.max(0, parseInt(localStorage.getItem('subterm-terminal-padding') || '0', 10) || 0),
     terminalScrollback: parseInt(localStorage.getItem('subterm-terminal-scrollback') || '5000', 10),
     sshKeepaliveSec: parseInt(localStorage.getItem('subterm-ssh-keepalive-sec') || '20', 10),
+    hostKeyPolicy: localStorage.getItem('subterm-host-key-policy') === 'strict' ? 'strict' : 'ask',
     sshConnectTimeoutSec: Math.min(120, Math.max(3, parseInt(localStorage.getItem('subterm-ssh-connect-timeout-sec') || '10', 10) || 10)),
     reconnectMaxAttempts: Math.max(0, parseInt(localStorage.getItem('subterm-reconnect-max-attempts') || '0', 10) || 0),
     reconnectMaxDelaySec: Math.min(300, Math.max(2, parseInt(localStorage.getItem('subterm-reconnect-max-delay-sec') || '30', 10) || 30)),
@@ -670,6 +671,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-lock-on-minimize', appSettings.lockOnMinimize ? 'true' : 'false');
     localStorage.setItem('subterm-clear-clipboard-on-lock', appSettings.clearClipboardOnLock ? 'true' : 'false');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
+    localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));
     localStorage.setItem('subterm-reconnect-max-attempts', String(appSettings.reconnectMaxAttempts ?? 0));
     localStorage.setItem('subterm-reconnect-max-delay-sec', String(appSettings.reconnectMaxDelaySec ?? 30));
@@ -681,6 +683,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-ssh-keepalive-sec', String(appSettings.sshKeepaliveSec || 20));
     invoke('set_ssh_keepalive_interval', { secs: appSettings.sshKeepaliveSec || 20 }).catch(console.error);
     invoke('set_ssh_connect_timeout', { secs: appSettings.sshConnectTimeoutSec || 10 }).catch(console.error);
+    invoke('set_host_key_policy', { strict: appSettings.hostKeyPolicy === 'strict' }).catch(console.error);
     localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {

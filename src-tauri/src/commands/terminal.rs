@@ -571,6 +571,12 @@ pub fn set_ssh_keepalive_interval(secs: u64) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn set_host_key_policy(strict: bool) -> Result<(), String> {
+    crate::ssh_manager::HOST_KEY_STRICT.store(strict, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn set_ssh_connect_timeout(secs: u64) -> Result<(), String> {
     crate::commands::connection::SSH_CONNECT_TIMEOUT_SECS.store(secs.clamp(3, 120), std::sync::atomic::Ordering::Relaxed);
     Ok(())

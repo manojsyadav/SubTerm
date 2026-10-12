@@ -736,6 +736,16 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
                 <option value={0}>Disabled</option>
               </select>
             </Row>
+            <Row id="host-key-policy" label="Unknown host keys" desc="Ask lets you trust a new key once. Strict refuses any server whose key is not already trusted, so nothing new is trusted by accident; connect once in Ask mode to add a server.">
+              <select
+                value={settings.hostKeyPolicy === "strict" ? "strict" : "ask"}
+                onChange={(e) => setSettings({ ...settings, hostKeyPolicy: e.target.value })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value="ask">Ask me (default)</option>
+                <option value="strict">Refuse (strict)</option>
+              </select>
+            </Row>
             <Row id="connect-timeout" label="Connection timeout" desc="How long to wait for a server (or its proxy) to accept the TCP connection before giving up">
               <select
                 value={settings.sshConnectTimeoutSec ?? 10}
@@ -1199,6 +1209,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "auto-close", page: "terminal", label: "Auto-close tab on exit", keywords: "exit close shell tab" },
   { id: "audit-download", page: "terminal", label: "Download audit on exit", keywords: "transcript log save" },
   { id: "ssh-connection", page: "terminal", label: "SSH Connection", keywords: "ssh connection keep alive timeout reconnect" },
+  { id: "host-key-policy", page: "terminal", label: "Unknown host keys", keywords: "host key fingerprint strict trust known hosts security mitm" },
   { id: "connect-timeout", page: "terminal", label: "Connection timeout", keywords: "ssh connect timeout seconds slow" },
   { id: "reconnect-attempts", page: "terminal", label: "Auto-reconnect attempts", keywords: "reconnect retry attempts give up drop" },
   { id: "reconnect-delay", page: "terminal", label: "Longest wait between retries", keywords: "reconnect retry backoff delay" },
