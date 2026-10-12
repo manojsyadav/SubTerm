@@ -296,10 +296,20 @@ function DesktopApp() {
     return () => window.removeEventListener("subterm-add-log", onTriggerLog);
   }, [addLog]);
 
-  // Local-first launch: open default local shell on startup so user can run commands immediately
+  // Launch view follows Settings -> On Startup. A local shell is opened immediately
+  // (before unlock) only when the user picked "New Local Terminal", or "Last Session"
+  // and the last session was a local shell. Otherwise the app lands on the server list;
+  // server sessions for "Last Session" open after unlock (see onStartupView).
   useEffect(() => {
-    if (sessions.length === 0) {
+    if (sessions.length !== 0 || IS_MOBILE_OS) return;
+    const mode = localStorage.getItem('subterm-startup-view') || 'servers';
+    if (mode === 'local') {
       openLocalTerminal();
+    } else if (mode === 'last') {
+      try {
+        const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as { kind: string; shell?: string } | null;
+        if (last?.kind === 'local') openLocalTerminal(last.shell);
+      } catch { /* stay on the server list */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -345,7 +355,12 @@ function DesktopApp() {
     setIsUnlocked(false);
     const remainingLocal = sessions.filter((s) => s.isLocal);
     if (remainingLocal.length === 0) {
-      openLocalTerminal();
+      if ((localStorage.getItem('subterm-startup-view') || 'servers') === 'local' && !IS_MOBILE_OS) {
+        openLocalTerminal();
+      } else {
+        setSessions([]);
+        setActiveView("nodes");
+      }
     } else {
       setSessions(remainingLocal);
       setActiveView(remainingLocal[0].id);
