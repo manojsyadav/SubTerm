@@ -1280,3 +1280,62 @@ pub async fn update_server_os_info(
     save_vault_internal(&state)?;
     Ok(())
 }
+
+/// Result of resolving a typed `ssh`/`sftp` target against `~/.ssh/config`.
+#[derive(serde::Serialize)]
+pub struct ResolvedSshTarget {
+    pub host: String,
+    pub port: i32,
+    pub username: String,
+    /// PEM body of the identity file, only when it exists and is not
+    /// passphrase-protected; otherwise the UI asks for a password.
+    pub private_key: Option<String>,
+}
+
+/// Resolve what the user typed in a local shell (`ssh [-p N] [-i key] [user@]host`)
+/// into a connectable target. Explicit command-line values win over
+/// `~/.ssh/config`; the config only fills the gaps (alias -> HostName, User,
+/// Port, IdentityFile). Targets that go through ProxyJump are rejected because
+/// Quick Connect cannot represent them. Best-effort: a missing/unreadable
+/// config just means the typed values are used as-is.
+#[tauri::command]
+pub fn resolve_ssh_target(
+    host: String,
+    username: Option<String>,
+    port: Option<u16>,
+    identity_file: Option<String>,
+) -> Result<ResolvedSshTarget, String> {
+    let cfg = crate::commands::sftp::parse_ssh_config(None)
+        .ok()
+        .and_then(|hosts| hosts.into_iter().find(|h| h.host_alias == host));
+
+    if cfg.as_ref().and_then(|c| c.proxy_jump.as_ref()).is_some() {
+        return Err("Host uses ProxyJump, which Quick Connect cannot represent".into());
+    }
+
+    let real_host = cfg.as_ref().map(|c| c.hostname.clone()).unwrap_or_else(|| host.clone());
+    let port = port.or_else(|| cfg.as_ref().map(|c| c.port)).unwrap_or(22);
+    let username = username
+        .filter(|u| !u.trim().is_empty())
+        .or_else(|| cfg.as_ref().map(|c| c.user.clone()).filter(|u| !u.trim().is_empty()))
+        .or_else(|| std::env::var("USERNAME").or_else(|_| std::env::var("USER")).ok())
+        .unwrap_or_else(|| "root".to_string());
+
+    let key_path = identity_file
+        .filter(|p| !p.trim().is_empty())
+        .or_else(|| cfg.as_ref().and_then(|c| c.identity_file.clone()));
+    let private_key = key_path.and_then(|p| {
+        let expanded = if let Some(rest) = p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
+            directories::UserDirs::new()?.home_dir().join(rest)
+        } else {
+            std::path::PathBuf::from(&p)
+        };
+        let pem = std::fs::read_to_string(expanded).ok()?;
+        let looks_valid = pem.contains("PRIVATE KEY");
+        // Encrypted keys need a passphrase we do not have.
+        let encrypted = pem.contains("ENCRYPTED") || pem.contains("Proc-Type: 4,ENCRYPTED");
+        (looks_valid && !encrypted && validate_ssh_private_key(&pem).is_ok()).then_some(pem)
+    });
+
+    Ok(ResolvedSshTarget { host: real_host, port: port as i32, username, private_key })
+}

@@ -214,6 +214,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
           options?.onAddLog?.(`Saved node → ${displayName}`, "success");
         })
         .catch((e) => options?.onAddLog?.(`QUICK_NODE_SAVE_FAILED: ${e}`, "error"));
+      return sessionId;
     },
     [options]
   );

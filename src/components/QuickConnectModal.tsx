@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Zap, X, AlertTriangle, KeyRound, Lock, History } from "lucide-react";
 import PasswordField from "./PasswordField";
 
@@ -22,9 +22,11 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConnect: (auth: QuickAuth) => void;
+  /** Pre-fills host/port/user when opened from a detected ssh command. */
+  prefill?: { host: string; port: number; username: string } | null;
 }
 
-const QuickConnectModal = ({ isOpen, onClose, onConnect }: Props) => {
+const QuickConnectModal = ({ isOpen, onClose, onConnect, prefill }: Props) => {
   const [host, setHost] = useState("");
   const [port, setPort] = useState<number>(22);
   const [username, setUsername] = useState("root");
@@ -55,6 +57,14 @@ const QuickConnectModal = ({ isOpen, onClose, onConnect }: Props) => {
     setHistory([]);
     try { localStorage.removeItem("submarine-quick-history"); } catch {}
   };
+
+  useEffect(() => {
+    if (isOpen && prefill) {
+      setHost(prefill.host);
+      setPort(prefill.port);
+      setUsername(prefill.username);
+    }
+  }, [isOpen, prefill]);
 
   if (!isOpen) return null;
 

@@ -20,6 +20,7 @@ const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ defa
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
+import { parseSshCommand, sshTargetKey, SshTarget } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { playTerminalBellChime } from '../terminal/bell';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
@@ -460,6 +461,34 @@ const TerminalView = ({
     setToast({ msg, tone });
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 1400);
+  };
+
+  // "Save and open natively" offer shown after `ssh`/`sftp` is typed in a local shell.
+  const [sshOffer, setSshOffer] = useState<SshTarget | null>(null);
+  const sshOfferTimerRef = useRef<number | null>(null);
+  const sshDismissedRef = useRef<Set<string>>(new Set());
+  const dismissSshOffer = () => {
+    if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
+    setSshOffer((cur) => {
+      if (cur) sshDismissedRef.current.add(sshTargetKey(cur));
+      return null;
+    });
+  };
+  const acceptSshOffer = async () => {
+    const offer = sshOffer;
+    if (!offer) return;
+    if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
+    setSshOffer(null);
+    sshDismissedRef.current.add(sshTargetKey(offer));
+    try {
+      const r = await invoke<{ host: string; port: number; username: string; private_key: string | null }>(
+        'resolve_ssh_target',
+        { host: offer.host, username: offer.username ?? null, port: offer.port ?? null, identityFile: offer.identityFile ?? null },
+      );
+      window.dispatchEvent(new CustomEvent('subterm-open-ssh-target', { detail: { ...r, openSftp: offer.kind === 'sftp' } }));
+    } catch (e) {
+      notify(String(e), 'err');
+    }
   };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -1085,6 +1114,15 @@ const TerminalView = ({
             setLastCommand(null);
           }
           commandBufRef.current = "";
+          // Local shell only: offer to save/open a typed ssh/sftp target natively.
+          if (isLocal && isFeatureEnabled('sshDetect') && !looksLikePasswordPrompt(recentOutputRef.current)) {
+            const target = parseSshCommand(line);
+            if (target && !sshDismissedRef.current.has(sshTargetKey(target))) {
+              setSshOffer(target);
+              if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
+              sshOfferTimerRef.current = window.setTimeout(() => dismissSshOffer(), 15000);
+            }
+          }
           // Do NOT persist what was typed at a no-echo password/passphrase
           // prompt — otherwise sudo/su/mysql -p/gpg secrets land verbatim in
           // searchable history. The onData handler can't see the PTY echo
@@ -1890,6 +1928,28 @@ const TerminalView = ({
           onToggleModifier={toggleModifier}
           onSpecialKey={sendSpecialKey}
         />
+      )}
+      {sshOffer && (
+        <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-white/10 shadow-xl text-[11px] font-sans text-zinc-200">
+          <span>
+            Save <b className="text-white">{sshOffer.username ? `${sshOffer.username}@` : ''}{sshOffer.host}</b> to your servers and open it
+            {sshOffer.kind === 'sftp' ? ' with the file panel' : ''}?
+          </span>
+          <button
+            type="button"
+            onClick={() => { void acceptSshOffer(); }}
+            className="px-2 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary font-bold hover:bg-primary/30"
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            onClick={dismissSshOffer}
+            className="px-2 py-0.5 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
       {/* Clipboard toast — bottom-right of the terminal pane. Pointer-events
           off so a stray hover never blocks selection / right-click. */}

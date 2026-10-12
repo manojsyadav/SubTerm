@@ -35,6 +35,12 @@ export const FEATURES = [
     desc: "Click a file path or file name in terminal output to open it in the editor, including relative paths (looked up in the shell's folder, your home folder, or by search on the server). When off, no path scanning or lookup runs.",
   },
   {
+    key: "sshDetect",
+    group: "Terminal",
+    label: "Offer to save ssh/sftp targets",
+    desc: "When you type ssh or sftp in a local terminal, offer to save the host to your server list and open it as a native session. Only the typed host, user, port and key path are read; passwords are never captured. When off, typed commands are not inspected.",
+  },
+  {
     key: "terminalCommandBlocks",
     group: "Terminal",
     label: "Command blocks and quick actions",

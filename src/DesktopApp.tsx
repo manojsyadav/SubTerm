@@ -427,6 +427,39 @@ function DesktopApp() {
   const [isNetworkToolsOpen, setIsNetworkToolsOpen] = useState(false);
   const [isRecordingPlayerOpen, setIsRecordingPlayerOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
+  const [quickConnectPrefill, setQuickConnectPrefill] = useState<{ host: string; port: number; username: string } | null>(null);
+  const pendingSftpRef = useRef(false);
+
+  // Quick Connect that can also open the SFTP panel once the session mounts
+  // (used when the target came from an `sftp` command typed in a local shell).
+  const connectQuick = useCallback((auth: QuickAuth) => {
+    const sessionId = openQuickConnect(auth);
+    if (pendingSftpRef.current && sessionId) {
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent(`subterm-toggle-tool-${sessionId}`, { detail: { tool: "sftp" } }));
+      }, 800);
+    }
+    pendingSftpRef.current = false;
+    setQuickConnectPrefill(null);
+  }, [openQuickConnect]);
+
+  // A local terminal detected `ssh`/`sftp <target>` and the user accepted the offer.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ host: string; port: number; username: string; private_key: string | null; openSftp: boolean }>).detail;
+      if (!d) return;
+      pendingSftpRef.current = !!d.openSftp;
+      if (d.private_key) {
+        connectQuick({ host: d.host, port: d.port, username: d.username, private_key: d.private_key });
+      } else {
+        // No usable key: reuse the Quick Connect form so the user types the password.
+        setQuickConnectPrefill({ host: d.host, port: d.port, username: d.username });
+        setIsQuickConnectOpen(true);
+      }
+    };
+    window.addEventListener("subterm-open-ssh-target", onOpen);
+    return () => window.removeEventListener("subterm-open-ssh-target", onOpen);
+  }, [connectQuick]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCommandPanelOpen, setIsCommandPanelOpen] = useState(false);
   const [editCommandData, setEditCommandData] = useState<{ id: number | null, title: string, content: string, serverId: number | null, tags: string }>({ id: null, title: "", content: "", serverId: null, tags: "" });
@@ -2338,8 +2371,9 @@ function DesktopApp() {
 
       <QuickConnectModal
         isOpen={isQuickConnectOpen}
-        onClose={() => setIsQuickConnectOpen(false)}
-        onConnect={openQuickConnect}
+        onClose={() => { setIsQuickConnectOpen(false); setQuickConnectPrefill(null); pendingSftpRef.current = false; }}
+        onConnect={connectQuick}
+        prefill={quickConnectPrefill}
       />
 
       {rdpView && (
