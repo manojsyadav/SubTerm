@@ -18,6 +18,7 @@ export interface AppSettings {
   enableMonitoring: boolean;
   terminalWebgl: boolean;
   rightClickAction: string;
+  linkOpenMode: string;
   copyOnSelect: boolean;
   terminalTheme: string;
   terminalCursorStyle: string;

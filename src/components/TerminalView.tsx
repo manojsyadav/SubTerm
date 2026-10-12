@@ -19,6 +19,7 @@ import HistorySearchOverlay from './HistorySearchOverlay';
 const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ default: m.AiCopilotModal })));
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
+import { IS_MOBILE_OS } from '../util/platform';
 import { getTerminalTheme } from '../terminal/themes';
 import { playTerminalBellChime } from '../terminal/bell';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
@@ -880,6 +881,26 @@ const TerminalView = ({
               }
             }
 
+          }
+
+          // Links open on Ctrl/Cmd+Click by default so a plain click (focus /
+          // start of a selection) never opens anything by accident. Touch
+          // devices have no modifier key, so they always open on tap.
+          const hintEl = terminalRef.current;
+          for (const link of links) {
+            const open = link.activate;
+            link.activate = (ev, text) => {
+              const mode = localStorage.getItem('subterm-link-open-mode') || 'ctrl-click';
+              if (mode === 'ctrl-click' && !IS_MOBILE_OS && !(ev.ctrlKey || ev.metaKey)) return;
+              open(ev, text);
+            };
+            link.hover = () => {
+              const mode = localStorage.getItem('subterm-link-open-mode') || 'ctrl-click';
+              if (hintEl && mode === 'ctrl-click' && !IS_MOBILE_OS) {
+                hintEl.title = `${/Mac/i.test(navigator.platform) ? 'Cmd' : 'Ctrl'}+Click to open`;
+              }
+            };
+            link.leave = () => { if (hintEl) hintEl.removeAttribute('title'); };
           }
 
           callback(links.length > 0 ? links : undefined);

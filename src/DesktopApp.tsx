@@ -115,6 +115,7 @@ function DesktopApp() {
     enableMonitoring: (localStorage.getItem('subterm-enable-monitoring') || localStorage.getItem('submarine-enable-monitoring')) !== 'false',
     terminalWebgl: localStorage.getItem('subterm-terminal-webgl') !== 'false',
     rightClickAction: localStorage.getItem('subterm-right-click-action') || 'smart',
+    linkOpenMode: localStorage.getItem('subterm-link-open-mode') || 'ctrl-click',
     copyOnSelect: localStorage.getItem('subterm-copy-on-select') !== 'false',
     terminalTheme: localStorage.getItem('subterm-terminal-theme') || 'subterm-dark',
     terminalCursorStyle: localStorage.getItem('subterm-terminal-cursor-style') || 'block',
@@ -518,6 +519,7 @@ function DesktopApp() {
     localStorage.setItem('submarine-enable-monitoring', appSettings.enableMonitoring ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-webgl', appSettings.terminalWebgl !== false ? 'true' : 'false');
     localStorage.setItem('subterm-right-click-action', appSettings.rightClickAction || 'smart');
+    localStorage.setItem('subterm-link-open-mode', appSettings.linkOpenMode || 'ctrl-click');
     localStorage.setItem('subterm-copy-on-select', appSettings.copyOnSelect !== false ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-theme', appSettings.terminalTheme || 'subterm-dark');
     localStorage.setItem('subterm-terminal-cursor-style', appSettings.terminalCursorStyle || 'block');

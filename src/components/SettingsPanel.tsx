@@ -575,6 +575,16 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
           <option value="paste">Paste Immediately (PuTTY style)</option>
         </select>
       </Row>
+      <Row label="Open Links" desc="How URLs and file paths in terminal output are opened (touch devices always use tap)">
+        <select
+          value={settings.linkOpenMode || 'ctrl-click'}
+          onChange={(e) => setSettings({ ...settings, linkOpenMode: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="ctrl-click">Ctrl/Cmd + Click</option>
+          <option value="click">Plain Click</option>
+        </select>
+      </Row>
       <Row label="Copy on select" desc="Automatically copy highlighted terminal text to system clipboard">
         <Toggle
           checked={settings.copyOnSelect !== false}
