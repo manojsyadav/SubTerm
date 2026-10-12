@@ -3,6 +3,8 @@ import type { AppSettings, SetAppSettings } from "../types.settings";
 import { SettingsFileLinkTypes } from "./SettingsFileLinkTypes";
 import { SettingsRdpMode } from "./SettingsRdpMode";
 import { FEATURES, FEATURE_FLAGS_CHANGED_EVENT, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
+import { buildBackup, parseBackup, applyBackup } from "../settingsBackup";
+import { saveTextFile } from "../terminal/saveFile";
 import { isSettingChanged, resetSetting, pageHasChanges, resetPage, type ResettablePage } from "../settingsDefaults";
 import { useState, useEffect, createContext, useContext, type ComponentProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -215,6 +217,26 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
     if (part !== 'general' || IS_MOBILE_OS) return;
     invoke<{ id: string; name: string }[]>('get_available_local_shells').then(setLocalShells).catch(() => setLocalShells([]));
   }, [part]);
+  const [backupMsg, setBackupMsg] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
+  const exportPrefs = async () => {
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const path = await saveTextFile(JSON.stringify(buildBackup(), null, 2), `subterm-preferences-${day}`, "json");
+      if (path) setBackupMsg({ text: "Preferences exported.", tone: "ok" });
+    } catch (e) {
+      setBackupMsg({ text: `Export failed: ${e}`, tone: "err" });
+    }
+  };
+  const importPrefs = async (file: File | undefined) => {
+    if (!file) return;
+    const parsed = parseBackup(await file.text());
+    if (!parsed.ok) { setBackupMsg({ text: parsed.error, tone: "err" }); return; }
+    const n = Object.keys(parsed.backup.prefs).length;
+    if (!window.confirm(`Replace your current preferences with the ${n} saved in this file? SubTerm will reload.`)) return;
+    const { applied, skipped } = applyBackup(parsed.backup);
+    setBackupMsg({ text: `Imported ${applied} preference${applied === 1 ? "" : "s"}${skipped ? `, skipped ${skipped}` : ""}. Reloading...`, tone: "ok" });
+    window.setTimeout(() => window.location.reload(), 600);
+  };
   const [importThemeModal, setImportThemeModal] = useState(false);
   const [importThemeText, setImportThemeText] = useState("");
   const [importThemeError, setImportThemeError] = useState("");
@@ -570,6 +592,19 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
               </Row>
             )}
           </SectionCard>
+          <SectionCard id="backup" title="Backup & Restore" subtitle="Preferences live only on this computer. Export them to move to another install or keep a copy. Servers, credentials and keys are not included; use Maintenance and Profiles for those.">
+            <Row id="backup-actions" label="Preferences file" desc="A small JSON file. Machine-bound items such as biometric unlock and pinned server ids are left out.">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { void exportPrefs(); }} className="px-3 h-8 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold hover:bg-primary/20">Export</button>
+                <label className="px-3 h-8 rounded-lg border border-white/15 text-zinc-200 text-xs font-bold hover:bg-white/10 inline-flex items-center cursor-pointer">
+                  Import
+                  <input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { void importPrefs(e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+              </div>
+            </Row>
+            {backupMsg && <p role="status" className={`text-[11px] mt-2 ${backupMsg.tone === "err" ? "text-rose-400" : "text-emerald-400"}`}>{backupMsg.text}</p>}
+          </SectionCard>
+
           <SectionCard id="security" title="Security" subtitle="Locking closes the vault and disconnects open SSH sessions; local terminals stay open.">
             <Row id="auto-lock" label="Auto-lock when idle" desc="Lock after this long without mouse or keyboard input. Output arriving in a terminal does not count as activity.">
               <select
@@ -1062,6 +1097,8 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
   { id: "startup", page: "general", label: "Startup", keywords: "launch open start" },
   { id: "local-shell", page: "general", label: "Default local shell", keywords: "powershell pwsh cmd bash wsl git shell terminal local" },
+  { id: "backup", page: "general", label: "Backup & Restore", keywords: "export import preferences settings backup restore migrate move" },
+  { id: "backup-actions", page: "general", label: "Preferences file", keywords: "export import preferences backup" },
   { id: "security", page: "general", label: "Security", keywords: "lock idle auto lock clipboard minimise" },
   { id: "auto-lock", page: "general", label: "Auto-lock when idle", keywords: "lock idle timeout inactivity security" },
   { id: "lock-on-minimize", page: "general", label: "Lock when the window is hidden", keywords: "lock minimise minimize hidden security" },

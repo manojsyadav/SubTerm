@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(settings)` — Backup & restore preferences**:
+  Settings > General > Backup & Restore exports your preferences to a JSON file and imports one back. Useful for moving to another install or the portable build; servers, credentials and keys are not included.
+
 - **`feat(security)` — Auto-lock**:
   Settings > General > Security adds auto-lock after an idle period, lock when the window is hidden, and clear clipboard on lock. Automatic locks close the vault and disconnect open SSH sessions without asking; local terminals stay open.
 
