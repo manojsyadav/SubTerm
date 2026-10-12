@@ -109,6 +109,12 @@ export function resetSetting(id: string, settings: AppSettings): AppSettings {
   return key ? { ...settings, [key]: SETTING_DEFAULTS[key] } : settings;
 }
 
+/** Every setting with a factory value back to default, and every feature switched on. */
+export function resetAllSettings(settings: AppSettings): AppSettings {
+  FEATURES.forEach((f) => setFeatureEnabled(f.key, true));
+  return { ...settings, ...SETTING_DEFAULTS };
+}
+
 export function pageHasChanges(page: ResettablePage, settings: AppSettings): boolean {
   return PAGE_ROWS[page].some((id) => isSettingChanged(id, settings));
 }

@@ -9,7 +9,7 @@ vi.stubGlobal("localStorage", {
 });
 vi.stubGlobal("window", { dispatchEvent: () => true, addEventListener: () => {}, removeEventListener: () => {} });
 
-const { SETTING_DEFAULTS, ROW_SETTING_KEY, isSettingChanged, resetSetting, pageHasChanges, resetPage } = await import("./settingsDefaults");
+const { SETTING_DEFAULTS, ROW_SETTING_KEY, isSettingChanged, resetSetting, pageHasChanges, resetPage, resetAllSettings } = await import("./settingsDefaults");
 const flags = await import("./featureFlags");
 
 const base: Record<string, unknown> = { ...SETTING_DEFAULTS };
@@ -44,5 +44,16 @@ describe("settingsDefaults", () => {
     const out = resetPage("terminal", s) as { rightClickAction: string; startupView: string };
     expect(out.rightClickAction).toBe("smart");
     expect(out.startupView).toBe("local");
+  });
+
+  it("resets every setting and re-enables every feature, leaving unrelated settings alone", () => {
+    flags.setFeatureEnabled("sshDetect", false);
+    const s = as_({ ...base, rightClickAction: "menu", autoLockMin: 15, terminalTheme: "nord", quickAccessServerIds: [1, 2] });
+    const out = resetAllSettings(s) as unknown as Record<string, unknown>;
+    expect(out.rightClickAction).toBe("smart");
+    expect(out.autoLockMin).toBe(0);
+    expect(out.terminalTheme).toBe("subterm-dark");
+    expect(out.quickAccessServerIds).toEqual([1, 2]);
+    expect(flags.isFeatureEnabled("sshDetect")).toBe(true);
   });
 });

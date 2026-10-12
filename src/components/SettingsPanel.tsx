@@ -5,7 +5,7 @@ import { SettingsRdpMode } from "./SettingsRdpMode";
 import { FEATURES, FEATURE_FLAGS_CHANGED_EVENT, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
 import { buildBackup, parseBackup, applyBackup } from "../settingsBackup";
 import { saveTextFile } from "../terminal/saveFile";
-import { isSettingChanged, resetSetting, pageHasChanges, resetPage, type ResettablePage } from "../settingsDefaults";
+import { isSettingChanged, resetSetting, pageHasChanges, resetPage, resetAllSettings, type ResettablePage } from "../settingsDefaults";
 import { useState, useEffect, createContext, useContext, type ComponentProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IS_MOBILE_OS } from "../util/platform";
@@ -1022,12 +1022,12 @@ const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: 
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Reset Preferences" subtitle="Resets UI aesthetics to factory defaults. Your servers and profiles are unaffected.">
+      <SectionCard title="Reset Preferences" subtitle="Restores every setting on the General, Appearance, Terminal and Features pages to its default and switches all features back on. Your servers, credentials, profiles, pinned servers and shortcuts are unaffected.">
         <button
-          onClick={() => { if (window.confirm("Reset all UI customisations to defaults?")) { setSettings((s) => ({ ...s, primaryColor: "#60a5fa", backgroundColor: "#0a0a0c", terminalFontSize: 14, enableMonitoring: true })); } }}
+          onClick={() => { if (window.confirm("Reset all settings to their defaults?")) { setSettings(resetAllSettings(settings)); } }}
           className="mt-4 px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase hover:bg-white/5 transition-all w-full"
         >
-          Reset to Defaults
+          Reset All Settings
         </button>
       </SectionCard>
 

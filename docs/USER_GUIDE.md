@@ -244,7 +244,7 @@ SubTerm includes a **Settings Panel** with 7 pages and a search box that jumps s
 - **System**: one page with three tabs, all behind the vault lock.
   - **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
 - **Changed-from-default markers**: on the General, Appearance, Terminal and Features pages a small dot appears beside any setting you have changed; click it to restore that one setting. **Reset this page to defaults** under the page title restores the whole page.
-  - **Maintenance**: Reset UI preferences to factory defaults, and **Export Server List** to a portable JSON or CSV file (name, host, port, username, folder, proxy, notes — never passwords or keys) for backup or migration.
+  - **Maintenance**: **Reset All Settings** restores every setting on General, Appearance, Terminal and Features to its default and switches all features back on (servers, credentials and profiles are untouched), and **Export Server List** to a portable JSON or CSV file (name, host, port, username, folder, proxy, notes — never passwords or keys) for backup or migration.
 
 ---
 
