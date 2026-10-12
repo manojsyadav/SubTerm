@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Server, KeyRound, Braces, Activity, Settings, Lock, ArrowLeftRight, Terminal, FolderOpen, Monitor } from "lucide-react";
+import { Server, KeyRound, Braces, Activity, Settings, Lock, ArrowLeftRight, Terminal, FolderOpen, Monitor, Network } from "lucide-react";
 
 interface MonitorListRow {
   node_id: number;
@@ -31,6 +31,8 @@ interface SidebarProps {
   enableMonitoring?: boolean;
   /** RDP page is hidden when the RDP feature toggle is off. */
   showRdp?: boolean;
+  /** Network Tools opens a dialog rather than a page, and is hidden when its feature is off. */
+  showNetworkTools?: boolean;
 }
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -50,6 +52,7 @@ export const Sidebar = ({
   onSwitchProfile,
   enableMonitoring = true,
   showRdp = true,
+  showNetworkTools = true,
 }: SidebarProps) => {
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
@@ -156,6 +159,7 @@ export const Sidebar = ({
     ...(showRdp ? [{ id: 'rdp', icon: Monitor, label: 'RDP' }] : []),
     { id: 'vault', icon: KeyRound, label: 'Credentials' },
     { id: 'library', icon: Braces, label: 'Snippets' },
+    ...(showNetworkTools ? [{ id: 'network', icon: Network, label: 'Network Tools' }] : []),
     ...(enableMonitoring ? [{ id: 'monitor', icon: Activity, label: 'Monitor' }] : []),
   ];
 

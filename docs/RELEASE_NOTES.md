@@ -42,6 +42,9 @@
 - **Behaviour changes to know about**:
   A local shell no longer opens at launch unless **Settings > General > On Startup** is *New Local Terminal* (the app lands on the server list). Right-click now defaults to *Smart* (copy selection, else paste; Shift+Right-Click for the menu), and links in terminal output need Ctrl/Cmd+Click (**Settings > Terminal > Open Links** restores plain click). Existing saved choices for these settings are kept.
 
+- **`feat(servers)` — Cleaner Servers page**:
+  The search box is now quick connect: type an IP, `user@ip` or `host:port` and press Enter to connect (a single saved match opens instead; Quick Connect asks for the password), and a lightning button inside the box opens the Quick Connect dialog. Add server and Import SSH config are one split button at the right end of the search row. Local Shell moved out (use **Local** in the sidebar) and Network Tools moved to the sidebar under Snippets.
+
 - **`feat(nav)` — New sidebar pages and renames**:
   The sidebar now reads **Local**, Servers, **SFTP**, **RDP**, **Credentials** (was Logins), **Snippets** (was Library) and Monitor. Local opens your default shell (Settings > General > Default local shell; Automatic is PowerShell 7, else Windows PowerShell). SFTP lists your SSH servers and opens a full-width, two-sided file browser; RDP lists your Remote Desktop servers and can add one. The session toolbar tab and the command palette use the new names too.
 

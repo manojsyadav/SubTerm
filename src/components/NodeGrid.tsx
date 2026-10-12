@@ -1,4 +1,4 @@
-import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, TerminalSquare, ShieldAlert, Download, Activity } from "lucide-react";
+import { Search, Plus, Server, Globe, Folder, ChevronLeft, Trash2, Edit2, Zap, Check, X, Copy, GripVertical, Box, Layers, ShieldAlert, Download } from "lucide-react";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -8,6 +8,8 @@ import { renderServerIcon } from "./ServerIcon";
 import DistroLogo from "./DistroLogo";
 import type { Server as ServerRecord, Folder as FolderRecord } from "../types";
 import type { Session } from "../hooks/useSessionManager";
+import { parseQuickTarget, type QuickTarget } from "../utils/quickTarget";
+import { AddServerSplitButton } from "./AddServerSplitButton";
 
 // Fixed card geometry — MUST match the rendered card's actual CSS (h-16 =
 // 64px) and the grid's gap-3 (12px). Both the row virtualizer and the
@@ -28,10 +30,11 @@ interface NodeGridProps {
   // Method syntax (bivariant params): these are also wired straight to
   // onClick, so they may receive the click event as their first argument.
   onAddClick(folderId?: unknown): void;
+  /** Opens the Quick Connect dialog empty (the lightning button in the search box). */
   onQuickConnect?(arg?: unknown): void;
-  onOpenLocalTerminal?(arg?: unknown): void;
+  /** Enter in the search box on something that looks like `[user@]host[:port]` and matches no saved server. */
+  onQuickConnectTarget?(target: QuickTarget): void;
   onImportSSHConfig?(arg?: unknown): void;
-  onOpenNetworkTools?(arg?: unknown): void;
   onRemoveServer: (id: number) => void | Promise<unknown>;
   onRemoveFolder: (id: number) => void | Promise<unknown>;
   onRenameFolder?: (id: number, name: string) => void | Promise<unknown>;
@@ -40,7 +43,7 @@ interface NodeGridProps {
   isMobile?: boolean;
 }
 
-export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onOpenLocalTerminal, onImportSSHConfig, onOpenNetworkTools, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: NodeGridProps) => {
+export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp, onActiveFolderChange, onOpenServer, onOpenMultipleServers, onEditServer, onAddClick, onQuickConnect, onQuickConnectTarget, onImportSSHConfig, onRemoveServer, onRemoveFolder, onRenameFolder, onCloneServer, onReorderServers, isMobile }: NodeGridProps) => {
   const [search, setSearch] = useState("");
   // Native window.confirm() is a silent no-op inside Tauri's Android WebView
   // (same shim gap useTextPrompt was added for), so the delete buttons here
@@ -603,15 +606,46 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
 
   return (
     <div className="flex-1 flex flex-col h-full p-6 overflow-hidden bg-transparent">
-      <div className="relative max-w-sm w-full mx-auto mb-6 shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
-        <input
-          type="text"
-          placeholder="Search servers…"
-          className="w-full h-9 bg-[#1c1c21] border border-white/10 rounded-lg pl-9 pr-4 text-[13px] text-zinc-100 outline-none focus:border-primary/50 focus:bg-[#16161a] transition-all placeholder:text-zinc-600 shadow-inner"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex items-center gap-3 mb-6 shrink-0">
+        <div className="relative flex-1 max-w-xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
+          <input
+            type="text"
+            placeholder="Search servers, or type [user@]host and press Enter to connect"
+            aria-label="Search servers or connect to a host"
+            className="w-full h-9 bg-[#1c1c21] border border-white/10 rounded-lg pl-9 pr-10 text-[13px] text-zinc-100 outline-none focus:border-primary/50 focus:bg-[#161619] transition-all placeholder:text-zinc-600 shadow-inner"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !isSearching) return;
+              // One match: open it. No match: if the text reads as an address, connect to it
+              // (Quick Connect asks for the password). Several matches: let the user pick.
+              if (displayedServers.length === 1) {
+                onOpenServer(displayedServers[0]);
+              } else if (displayedServers.length === 0 && onQuickConnectTarget) {
+                const target = parseQuickTarget(search);
+                if (target) {
+                  onQuickConnectTarget(target);
+                  setSearch("");
+                }
+              }
+            }}
+          />
+          {onQuickConnect && (
+            <button
+              type="button"
+              onClick={onQuickConnect}
+              title="Quick connect to a host that is not saved"
+              aria-label="Quick connect"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15 transition-colors"
+            >
+              <Zap size={14} />
+            </button>
+          )}
+        </div>
+        <div className="ml-auto shrink-0">
+          <AddServerSplitButton onAdd={onAddClick} onImport={onImportSSHConfig} />
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0">
@@ -663,14 +697,6 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                 <p className="text-[12px] text-zinc-500 mt-1">Tap here to get started.</p>
               </div>
             </button>
-            {onOpenLocalTerminal && (
-              <button
-                onClick={onOpenLocalTerminal}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all shadow-sm"
-              >
-                <TerminalSquare size={15} /> Launch Local Shell
-              </button>
-            )}
             {onImportSSHConfig && (
               <button
                 onClick={onImportSSHConfig}
@@ -684,58 +710,15 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           <>
             {/* Compact action toolbar (root only) — sized to its own content
                 rather than filling a full grid cell like the cards. */}
-            {(!isSearching && activeFolderId === null) && (
+            {(!isSearching && activeFolderId === null && displayedServers.length >= 2 && onOpenMultipleServers) && (
               <div className="flex items-center gap-2 mb-4 flex-wrap shrink-0">
                 <button
-                  onClick={onAddClick}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary/10 border border-primary/25 text-primary text-[11px] font-bold uppercase tracking-wider hover:bg-primary/20 transition-colors"
+                  onClick={() => onOpenMultipleServers(displayedServers)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-500/20 hover:text-white transition-colors"
+                  title="Connect all displayed servers and enable broadcast"
                 >
-                  <Plus size={13} /> Add server
+                  <Layers size={13} /> Connect All ({displayedServers.length})
                 </button>
-                {onQuickConnect && (
-                  <button
-                    onClick={onQuickConnect}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300/90 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-500/20 hover:text-amber-200 transition-colors"
-                  >
-                    <Zap size={13} /> Quick connect
-                  </button>
-                )}
-                {onOpenLocalTerminal && (
-                  <button
-                    onClick={onOpenLocalTerminal}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors"
-                    title="Launch a local shell (PowerShell / Bash) session"
-                  >
-                    <TerminalSquare size={13} /> Local Shell
-                  </button>
-                )}
-                {onImportSSHConfig && (
-                  <button
-                    onClick={onImportSSHConfig}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-400 text-[11px] font-bold uppercase tracking-wider hover:bg-sky-500/20 hover:text-sky-300 transition-colors"
-                    title="Import hosts from OpenSSH ~/.ssh/config, PuTTY, or MobaXterm"
-                  >
-                    <Download size={13} /> Import SSH Config
-                  </button>
-                )}
-                {onOpenNetworkTools && (
-                  <button
-                    onClick={onOpenNetworkTools}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-teal-500/10 border border-teal-500/25 text-teal-300 text-[11px] font-bold uppercase tracking-wider hover:bg-teal-500/20 hover:text-teal-200 transition-colors"
-                    title="Network diagnostics: TCP port probe, latency ping, service audit"
-                  >
-                    <Activity size={13} /> Network Tools
-                  </button>
-                )}
-                {displayedServers.length >= 2 && onOpenMultipleServers && (
-                  <button
-                    onClick={() => onOpenMultipleServers(displayedServers)}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-500/20 hover:text-white transition-colors"
-                    title="Connect all displayed servers and enable broadcast"
-                  >
-                    <Layers size={13} /> Connect All ({displayedServers.length})
-                  </button>
-                )}
               </div>
             )}
 

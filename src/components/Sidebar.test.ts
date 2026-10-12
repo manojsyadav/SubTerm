@@ -29,7 +29,7 @@ afterEach(() => { act(() => root.unmount()); host.remove(); });
 describe("Sidebar", () => {
   it("lists the pages in order with the renamed entries", () => {
     mount();
-    expect(titles()).toEqual(["Local", "Servers", "SFTP", "RDP", "Credentials", "Snippets"]);
+    expect(titles()).toEqual(["Local", "Servers", "SFTP", "RDP", "Credentials", "Snippets", "Network Tools"]);
   });
 
   it("hides RDP when the feature is off", () => {

@@ -15,11 +15,12 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 ### 1.2 The Sidebar Pages
 The left sidebar (bottom bar on narrow windows) has one entry per activity:
 - **Local**: opens a local terminal with your default shell, or switches to the one already open. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL). The tab strip's shell menu still opens any other shell.
-- **Servers**: your saved servers and folders (the home page).
+- **Servers**: your saved servers and folders (the home page). The search box doubles as quick connect: type `10.0.0.5`, `root@10.0.0.5` or `host.example.com:2222` and press **Enter**. If a saved server matches (and it is the only match) it opens; if nothing matches, the Quick Connect dialog opens with the host, user and port filled in and the cursor in the password field. A bare word such as `web` is only ever a search. The lightning button inside the search box opens the empty Quick Connect dialog. **Add server** (with **Import SSH config** under its arrow) sits at the right end of the same row; **Connect All** appears below it when there are two or more servers.
 - **SFTP**: a searchable list of your SSH servers. Click one to open its file browser across the whole window, with this computer's files on one side and the server's on the other (drag to transfer). Close the file browser (the **x** in its header) to return to the terminal; the terminal keeps running behind it.
 - **RDP**: a searchable list of your Remote Desktop servers with a **New RDP server** button. Connect opens it inside SubTerm or in the system client, as set under **Settings > General > Remote Desktop**. Hidden when the RDP feature is turned off.
 - **Credentials** (formerly *Logins*): saved passwords and SSH keys.
 - **Snippets** (formerly *Library*): saved commands and notes.
+- **Network Tools**: opens the network diagnostics dialog (TCP port probe, latency ping, service audit). Hidden when the Network Tools feature is off.
 - **Monitor**: resource dashboard, when monitoring is on.
 
 ### 1.3 Finding a Server
@@ -34,7 +35,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 *Goal*: Connect to a remote Linux or BSD server and start an interactive terminal session.
 
 1. **Add Server**:
-   - Click the **+ New Server** button on the home dashboard or press `Ctrl+N`.
+   - Click **Add server** at the right end of the search row on the Servers page or press `Ctrl+N`. The arrow beside it holds **Import SSH config**.
    - Provide a friendly **Name**, **Host/IP**, and **Port** (default: `22`).
 2. **Configure Authentication**:
    - Choose **Password Authentication** or **Private Key**.
@@ -95,7 +96,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 10. **1-Click OpenSSH `~/.ssh/config` & Client Importer**:
     - Effortlessly migrate existing SSH hosts without manual entry.
-    - Click **Import SSH Config** in the Node Toolbar (or the prominent button in the empty server state).
+    - Open the arrow beside **Add server** on the Servers page and choose **Import SSH config** (or use the button in the empty server state).
     - SubTerm scans your local standard OpenSSH configuration (`~/.ssh/config` on Linux/macOS or `%USERPROFILE%\.ssh\config` on Windows), parses `Host`, `HostName`, `User`, `Port`, and `IdentityFile` declarations, and allows batch-importing into your encrypted vault with 1 click.
     - Also supports importing from PuTTY session registry exports and Termius JSON vaults.
 
@@ -107,7 +108,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 12. **Interactive Network Diagnostics & TCP Port Prober**:
     - Rapidly troubleshoot connectivity before or during connection issues.
-    - Click **Network Tools** (`Activity` icon) in the node toolbar or select **Network Diagnostics** from any server card's context menu.
+    - Click **Network Tools** in the sidebar (below Snippets) or select **Network Diagnostics** from any server card's context menu.
     - **TCP Ping & Latency**: Test connectivity to any host/port and observe real-time round-trip latency (`ms`).
     - **Common Port Audit**: 1-click audit scanning essential infrastructure ports simultaneously: SSH (22), HTTP (80), HTTPS (443), MySQL (3306), PostgreSQL (5432), Redis (6379), Web Alternative (8080), and HTTPS Alternative (8443).
     - **Wake-on-LAN (WOL)**: Send magic broadcast packets (`FF:FF:FF:FF:FF:FF` + MACx16) to wake sleeping local network servers.
@@ -272,7 +273,7 @@ npm run tauri dev -- --features full-ssh-algos
 The pure-Rust default build intentionally disables legacy RSA host keys to reduce attack surface and build dependencies.
 
 ### Q: How do I open a native local terminal on my computer?
-Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar. SubTerm no longer opens a local shell at launch by default; set **Settings > General > On Startup** to *New Local Terminal* if you want that. Typing `exit` closes the tab. On Windows, this launches PowerShell or Command Prompt via ConPTY. On Linux/macOS, it launches your default `$SHELL`.
+Press `Ctrl+Alt+T` or click **Local** in the sidebar. SubTerm no longer opens a local shell at launch by default; set **Settings > General > On Startup** to *New Local Terminal* if you want that. Typing `exit` closes the tab. On Windows, this launches PowerShell or Command Prompt via ConPTY. On Linux/macOS, it launches your default `$SHELL`.
 
 ### Q: What happens if my laptop sleeps or I switch networks mid-session?
 SubTerm detects both and retries automatically — you don't need to manually reconnect. A sleep/resume cycle or a network change (Wi-Fi roam, VPN toggle, cable unplug) triggers an immediate reconnect attempt instead of waiting for the passive connection-health check to notice. If the server is still unreachable, retries continue with increasing backoff (2s, 4s, 8s, up to 30s) until it comes back, shown as a "Reconnecting · attempt N" banner. A connection you disconnected yourself (right-click → Disconnect) never auto-reconnects — click **Reconnect** on the banner when you're ready.

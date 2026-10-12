@@ -1978,7 +1978,8 @@ function DesktopApp() {
       <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
         <Sidebar
           activeTab={activeView.startsWith('session-local-') ? 'local' : activeView.startsWith('session-') ? 'nodes' : activeView}
-          setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else setActiveView(tab); }}
+          setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else if (tab === 'network') setIsNetworkToolsOpen(true); else setActiveView(tab); }}
+          showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
           isMobile={isMobile}
           isUnlocked={isUnlocked}
@@ -2022,9 +2023,13 @@ function DesktopApp() {
                   setIsImportModalRequested(true);
                   setIsPanelOpen(true);
                 }}
-                onOpenNetworkTools={networkToolsEnabled ? () => setIsNetworkToolsOpen(true) : undefined}
                 onQuickConnect={() => setIsQuickConnectOpen(true)}
-                onOpenLocalTerminal={openLocalTerminal}
+                onQuickConnectTarget={(t) => {
+                  pendingSftpRef.current = false;
+                  pendingSaveRef.current = true;
+                  setQuickConnectPrefill({ host: t.host, port: t.port, username: t.username || appSettings.defaultSshUser || 'root' });
+                  setIsQuickConnectOpen(true);
+                }}
                 onRemoveServer={removeServer}
                 onRemoveFolder={removeFolder}
                 onRenameFolder={renameFolder}
