@@ -822,6 +822,20 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
             </Row>
           </SectionCard>
 
+          <SectionCard id="transfers" title="File Transfers" subtitle="Uploads and downloads run one at a time per session so two transfers never write the same file together.">
+            <Row id="overwrite-policy" label="When a file already exists" desc="Ask shows the compare dialog. Skip keeps the existing file. Overwrite replaces it without asking, so use it with care.">
+              <select
+                value={settings.overwritePolicy || "ask"}
+                onChange={(e) => setSettings({ ...settings, overwritePolicy: e.target.value })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value="ask">Ask me (default)</option>
+                <option value="skip">Skip existing files</option>
+                <option value="overwrite">Overwrite existing files</option>
+              </select>
+            </Row>
+          </SectionCard>
+
           <SectionCard id="command-widget" title="Command Widget">
             <Row label="Auto-dismiss timer (seconds)" desc="How long the floating output pill stays (0 = until closed)">
               <div className="flex items-center gap-3">
@@ -1229,6 +1243,8 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "paste-review", page: "terminal", label: "Review multi-line paste", keywords: "paste lines confirm script safety" },
   { id: "word-separators", page: "terminal", label: "Word separators", keywords: "double click select word" },
   { id: "scroll-on-input", page: "terminal", label: "Scroll to bottom on typing", keywords: "scroll keypress output" },
+  { id: "transfers", page: "terminal", label: "File Transfers", keywords: "sftp upload download transfer" },
+  { id: "overwrite-policy", page: "terminal", label: "When a file already exists", keywords: "overwrite skip existing conflict replace sftp transfer" },
   { id: "right-click", page: "terminal", label: "Right-Click", keywords: "paste copy context menu mouse smart" },
   { id: "copy-on-select", page: "terminal", label: "Copy on select", keywords: "clipboard selection" },
   { id: "open-links", page: "terminal", label: "Open Links", keywords: "ctrl click url file path hyperlink" },

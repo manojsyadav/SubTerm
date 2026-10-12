@@ -32,6 +32,8 @@ export interface AppSettings {
   terminalLineHeight: number;
   /** Whole-UI zoom in percent (webview zoom). */
   uiZoom: number;
+  /** What a transfer does when the target exists: "ask" (dialog), "skip" or "overwrite". */
+  overwritePolicy: string;
   /** Quick Editor: spaces per tab (1-8). */
   editorTabSize: number;
   editorWordWrap: boolean;

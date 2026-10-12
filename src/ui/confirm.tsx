@@ -81,6 +81,14 @@ export type OverwriteChoice =
   | "skip-all"
   | "cancel";
 
+/**
+ * Settings > Terminal > File Transfers > When a file already exists. `ask` (the default) shows the
+ * dialog; `skip` and `overwrite` answer it without one. Returns null when the dialog is needed.
+ */
+export function overwritePolicyChoice(policy: string | null): OverwriteChoice | null {
+  return policy === "skip" ? "skip" : policy === "overwrite" ? "overwrite" : null;
+}
+
 export interface OverwritePromptOptions {
   /** Display name (just the basename, not the full path). */
   name: string;
@@ -182,6 +190,8 @@ export const ConfirmProvider = ({ children }: { children: React.ReactNode }) => 
   }, []);
 
   const overwritePrompt = useCallback((opts: OverwritePromptOptions) => {
+    const preset = overwritePolicyChoice(localStorage.getItem("subterm-overwrite-policy"));
+    if (preset) return Promise.resolve(preset);
     return new Promise<OverwriteChoice>((resolve) => {
       setOwState({ opts, resolve });
     });

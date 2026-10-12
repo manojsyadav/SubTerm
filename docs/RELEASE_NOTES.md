@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(sftp)` — Default for existing files**:
+  Settings > Terminal > File Transfers lets uploads and downloads skip or overwrite an existing file automatically instead of asking (Ask remains the default).
+
 - **`feat(editor)` — Quick Editor preferences**:
   Settings > Appearance > Quick Editor sets font size, tab width (was fixed at 4) and line wrapping, for both the syntax-highlighted editor and the plain text fallback.
 
