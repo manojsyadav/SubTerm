@@ -9,6 +9,9 @@
 - **Behaviour changes to know about**:
   A local shell no longer opens at launch unless **Settings > General > On Startup** is *New Local Terminal* (the app lands on the server list). Right-click now defaults to *Smart* (copy selection, else paste; Shift+Right-Click for the menu), and links in terminal output need Ctrl/Cmd+Click (**Settings > Terminal > Open Links** restores plain click). Existing saved choices for these settings are kept.
 
+- **`feat(nav)` — New sidebar pages and renames**:
+  The sidebar now reads Servers, **Local**, **SFTP**, **RDP**, **Credentials** (was Logins), **Snippets** (was Library) and Monitor. Local opens your default shell (Settings > General > Default local shell; Automatic is PowerShell 7, else Windows PowerShell). SFTP lists your SSH servers and opens a full-width, two-sided file browser; RDP lists your Remote Desktop servers and can add one. The session toolbar tab and the command palette use the new names too.
+
 - **`feat(settings)` — Reorganised Settings with search**:
   Settings now has **General** (startup, Remote Desktop), **Appearance** (colours plus terminal theme and fonts), **Terminal** (mouse and clipboard, sessions, command widget, triggers) and **Features** pages. A feature's own options sit under its toggle and grey out while it is off, and a search box jumps straight to any setting. On wide windows the General, Appearance, Terminal and Features pages use two columns so far less scrolling is needed, and the Features page is split into Editor, Terminal, Panels and AI cards. A dot beside a changed setting resets it with one click, and **Reset this page to defaults** restores a whole page. Every terminal pane also gets a small **⋮** button for the full menu, and sftp targets open with the file panel as part of the session.
 

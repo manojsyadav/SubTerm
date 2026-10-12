@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import {
+import { FolderOpen, Monitor,
   Plus, X, RefreshCw, Terminal, Key,
   ArrowLeftRight, Cpu, List,
   Square, Copy, MoreVertical, Radio,
@@ -43,6 +43,8 @@ import { SnippetParamModal } from "./components/SnippetParamModal";
 import { CommandEditPanel, NoteEditPanel, CredentialEditPanel, KeyEditPanel } from "./components/VaultEditPanels";
 import { LibraryView } from "./components/LibraryView";
 import { LoginsView } from "./components/LoginsView";
+import { isFeatureEnabled } from "./featureFlags";
+import { ServerPickerView } from "./components/ServerPickerView";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
 import { publishOpenSessions } from "./fs/sessionRegistry";
@@ -118,6 +120,7 @@ function DesktopApp() {
     rightClickAction: localStorage.getItem('subterm-right-click-action') || 'smart',
     linkOpenMode: localStorage.getItem('subterm-link-open-mode') || 'ctrl-click',
     startupView: localStorage.getItem('subterm-startup-view') || 'servers',
+    localShell: localStorage.getItem('subterm-local-shell') || '',
     sshDetectMode: localStorage.getItem('subterm-ssh-detect-mode') || 'prompt',
     copyOnSelect: localStorage.getItem('subterm-copy-on-select') !== 'false',
     terminalTheme: localStorage.getItem('subterm-terminal-theme') || 'subterm-dark',
@@ -177,6 +180,13 @@ function DesktopApp() {
     openServer, openMultipleServers, openQuickConnect, openLocalTerminal,
   } = sessionManager;
 
+  // Local terminals use the shell chosen in Settings > General (empty = automatic: PowerShell 7,
+  // else Windows PowerShell on Windows; $SHELL elsewhere). Read from storage so it is current
+  // even when called from a callback created before the setting changed.
+  const openDefaultLocal = useCallback(() => {
+    openLocalTerminal(localStorage.getItem('subterm-local-shell') || undefined);
+  }, [openLocalTerminal]);
+
   const [tabNames, setTabNames] = useState<Record<string, string>>({});
 
   // Remember the most recent real session so "On startup: Last session" can reopen it.
@@ -213,7 +223,7 @@ function DesktopApp() {
       // Read at call time: this runs right after unlock, before any settings re-render.
       const mode = localStorage.getItem('subterm-startup-view') || 'servers';
       if (mode === 'local' && !IS_MOBILE_OS) {
-        openLocalTerminal();
+        openDefaultLocal();
       } else if (mode === 'last') {
         try {
           const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as
@@ -305,7 +315,7 @@ function DesktopApp() {
     if (sessions.length !== 0 || IS_MOBILE_OS) return;
     const mode = localStorage.getItem('subterm-startup-view') || 'servers';
     if (mode === 'local') {
-      openLocalTerminal();
+      openDefaultLocal();
     } else if (mode === 'last') {
       try {
         const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as { kind: string; shell?: string } | null;
@@ -357,7 +367,7 @@ function DesktopApp() {
     const remainingLocal = sessions.filter((s) => s.isLocal);
     if (remainingLocal.length === 0) {
       if ((localStorage.getItem('subterm-startup-view') || 'servers') === 'local' && !IS_MOBILE_OS) {
-        openLocalTerminal();
+        openDefaultLocal();
       } else {
         setSessions([]);
         setActiveView("nodes");
@@ -613,6 +623,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-right-click-action', appSettings.rightClickAction || 'smart');
     localStorage.setItem('subterm-link-open-mode', appSettings.linkOpenMode || 'ctrl-click');
     localStorage.setItem('subterm-startup-view', appSettings.startupView || 'servers');
+    localStorage.setItem('subterm-local-shell', appSettings.localShell || '');
     localStorage.setItem('subterm-ssh-detect-mode', appSettings.sshDetectMode || 'prompt');
     localStorage.setItem('subterm-copy-on-select', appSettings.copyOnSelect !== false ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-theme', appSettings.terminalTheme || 'subterm-dark');
@@ -876,7 +887,7 @@ function DesktopApp() {
         <div className="relative flex items-center">
           <button
             type="button"
-            onClick={() => openLocalTerminal()}
+            onClick={() => openDefaultLocal()}
             title={`Open or Focus Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
             className={`h-7 pl-2.5 pr-1.5 rounded-l-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
               activeView.startsWith("session-local-")
@@ -1880,8 +1891,9 @@ function DesktopApp() {
           (terminal gains the ~50px the vertical rail used to eat). */}
       <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
         <Sidebar
-          activeTab={activeView.startsWith('session-') ? 'nodes' : activeView}
-          setActiveTab={setActiveView}
+          activeTab={activeView.startsWith('session-local-') ? 'local' : activeView.startsWith('session-') ? 'nodes' : activeView}
+          setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else setActiveView(tab); }}
+          showRdp={isFeatureEnabled('rdpServers')}
           isMobile={isMobile}
           isUnlocked={isUnlocked}
           onUnlock={() => setIsUnlockModalOpen(true)}
@@ -1892,10 +1904,10 @@ function DesktopApp() {
         />
 
         <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent relative">
-          {!isUnlocked && (activeView === "nodes" || activeView === "vault" || activeView === "library" || activeView === "monitor") ? (
+          {!isUnlocked && (activeView === "nodes" || activeView === "vault" || activeView === "library" || activeView === "monitor" || activeView === "sftp" || activeView === "rdp") ? (
             <LockedVaultNotice
               onUnlock={() => setIsUnlockModalOpen(true)}
-              onOpenLocal={() => openLocalTerminal()}
+              onOpenLocal={() => openDefaultLocal()}
             />
           ) : (
             <>
@@ -1964,6 +1976,32 @@ function DesktopApp() {
               />
             )}
 
+            {activeView === "sftp" && (
+              <ServerPickerView
+                title="SFTP"
+                subtitle="Pick a server to browse its files next to this computer's, full width."
+                icon={<FolderOpen size={20} />}
+                servers={servers}
+                include={(s) => s.protocol !== "rdp"}
+                actionLabel="Open file browser"
+                onOpen={(s) => openServer(s, "sftp", { fullWidth: true })}
+                emptyText="No SSH servers saved yet. Add one on the Servers page."
+              />
+            )}
+            {activeView === "rdp" && (
+              <ServerPickerView
+                title="Remote Desktop"
+                subtitle="Open a saved RDP server. Where it opens (inside SubTerm or the system client) is set in Settings > General."
+                icon={<Monitor size={20} />}
+                servers={servers}
+                include={(s) => s.protocol === "rdp"}
+                actionLabel="Connect"
+                onOpen={(s) => openServer(s)}
+                addLabel="New RDP server"
+                onAdd={() => { setNewNode({ ...defaultNode, protocol: "rdp", port: 3389 }); setIsPanelOpen(true); }}
+                emptyText="No RDP servers saved yet. Use New RDP server to add one."
+              />
+            )}
             {activeView === "vault" && (
               <LoginsView
                 credentials={credentials}
@@ -2509,7 +2547,7 @@ function DesktopApp() {
         }}
         onOpenLocalTerminal={() => {
           setIsCommandPaletteOpen(false);
-          openLocalTerminal();
+          openDefaultLocal();
         }}
         onOpenRecordingPlayer={recordingEnabled ? () => {
           setIsCommandPaletteOpen(false);

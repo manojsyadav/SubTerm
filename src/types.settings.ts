@@ -20,6 +20,8 @@ export interface AppSettings {
   rightClickAction: string;
   linkOpenMode: string;
   startupView: string;
+  /** Shell the Local item and Ctrl+Alt+T open. Empty = automatic. */
+  localShell: string;
   sshDetectMode: string;
   copyOnSelect: boolean;
   terminalTheme: string;

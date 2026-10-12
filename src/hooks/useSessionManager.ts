@@ -13,6 +13,8 @@ export type Session = {
   runOnConnect?: string;
   quickAuth?: QuickAuth | null;
   initialTool?: "sftp" | "tunnels" | "mirrors" | "cmds" | "info" | null;
+  /** Open the initial tool across the whole window instead of beside the terminal. */
+  toolFull?: boolean;
   isLocal?: boolean;
   localShell?: string;
   isProduction?: boolean;
@@ -123,7 +125,7 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
   }, []);
 
   const openServer = useCallback(
-    (server: Server, initialTool?: Session["initialTool"]) => {
+    (server: Server, initialTool?: Session["initialTool"], opts?: { fullWidth?: boolean }) => {
       if (server.protocol === "rdp") {
         launchRdp(server);
         return;
@@ -141,12 +143,14 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
               mirrors: server.mirrors,
               runOnConnect: server.run_on_connect || "",
               initialTool: initialTool || null,
+              toolFull: !!(initialTool && opts?.fullWidth),
               isProduction: Boolean(server.is_production || /prod|production|live/i.test(server.name || "")),
               icon: server.icon || "server",
               color: server.color ?? null,
             },
           ];
         } else if (initialTool) {
+          if (opts?.fullWidth) window.dispatchEvent(new CustomEvent(`subterm-tool-full-${sessionId}`));
           window.dispatchEvent(new CustomEvent(`submarine-set-tool-${sessionId}`, { detail: initialTool }));
         }
         return prev;

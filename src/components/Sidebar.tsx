@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Server, KeyRound, Library, Activity, Settings, Lock, ArrowLeftRight } from "lucide-react";
+import { Server, KeyRound, Braces, Activity, Settings, Lock, ArrowLeftRight, Terminal, FolderOpen, Monitor } from "lucide-react";
 
 interface MonitorListRow {
   node_id: number;
@@ -29,6 +29,8 @@ interface SidebarProps {
   onLock?: () => void;
   onSwitchProfile?: () => void;
   enableMonitoring?: boolean;
+  /** RDP page is hidden when the RDP feature toggle is off. */
+  showRdp?: boolean;
 }
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -47,6 +49,7 @@ export const Sidebar = ({
   onLock,
   onSwitchProfile,
   enableMonitoring = true,
+  showRdp = true,
 }: SidebarProps) => {
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
@@ -148,8 +151,11 @@ export const Sidebar = ({
   // only makes sense while sessions are open.
   const items = [
     { id: 'nodes', icon: Server, label: 'Servers' },
-    { id: 'vault', icon: KeyRound, label: 'Logins' },
-    { id: 'library', icon: Library, label: 'Library' },
+    { id: 'local', icon: Terminal, label: 'Local' },
+    { id: 'sftp', icon: FolderOpen, label: 'SFTP' },
+    ...(showRdp ? [{ id: 'rdp', icon: Monitor, label: 'RDP' }] : []),
+    { id: 'vault', icon: KeyRound, label: 'Credentials' },
+    { id: 'library', icon: Braces, label: 'Snippets' },
     ...(enableMonitoring ? [{ id: 'monitor', icon: Activity, label: 'Monitor' }] : []),
   ];
 

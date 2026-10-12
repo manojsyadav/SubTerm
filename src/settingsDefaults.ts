@@ -8,6 +8,7 @@ import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "
  */
 export const SETTING_DEFAULTS = {
   startupView: "servers",
+  localShell: "",
   primaryColor: "#60a5fa",
   backgroundColor: "#0a0a0c",
   terminalTheme: "subterm-dark",
@@ -37,6 +38,7 @@ type DefaultKey = keyof typeof SETTING_DEFAULTS;
 /** Settings-row id (the `data-setting` attribute) -> the setting it edits. */
 export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
   "startup-view": "startupView",
+  "local-shell": "localShell",
   accent: "primaryColor",
   background: "backgroundColor",
   theme: "terminalTheme",
@@ -62,7 +64,7 @@ export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
 export type ResettablePage = "general" | "appearance" | "terminal" | "features";
 
 const PAGE_ROWS: Record<ResettablePage, string[]> = {
-  general: ["startup-view"],
+  general: ["startup-view", "local-shell"],
   appearance: ["accent", "background", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-blink", "webgl", "bell"],
   terminal: ["right-click", "copy-on-select", "open-links", "auto-copy-output", "auto-close", "audit-download", "keepalive", "command-widget"],
   features: ["ssh-mode", ...FEATURES.map((f) => f.key as string)],

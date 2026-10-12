@@ -67,6 +67,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Multi-Tab Fleet Broadcast**: Concurrently fan out keystrokes and commands across multiple server sessions with live session targeting and armed safety banners.
 - **Parameterized Snippets Engine**: Runbook automation with `{{variable:defaultValue}}` placeholders and interactive variable prompting.
 - **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
+- **Activity Sidebar**: Servers, Local (opens your default shell: PowerShell, CMD, Git Bash, WSL, or `$SHELL`), SFTP (full-width file browser for any server), RDP, Credentials, Snippets and Monitor, each one click away.
 - **VS Code-Style Settings Panel**: 13 focused pages (General, Appearance, Terminal, Features and more) with a vertical left-sidebar navigator, a settings search box and vault-gated security screens.
 
 ---

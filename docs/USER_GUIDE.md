@@ -12,7 +12,17 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 - **Subsequent Launches**: Enter your master password to unlock your stored servers, SSH keys, and credentials.
 - **Locking Your Vault**: Click the Lock icon in the sidebar or top bar at any time to immediately flush unencrypted data from memory.
 
-### 1.2 Finding a Server
+### 1.2 The Sidebar Pages
+The left sidebar (bottom bar on narrow windows) has one entry per activity:
+- **Servers**: your saved servers and folders (the home page).
+- **Local**: opens a local terminal with your default shell, or switches to the one already open. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL). The tab strip's shell menu still opens any other shell.
+- **SFTP**: a searchable list of your SSH servers. Click one to open its file browser across the whole window, with this computer's files on one side and the server's on the other (drag to transfer). Close the file browser (the **x** in its header) to return to the terminal; the terminal keeps running behind it.
+- **RDP**: a searchable list of your Remote Desktop servers with a **New RDP server** button. Connect opens it inside SubTerm or in the system client, as set under **Settings > General > Remote Desktop**. Hidden when the RDP feature is turned off.
+- **Credentials** (formerly *Logins*): saved passwords and SSH keys.
+- **Snippets** (formerly *Library*): saved commands and notes.
+- **Monitor**: resource dashboard, when monitoring is on.
+
+### 1.3 Finding a Server
 The home dashboard's search bar filters by server name or host as you type. It also accepts shell-style glob wildcards: `*` matches any run of characters and `?` matches exactly one — e.g. `web-*`, `prod-db?`, `*-staging`.
 
 ---
@@ -108,7 +118,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 *Goal*: Browse, upload, download, and edit configuration files directly on the remote server.
 
 1. **Open SFTP Tab**:
-   - From an active session, click the **SFTP** tab or press `Ctrl+Shift+F`.
+   - From an active session, click the **SFTP** tab or press `Ctrl+Shift+F`, or pick the server on the **SFTP** sidebar page for a full-width file browser.
 2. **Directory Navigation**:
    - Browse through remote directories using the clickable breadcrumb bar or path input.
    - Right-click any file to download, rename, change permissions (`chmod`), or delete.
@@ -188,7 +198,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 2. **Executing Snippets**:
    - **From Command Palette (`Ctrl+K`)**: Select any saved command snippet.
    - **From Quick Commands (`CmdsPanel`)**: Click the play icon on any snippet in the terminal sidebar.
-   - **From Library Tab**: Click the **Run** button directly on the command card.
+   - **From the Snippets page**: Click the **Run** button directly on the command card.
 3. **Interactive Parameter Modal**:
    - SubTerm detects variables and prompts you with a modal displaying:
      - Input fields prefilled with default values or previously used values.
@@ -196,8 +206,8 @@ The home dashboard's search bar filters by server name or host as you type. It a
      - Fleet Broadcast indicator if running across multiple sessions.
    - Click **Run Command** (`Enter`) to execute, or **Paste to Prompt** to insert into the terminal without executing.
 4. **Scoping a Snippet to One Server**:
-   - When adding or editing a command in the Library, set **Scope** to a specific server instead of **Global**, and optionally add comma-separated **Tags**.
-   - A server-scoped snippet only appears in that server's Command Palette (`Ctrl+K`) — global snippets (the default) still show everywhere. Library cards show a scope badge and tag chips, and the Library search box matches against tags too.
+   - When adding or editing a command in Snippets, set **Scope** to a specific server instead of **Global**, and optionally add comma-separated **Tags**.
+   - A server-scoped snippet only appears in that server's Command Palette (`Ctrl+K`) — global snippets (the default) still show everywhere. Library cards show a scope badge and tag chips, and the Snippets search box matches against tags too.
 
 ---
 

@@ -214,6 +214,11 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
     window.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, sync);
     return () => window.removeEventListener(FEATURE_FLAGS_CHANGED_EVENT, sync);
   }, []);
+  const [localShells, setLocalShells] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (part !== 'general' || IS_MOBILE_OS) return;
+    invoke<{ id: string; name: string }[]>('get_available_local_shells').then(setLocalShells).catch(() => setLocalShells([]));
+  }, [part]);
   const [importThemeModal, setImportThemeModal] = useState(false);
   const [importThemeText, setImportThemeText] = useState("");
   const [importThemeError, setImportThemeError] = useState("");
@@ -529,6 +534,18 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
                 {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
               </select>
             </Row>
+            {!IS_MOBILE_OS && (
+              <Row id="local-shell" label="Default local shell" desc="Opened by the Local item and Ctrl+Alt+T. Automatic picks PowerShell 7, else Windows PowerShell (or $SHELL on macOS/Linux).">
+                <select
+                  value={settings.localShell || ''}
+                  onChange={(e) => setSettings({ ...settings, localShell: e.target.value })}
+                  className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+                >
+                  <option value="">Automatic</option>
+                  {localShells.map((sh) => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
+                </select>
+              </Row>
+            )}
           </SectionCard>
       <SectionCard id="rdp" title="Remote Desktop (RDP)" subtitle="Where RDP servers open when you click them.">
         <SettingsRdpMode />
@@ -885,6 +902,7 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 // Search index: one entry per settings row/section that carries a data-setting id.
 export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
   { id: "startup", page: "general", label: "Startup", keywords: "launch open start" },
+  { id: "local-shell", page: "general", label: "Default local shell", keywords: "powershell pwsh cmd bash wsl git shell terminal local" },
   { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
   { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },

@@ -567,6 +567,16 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     }
   }, [session?.id, terminals, activeTab, onTerminalsChange]);
   const [activeTool, setActiveTool] = useState<ActiveTool | null>(() => session?.initialTool || null);
+  // The tool fills the window (terminal hidden, still mounted) when opened from the SFTP page;
+  // closing the tool returns to the normal side-by-side layout.
+  const [toolFull, setToolFull] = useState<boolean>(() => !!session?.toolFull);
+  useEffect(() => { if (!activeTool) setToolFull(false); }, [activeTool]);
+  useEffect(() => {
+    if (!session?.id) return;
+    const onFull = () => setToolFull(true);
+    window.addEventListener(`subterm-tool-full-${session.id}`, onFull);
+    return () => window.removeEventListener(`subterm-tool-full-${session.id}`, onFull);
+  }, [session?.id]);
   const toolEnabled: Record<string, boolean> = {
     sftp: true,
     tunnels: useFeatureFlag('panelTunnels'),
@@ -851,6 +861,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // We collapse to a stacked single-pane view: when a tool is open, the
   // tool takes full width and the terminal is hidden behind a back-chip.
   const isCompact = useIsCompact();
+  const fullTool = isCompact || toolFull;
   // Width of the right-side tool pane in pixels. The divider drag updates this
   // and we sync it to localStorage so subsequent sessions remember the split.
   // First-time default is a quarter of the current window width — looks right
@@ -1758,7 +1769,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
           {(session?.isLocal
             ? [
-                { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
+                { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
@@ -1770,7 +1781,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
-                { id: 'cmds',      icon: Library,  label: 'Library',   hint: 'Library — commands & notes' },
+                { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
               ]
           ).filter((t) => toolEnabled[t.id]).map(({ id, icon: Icon, label, hint }) => {
@@ -2168,7 +2179,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             hidden — so switching a tab that isn't in the split preserves
             its scrollback. The tiles fill the whole left panel; the tool
             side panel continues to work exactly as before. */}
-        <div className={`h-full relative ${activeTool && isCompact ? 'hidden' : 'flex-1 min-w-0'}`}>
+        <div className={`h-full relative ${activeTool && fullTool ? 'hidden' : 'flex-1 min-w-0'}`}>
           <TerminalPanes
             terminals={terminals}
             splitTerminals={splitTerminals}
@@ -2190,7 +2201,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                         sessionId={session.id}
                         terminalId={t.id}
                         disabled={status !== 'connected' || !!sessionEndedAudit}
-                        isActive={isSessionActive && isFocused && !(activeTool && isCompact) && (!inSplit || inTile)}
+                        isActive={isSessionActive && isFocused && !(activeTool && fullTool) && (!inSplit || inTile)}
                         containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                         connectionEpoch={connectionEpoch}
                         serverId={session.serverId}
@@ -2295,7 +2306,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         </div>
 
         {/* Resizable divider — only useful when both panes are visible. */}
-        {activeTool && !isCompact && (
+        {activeTool && !fullTool && (
           <div
             onMouseDown={startToolResize}
             className="w-1 shrink-0 cursor-col-resize bg-white/5 hover:bg-primary/40 transition-colors"
@@ -2310,8 +2321,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             tree was torn down. Other tools still conditional-render: they
             don't carry live state worth preserving across switches. */}
         <div
-          style={activeTool && !isCompact ? { width: `${toolPanelWidth}px` } : undefined}
-          className={`${activeTool ? (isCompact ? 'flex-1 min-w-0' : 'shrink-0') : 'hidden'} bg-[#121214]/95 flex flex-col h-full overflow-hidden ${activeTool ? 'animate-in slide-in-from-right duration-300' : ''}`}
+          style={activeTool && !fullTool ? { width: `${toolPanelWidth}px` } : undefined}
+          className={`${activeTool ? (fullTool ? 'flex-1 min-w-0' : 'shrink-0') : 'hidden'} bg-[#121214]/95 flex flex-col h-full overflow-hidden ${activeTool ? 'animate-in slide-in-from-right duration-300' : ''}`}
         >
           {activeTool === 'sftp' && (
             <div className="flex-1 flex flex-col overflow-hidden">
