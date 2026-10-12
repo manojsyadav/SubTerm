@@ -32,3 +32,19 @@
   scrollbar-width: thin !important;
   scrollbar-color: rgba(96, 165, 250, 0.18) transparent !important;
 }
+
+/* Settings > Appearance > Reduce motion. The class is set on <html> by DesktopApp. Animated
+   spinners and the cursor blink are left alone: they carry information (loading, focus). */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+html.reduce-motion .animate-in,
+html.reduce-motion [class*="slide-in-"],
+html.reduce-motion [class*="fade-in"],
+html.reduce-motion [class*="zoom-in"] {
+  animation: none !important;
+}

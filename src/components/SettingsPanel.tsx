@@ -196,6 +196,19 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
         </Row>
       </SectionCard>
     )}
+    <SectionCard id="accessibility" title="Accessibility">
+      <Row id="reduce-motion" label="Reduce motion" desc="Turns off slide and fade animations and transitions. Loading spinners and the cursor blink stay. System follows your operating system setting.">
+        <select
+          value={settings.reduceMotion || "system"}
+          onChange={(e) => setSettings({ ...settings, reduceMotion: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="system">Follow system (default)</option>
+          <option value="on">Always reduce</option>
+          <option value="off">Never reduce</option>
+        </select>
+      </Row>
+    </SectionCard>
     <SectionCard id="quick-editor" title="Quick Editor" subtitle="For files opened in the built-in editor. Changes apply the next time you open a file.">
       <Row id="editor-font-size" label="Font size">
         <select
@@ -1277,6 +1290,8 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
   { id: "ui-zoom", page: "appearance", label: "Interface Zoom", keywords: "zoom scale size dpi large small interface ui" },
   { id: "ui-zoom-row", page: "appearance", label: "Zoom level", keywords: "zoom scale size dpi" },
+  { id: "accessibility", page: "appearance", label: "Accessibility", keywords: "accessibility motion animation reduce" },
+  { id: "reduce-motion", page: "appearance", label: "Reduce motion", keywords: "reduce motion animation transition accessibility vestibular" },
   { id: "quick-editor", page: "appearance", label: "Quick Editor", keywords: "editor font tab wrap file edit" },
   { id: "editor-font-size", page: "appearance", label: "Editor font size", keywords: "editor font size text" },
   { id: "editor-tab-size", page: "appearance", label: "Editor tab width", keywords: "editor tab indent spaces" },

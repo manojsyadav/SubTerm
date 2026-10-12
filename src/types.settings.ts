@@ -32,6 +32,8 @@ export interface AppSettings {
   terminalLineHeight: number;
   /** Whole-UI zoom in percent (webview zoom). */
   uiZoom: number;
+  /** "system" (follow the OS), "on" or "off". */
+  reduceMotion: string;
   /** Notify when a command that took at least this many seconds finishes in the background; 0 = off. */
   notifyLongCommandSec: number;
   /** Notify when an SSH session drops while the window is in the background. */

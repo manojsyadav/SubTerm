@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(a11y)` — Reduce motion**:
+  Settings > Appearance > Accessibility can turn off animations and transitions, following the OS setting by default.
+
 - **`feat(notifications)` — Background notifications**:
   Settings > Terminal > Notifications can show a system notification when a long command finishes (shell-integration shells only) or an SSH session drops, while the window is in the background. Off by default.
 

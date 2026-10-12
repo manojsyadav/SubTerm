@@ -45,6 +45,7 @@ import { LibraryView } from "./components/LibraryView";
 import { LoginsView } from "./components/LoginsView";
 import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
+import { normalizeReduceMotion, shouldReduceMotion } from "./ui/reduceMotion";
 import { useIdleLock, useLockOnHidden } from "./hooks/useIdleLock";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
@@ -139,6 +140,7 @@ function DesktopApp() {
     confirmOnClose: localStorage.getItem('subterm-confirm-on-close') !== 'false',
     notifyLongCommandSec: Math.max(0, parseInt(localStorage.getItem('subterm-notify-long-sec') || '0', 10) || 0),
     notifyOnDisconnect: localStorage.getItem('subterm-notify-disconnect') === 'true',
+    reduceMotion: normalizeReduceMotion(localStorage.getItem('subterm-reduce-motion')) as string,
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -171,6 +173,15 @@ function DesktopApp() {
     if (IS_MOBILE_OS) return;
     invoke('set_ui_zoom', { factor: (appSettings.uiZoom || 100) / 100 }).catch(() => {});
   }, [appSettings.uiZoom]);
+
+  // Reduce motion: an explicit choice, or follow the OS preference live.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const apply = () => document.documentElement.classList.toggle('reduce-motion', shouldReduceMotion(normalizeReduceMotion(appSettings.reduceMotion), mq.matches));
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [appSettings.reduceMotion]);
 
   const wallManager = useWallManager();
   const {
@@ -694,6 +705,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-confirm-on-close', appSettings.confirmOnClose === false ? 'false' : 'true');
     localStorage.setItem('subterm-notify-long-sec', String(appSettings.notifyLongCommandSec ?? 0));
     localStorage.setItem('subterm-notify-disconnect', appSettings.notifyOnDisconnect ? 'true' : 'false');
+    localStorage.setItem('subterm-reduce-motion', appSettings.reduceMotion || 'system');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));
