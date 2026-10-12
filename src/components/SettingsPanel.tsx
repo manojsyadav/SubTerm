@@ -11,7 +11,7 @@ import {
   Settings, Palette, RefreshCw, List, Cloud, User,
   ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
   Plus, Terminal, Keyboard, ChevronRight, Lock, ShieldCheck,
-  Download, X,
+  Download, X, SlidersHorizontal, ToggleRight, Search,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 const CloudPanel = lazy(() => import("./CloudPanel"));
@@ -23,7 +23,7 @@ import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
 import { TerminalTrigger, TriggerAction, getTerminalTriggers, saveTerminalTriggers, newTrigger } from "../terminal/triggers";
 
-type CategoryId = "appearance" | "terminal" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
+type CategoryId = "general" | "appearance" | "terminal" | "features" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
 
 interface Category {
   id: CategoryId;
@@ -36,8 +36,10 @@ interface Category {
 const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "quickcommands", "servers", "security", "maintenance", "logs"];
 
 const CATEGORIES: Category[] = [
-  { id: "appearance",    label: "Appearance",        icon: <Palette size={16} />,     description: "Colors, fonts, and theme" },
-  { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,    description: "Behaviour, clipboard, session-end" },
+  { id: "general",       label: "General",            icon: <SlidersHorizontal size={16} />, description: "Startup and remote desktop" },
+  { id: "appearance",    label: "Appearance",        icon: <Palette size={16} />,     description: "Colors, fonts, and terminal theme" },
+  { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,    description: "Mouse, clipboard, sessions, triggers" },
+  { id: "features",      label: "Features",           icon: <ToggleRight size={16} />, description: "Turn optional features on or off" },
   { id: "servers",       label: "Quick Access",       icon: <Server size={16} />,      description: "Pinned servers in the top bar" },
   { id: "monitoring",    label: "Monitoring",         icon: <Activity size={16} />,    description: "Resource polling and alerts" },
   { id: "cloud",         label: "Cloud and Sync",     icon: <Cloud size={16} />,       description: "Cloud account and sync settings" },
@@ -50,8 +52,8 @@ const CATEGORIES: Category[] = [
 ];
 
 // â”€â”€â”€ Reusable primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const SectionCard = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
-  <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl">
+const SectionCard = ({ id, title, subtitle, children }: { id?: string; title: string; subtitle?: string; children: React.ReactNode }) => (
+  <div data-setting={id} className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl">
     <div className="mb-4">
       <h3 className="text-sm font-bold text-white">{title}</h3>
       {subtitle && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{subtitle}</p>}
@@ -72,8 +74,8 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void 
   </button>
 );
 
-const Row = ({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) => (
-  <div className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-0">
+const Row = ({ id, label, desc, children }: { id?: string; label: string; desc?: string; children: React.ReactNode }) => (
+  <div data-setting={id} className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-0">
     <div className="min-w-0">
       <div className="text-sm font-semibold text-zinc-200">{label}</div>
       {desc && <div className="text-xs text-zinc-500 mt-0.5">{desc}</div>}
@@ -146,7 +148,7 @@ interface SettingsPanelProps extends SettingsPageProps, CloudSyncExtras, Compone
 
 const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
   <div className="space-y-6">
-    <SectionCard title="Primary Accent Color">
+    <SectionCard id="accent" title="Primary Accent Color">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs text-zinc-500">Pick a preset or enter a custom hex value</span>
         <div className="flex items-center gap-2">
@@ -160,7 +162,7 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
         ))}
       </div>
     </SectionCard>
-    <SectionCard title="Background Theme">
+    <SectionCard id="background" title="Background Theme">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs text-zinc-500">App background colour preset</span>
         <div className="flex items-center gap-2">
@@ -177,7 +179,9 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
   </div>
 );
 
-const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
+type TerminalPart = "appearance" | "general" | "terminal" | "features";
+
+const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { part: TerminalPart }) => {
   const [themesList, setThemesList] = useState<TerminalThemeConfig[]>(getAllTerminalThemes());
   const [flags, setFlags] = useState<Record<FeatureKey, boolean>>(() =>
     Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>,
@@ -232,10 +236,33 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
     }
   };
 
+  const featureExtras: Partial<Record<FeatureKey, React.ReactNode>> = {
+    terminalFileLinks: (
+      <div data-setting="file-types" className="py-2">
+        <div className="text-xs text-zinc-500 mb-2">Which file names in terminal output can be clicked to open in the editor.</div>
+        <SettingsFileLinkTypes />
+      </div>
+    ),
+    sshDetect: (
+      <Row id="ssh-mode" label="When you type ssh / sftp" desc="Ask first, or open a matching saved server straight away. Either way the shell's own ssh is stopped.">
+        <select
+          value={settings.sshDetectMode || 'prompt'}
+          onChange={(e) => setSettings({ ...settings, sshDetectMode: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="prompt">Ask First</option>
+          <option value="auto">Open Saved Servers Automatically</option>
+        </select>
+      </Row>
+    ),
+  };
+
   return (
     <div className="space-y-6">
-      <SectionCard title="Display & Theme">
-        <Row label="Color Scheme / Theme" desc="Curated palette, custom themes, and full ANSI 16-color theme for terminal sessions">
+      {part === 'appearance' && (
+        <>
+      <SectionCard id="display" title="Display & Theme">
+        <Row id="theme" label="Color Scheme / Theme" desc="Curated palette, custom themes, and full ANSI 16-color theme for terminal sessions">
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 p-1 bg-black/40 rounded-md border border-white/10" title="Palette preview">
               {currentTheme.previewColors.map((color, i) => (
@@ -298,7 +325,7 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             )}
           </div>
         </Row>
-        <Row label="Font Family" desc="Typography typeface preset or custom font stack">
+        <Row id="font" label="Font Family" desc="Typography typeface preset or custom font stack">
           <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
             <select
               value={selectedPresetId}
@@ -330,13 +357,13 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             )}
           </div>
         </Row>
-        <Row label="Font Size (px)" desc="Terminal character size in pixels">
+        <Row id="font-size" label="Font Size (px)" desc="Terminal character size in pixels">
           <div className="flex items-center gap-3">
             <input type="range" min="8" max="24" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-32 accent-primary" />
             <input type="number" value={settings.terminalFontSize || 14} onChange={(e) => setSettings({ ...settings, terminalFontSize: parseInt(e.target.value) || 14 })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
           </div>
         </Row>
-        <Row label="Line Height" desc="Vertical line spacing ratio for terminal characters">
+        <Row id="line-height" label="Line Height" desc="Vertical line spacing ratio for terminal characters">
           <div className="flex items-center gap-3">
             <input
               type="range"
@@ -352,7 +379,7 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             </span>
           </div>
         </Row>
-        <Row label="Scrollback Buffer" desc="Historical terminal lines retained in memory per session">
+        <Row id="scrollback" label="Scrollback Buffer" desc="Historical terminal lines retained in memory per session">
           <select
             value={settings.terminalScrollback || 5000}
             onChange={(e) => setSettings({ ...settings, terminalScrollback: parseInt(e.target.value, 10) || 5000 })}
@@ -365,7 +392,7 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             ))}
           </select>
         </Row>
-        <Row label="Cursor Style" desc="Visual shape of the terminal cursor">
+        <Row id="cursor-style" label="Cursor Style" desc="Visual shape of the terminal cursor">
           <select
             value={settings.terminalCursorStyle || 'block'}
             onChange={(e) => setSettings({ ...settings, terminalCursorStyle: e.target.value })}
@@ -376,13 +403,13 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             <option value="bar">Bar (Vertical Line)</option>
           </select>
         </Row>
-        <Row label="Cursor Blinking" desc="Animate cursor blinking when the terminal is focused">
+        <Row id="cursor-blink" label="Cursor Blinking" desc="Animate cursor blinking when the terminal is focused">
           <Toggle
             checked={settings.terminalCursorBlink !== false}
             onChange={() => setSettings({ ...settings, terminalCursorBlink: settings.terminalCursorBlink === false ? true : false })}
           />
         </Row>
-        <Row label="WebGL Hardware Acceleration" desc="Enable GPU-accelerated rendering for 60fps throughput and lower CPU usage">
+        <Row id="webgl" label="WebGL Hardware Acceleration" desc="Enable GPU-accelerated rendering for 60fps throughput and lower CPU usage">
           <Toggle
             checked={settings.terminalWebgl !== false}
             onChange={() => {
@@ -392,7 +419,7 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             }}
           />
         </Row>
-        <Row label="Terminal Bell" desc="Notification style when an ASCII bell (\a or BEL) is emitted by the shell">
+        <Row id="bell" label="Terminal Bell" desc="Notification style when an ASCII bell (\a or BEL) is emitted by the shell">
           <select
             value={settings.terminalBell || 'visual'}
             onChange={(e) => setSettings({ ...settings, terminalBell: e.target.value })}
@@ -404,91 +431,6 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
             <option value="none">Disabled (Mute)</option>
           </select>
         </Row>
-      </SectionCard>
-
-      <SectionCard title="Feature Toggles" subtitle="Turn optional features off to skip loading and running their code. Changes apply immediately.">
-        {(["Editor", "Terminal", "Panels", "AI"] as const).map((group) => {
-          const items = FEATURES.filter((f) => f.group === group);
-          if (items.length === 0) return null;
-          return (
-            <div key={group}>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 pt-2 pb-1">{group}</div>
-              {items.map((f) => (
-                <Row key={f.key} label={f.label} desc={f.desc}>
-                  <Toggle
-                    checked={flags[f.key]}
-                    onChange={() => {
-                      const next = !flags[f.key];
-                      setFeatureEnabled(f.key, next);
-                      setFlags((prev) => ({ ...prev, [f.key]: next }));
-                    }}
-                  />
-                </Row>
-              ))}
-            </div>
-          );
-        })}
-      </SectionCard>
-
-      <SectionCard title="Clickable file types" subtitle="Choose which file names in terminal output can be clicked to open in the editor. Add or remove extensions and exact file names; changes apply immediately.">
-        <SettingsFileLinkTypes />
-      </SectionCard>
-
-      <SectionCard title="Remote Desktop (RDP)" subtitle="Where RDP servers open when you click them.">
-        <SettingsRdpMode />
-      </SectionCard>
-
-      <SectionCard title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">
-        {triggers.length === 0 && (
-          <p className="text-xs text-zinc-500 italic py-1">No triggers configured yet.</p>
-        )}
-        <div className="space-y-2">
-          {triggers.map((t) => (
-            <div key={t.id} className="flex flex-wrap items-center gap-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-2">
-              <Toggle checked={t.enabled} onChange={() => updateTrigger(t.id, { enabled: !t.enabled })} />
-              <input
-                type="text"
-                value={t.pattern}
-                onChange={(e) => updateTrigger(t.id, { pattern: e.target.value })}
-                placeholder={t.isRegex ? "regex, e.g. (ERROR|FATAL)" : "keyword, e.g. ERROR"}
-                className="flex-1 min-w-[140px] bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50 font-mono"
-              />
-              <label className="flex items-center gap-1 text-[10.5px] text-zinc-400 cursor-pointer select-none">
-                <input type="checkbox" checked={t.isRegex} onChange={(e) => updateTrigger(t.id, { isRegex: e.target.checked })} className="accent-primary" />
-                Regex
-              </label>
-              <label className="flex items-center gap-1 text-[10.5px] text-zinc-400 cursor-pointer select-none">
-                <input type="checkbox" checked={t.caseSensitive} onChange={(e) => updateTrigger(t.id, { caseSensitive: e.target.checked })} className="accent-primary" />
-                Case-sensitive
-              </label>
-              <select
-                value={t.action}
-                onChange={(e) => updateTrigger(t.id, { action: e.target.value as TriggerAction })}
-                className="bg-black/60 border border-white/10 text-white rounded-lg px-2 py-1 text-[10.5px] outline-none focus:border-primary/50"
-              >
-                <option value="notify">Toast Notification</option>
-                <option value="chime">Audible Chime</option>
-                <option value="highlight">Visual Flash</option>
-                <option value="log">Activity Log Entry</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => updateTriggers(triggers.filter((x) => x.id !== t.id))}
-                className="p-1.5 rounded-md bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
-                title="Remove trigger"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => updateTriggers([...triggers, newTrigger()])}
-          className="mt-3 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold uppercase hover:bg-primary hover:text-zinc-950 transition-all flex items-center gap-1.5"
-        >
-          <Plus size={13} /> Add Trigger
-        </button>
       </SectionCard>
 
       {/* Import Theme Modal */}
@@ -541,101 +483,201 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
           </div>
         </div>
       )}
-    <SectionCard title="Session Behaviour">
-      <Row label="Auto-close tab on exit" desc="Close the session tab when the shell process exits">
-        <Toggle checked={!!settings.autoCloseOnExit} onChange={() => setSettings({ ...settings, autoCloseOnExit: !settings.autoCloseOnExit })} />
-      </Row>
-      <Row label="Download audit on exit" desc="Save a session transcript to file when the session ends">
-        <Toggle checked={!!settings.downloadAuditOnExit} onChange={() => setSettings({ ...settings, downloadAuditOnExit: !settings.downloadAuditOnExit })} />
-      </Row>
-      <Row label="Auto-copy output to clipboard" desc="Copies command output automatically after completion">
-        <Toggle checked={!!settings.autoCopyOutput} onChange={() => setSettings({ ...settings, autoCopyOutput: !settings.autoCopyOutput })} />
-      </Row>
-      <Row label="SSH Keep-Alive Interval" desc="Sends periodic ping packets through the SSH transport to prevent NAT dropouts and keep idle connections alive">
-        <select
-          value={settings.sshKeepaliveSec || 20}
-          onChange={(e) => setSettings({ ...settings, sshKeepaliveSec: parseInt(e.target.value, 10) || 20 })}
-          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
-        >
-          <option value={10}>10 seconds (High frequency / aggressive NATs)</option>
-          <option value={20}>20 seconds (Standard / Recommended)</option>
-          <option value={30}>30 seconds (Default)</option>
-          <option value={60}>60 seconds (Relaxed)</option>
-          <option value={0}>Disabled (Mute)</option>
-        </select>
-      </Row>
-      <Row label="Right-Click Action" desc="Behavior when right-clicking inside the terminal viewport">
-        <select
-          value={settings.rightClickAction || 'smart'}
-          onChange={(e) => setSettings({ ...settings, rightClickAction: e.target.value })}
-          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
-        >
-          <option value="smart">Smart: Copy Selection, Else Paste (Shift+Right-Click for Menu)</option>
-          <option value="menu">Open Context Menu</option>
-          <option value="paste">Paste Immediately (PuTTY style)</option>
-        </select>
-      </Row>
-      <Row label="On Startup" desc="What to show after a profile is unlocked (servers marked Autostart always open first)">
-        <select
-          value={settings.startupView || 'servers'}
-          onChange={(e) => setSettings({ ...settings, startupView: e.target.value })}
-          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
-        >
-          <option value="servers">Server List</option>
-          <option value="last">Reopen Last Session</option>
-          {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
-        </select>
-      </Row>
-      <Row label="ssh in Local Terminal" desc="When you type ssh/sftp in a local terminal (turn the feature off under Feature Toggles). Ask: show a bar, and stop the shell's ssh if you accept. Auto: a saved server is opened at once and the shell's ssh is stopped; unknown hosts still ask.">
-        <select
-          value={settings.sshDetectMode || 'prompt'}
-          onChange={(e) => setSettings({ ...settings, sshDetectMode: e.target.value })}
-          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
-        >
-          <option value="prompt">Ask First</option>
-          <option value="auto">Open Saved Servers Automatically</option>
-        </select>
-      </Row>
-      <Row label="Open Links" desc="How URLs and file paths in terminal output are opened (touch devices always use tap)">
-        <select
-          value={settings.linkOpenMode || 'ctrl-click'}
-          onChange={(e) => setSettings({ ...settings, linkOpenMode: e.target.value })}
-          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
-        >
-          <option value="ctrl-click">Ctrl/Cmd + Click</option>
-          <option value="click">Plain Click</option>
-        </select>
-      </Row>
-      <Row label="Copy on select" desc="Automatically copy highlighted terminal text to system clipboard">
-        <Toggle
-          checked={settings.copyOnSelect !== false}
-          onChange={() => setSettings({ ...settings, copyOnSelect: settings.copyOnSelect === false ? true : false })}
-        />
-      </Row>
-    </SectionCard>
-    <SectionCard title="Command Widget">
-      <Row label="Auto-dismiss timer (seconds)" desc="Time before floating output pill fades (0 = stay open)">
-        <div className="flex items-center gap-3">
-          <input type="range" min="0" max="20" value={settings.commandDismissSec !== undefined ? settings.commandDismissSec : 4} onChange={(e) => setSettings({ ...settings, commandDismissSec: Math.max(0, parseInt(e.target.value) || 0) })} className="w-32 accent-primary" />
-          <input type="number" min="0" max="30" value={settings.commandDismissSec !== undefined ? settings.commandDismissSec : 4} onChange={(e) => setSettings({ ...settings, commandDismissSec: Math.max(0, parseInt(e.target.value) || 0) })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
-        </div>
-      </Row>
-    </SectionCard>
-    <SectionCard title="Session-End Banner Buttons">
-      {settings.autoCloseOnExit ? (
-        <p className="text-xs text-zinc-500 italic py-2">Disabled because the tab closes automatically on exit.</p>
-      ) : (
-        <>
-          <Row label="Show Copy Output button" desc="Displays the Copy Output action on the session-end screen">
-            <Toggle checked={settings.showAuditCopy !== false} onChange={() => setSettings({ ...settings, showAuditCopy: settings.showAuditCopy === false ? true : false })} />
-          </Row>
-          <Row label="Show Download Audit button" desc="Displays the Download Audit action on the session-end screen">
-            <Toggle checked={settings.showAuditDownload !== false} onChange={() => setSettings({ ...settings, showAuditDownload: settings.showAuditDownload === false ? true : false })} />
-          </Row>
+
         </>
       )}
-    </SectionCard>
-  </div>
+
+      {part === 'general' && (
+        <>
+          <SectionCard id="startup" title="Startup">
+            <Row id="startup-view" label="On Startup" desc="What opens after you unlock a profile. Servers marked Autostart always open first.">
+              <select
+                value={settings.startupView || 'servers'}
+                onChange={(e) => setSettings({ ...settings, startupView: e.target.value })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value="servers">Server List</option>
+                <option value="last">Reopen Last Session</option>
+                {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
+              </select>
+            </Row>
+          </SectionCard>
+      <SectionCard id="rdp" title="Remote Desktop (RDP)" subtitle="Where RDP servers open when you click them.">
+        <SettingsRdpMode />
+      </SectionCard>
+
+        </>
+      )}
+
+      {part === 'terminal' && (
+        <>
+          <SectionCard id="mouse" title="Mouse & Clipboard">
+            <Row id="right-click" label="Right-Click" desc="Smart copies a selection, otherwise pastes. Shift+Right-Click always opens the menu.">
+              <select
+                value={settings.rightClickAction || 'smart'}
+                onChange={(e) => setSettings({ ...settings, rightClickAction: e.target.value })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value="smart">Smart: Copy Selection, Else Paste</option>
+                <option value="menu">Open Context Menu</option>
+                <option value="paste">Paste Immediately (PuTTY style)</option>
+              </select>
+            </Row>
+            <Row id="copy-on-select" label="Copy on select" desc="Copy highlighted text to the clipboard automatically">
+              <Toggle
+                checked={settings.copyOnSelect !== false}
+                onChange={() => setSettings({ ...settings, copyOnSelect: settings.copyOnSelect === false ? true : false })}
+              />
+            </Row>
+            <Row id="open-links" label="Open Links" desc="How URLs and file paths in output are opened (touch devices always tap)">
+              <select
+                value={settings.linkOpenMode || 'ctrl-click'}
+                onChange={(e) => setSettings({ ...settings, linkOpenMode: e.target.value })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value="ctrl-click">Ctrl/Cmd + Click</option>
+                <option value="click">Plain Click</option>
+              </select>
+            </Row>
+            <Row id="auto-copy-output" label="Auto-copy command output" desc="Copy a command's output to the clipboard when it finishes">
+              <Toggle checked={!!settings.autoCopyOutput} onChange={() => setSettings({ ...settings, autoCopyOutput: !settings.autoCopyOutput })} />
+            </Row>
+          </SectionCard>
+
+          <SectionCard id="sessions" title="Sessions">
+            <Row id="auto-close" label="Auto-close tab on exit" desc="Close the tab when the shell exits">
+              <Toggle checked={!!settings.autoCloseOnExit} onChange={() => setSettings({ ...settings, autoCloseOnExit: !settings.autoCloseOnExit })} />
+            </Row>
+            <Row id="audit-download" label="Download audit on exit" desc="Save a transcript when the session ends">
+              <Toggle checked={!!settings.downloadAuditOnExit} onChange={() => setSettings({ ...settings, downloadAuditOnExit: !settings.downloadAuditOnExit })} />
+            </Row>
+            <Row id="keepalive" label="SSH Keep-Alive" desc="Ping interval that stops NAT and firewalls from dropping idle connections">
+              <select
+                value={settings.sshKeepaliveSec || 20}
+                onChange={(e) => setSettings({ ...settings, sshKeepaliveSec: parseInt(e.target.value, 10) || 20 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={10}>10 seconds (aggressive NATs)</option>
+                <option value={20}>20 seconds (recommended)</option>
+                <option value={30}>30 seconds</option>
+                <option value={60}>60 seconds (relaxed)</option>
+                <option value={0}>Disabled</option>
+              </select>
+            </Row>
+          </SectionCard>
+
+          <SectionCard id="command-widget" title="Command Widget">
+            <Row label="Auto-dismiss timer (seconds)" desc="How long the floating output pill stays (0 = until closed)">
+              <div className="flex items-center gap-3">
+                <input type="range" min="0" max="20" value={settings.commandDismissSec !== undefined ? settings.commandDismissSec : 4} onChange={(e) => setSettings({ ...settings, commandDismissSec: Math.max(0, parseInt(e.target.value) || 0) })} className="w-32 accent-primary" />
+                <input type="number" min="0" max="30" value={settings.commandDismissSec !== undefined ? settings.commandDismissSec : 4} onChange={(e) => setSettings({ ...settings, commandDismissSec: Math.max(0, parseInt(e.target.value) || 0) })} className="w-14 h-8 bg-black border border-white/10 rounded-lg px-2 text-[12px] font-bold text-white focus:border-primary/50 outline-none text-center" />
+              </div>
+            </Row>
+          </SectionCard>
+
+          <SectionCard id="banner-buttons" title="Session-End Banner Buttons">
+            {settings.autoCloseOnExit ? (
+              <p className="text-xs text-zinc-500 italic py-2">Disabled because the tab closes automatically on exit.</p>
+            ) : (
+              <>
+                <Row label="Show Copy Output button" desc="Copy Output action on the session-end screen">
+                  <Toggle checked={settings.showAuditCopy !== false} onChange={() => setSettings({ ...settings, showAuditCopy: settings.showAuditCopy === false ? true : false })} />
+                </Row>
+                <Row label="Show Download Audit button" desc="Download Audit action on the session-end screen">
+                  <Toggle checked={settings.showAuditDownload !== false} onChange={() => setSettings({ ...settings, showAuditDownload: settings.showAuditDownload === false ? true : false })} />
+                </Row>
+              </>
+            )}
+          </SectionCard>
+      <SectionCard id="triggers" title="Terminal Triggers & Alert Keywords" subtitle="Match keywords or regex patterns against live terminal output and fire an alert — useful for spotting ERROR/FATAL lines in a session you're not actively watching.">
+        {triggers.length === 0 && (
+          <p className="text-xs text-zinc-500 italic py-1">No triggers configured yet.</p>
+        )}
+        <div className="space-y-2">
+          {triggers.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-2">
+              <Toggle checked={t.enabled} onChange={() => updateTrigger(t.id, { enabled: !t.enabled })} />
+              <input
+                type="text"
+                value={t.pattern}
+                onChange={(e) => updateTrigger(t.id, { pattern: e.target.value })}
+                placeholder={t.isRegex ? "regex, e.g. (ERROR|FATAL)" : "keyword, e.g. ERROR"}
+                className="flex-1 min-w-[140px] bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50 font-mono"
+              />
+              <label className="flex items-center gap-1 text-[10.5px] text-zinc-400 cursor-pointer select-none">
+                <input type="checkbox" checked={t.isRegex} onChange={(e) => updateTrigger(t.id, { isRegex: e.target.checked })} className="accent-primary" />
+                Regex
+              </label>
+              <label className="flex items-center gap-1 text-[10.5px] text-zinc-400 cursor-pointer select-none">
+                <input type="checkbox" checked={t.caseSensitive} onChange={(e) => updateTrigger(t.id, { caseSensitive: e.target.checked })} className="accent-primary" />
+                Case-sensitive
+              </label>
+              <select
+                value={t.action}
+                onChange={(e) => updateTrigger(t.id, { action: e.target.value as TriggerAction })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2 py-1 text-[10.5px] outline-none focus:border-primary/50"
+              >
+                <option value="notify">Toast Notification</option>
+                <option value="chime">Audible Chime</option>
+                <option value="highlight">Visual Flash</option>
+                <option value="log">Activity Log Entry</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => updateTriggers(triggers.filter((x) => x.id !== t.id))}
+                className="p-1.5 rounded-md bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                title="Remove trigger"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => updateTriggers([...triggers, newTrigger()])}
+          className="mt-3 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold uppercase hover:bg-primary hover:text-zinc-950 transition-all flex items-center gap-1.5"
+        >
+          <Plus size={13} /> Add Trigger
+        </button>
+      </SectionCard>
+
+        </>
+      )}
+
+      {part === 'features' && (
+        <SectionCard id="features" title="Feature Toggles" subtitle="Turn optional features off to skip loading and running their code. Options for a feature sit under it and are greyed out while it is off. Changes apply immediately.">
+          {(["Editor", "Terminal", "Panels", "AI"] as const).map((group) => {
+            const items = FEATURES.filter((f) => f.group === group);
+            if (items.length === 0) return null;
+            return (
+              <div key={group}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 pt-2 pb-1">{group}</div>
+                {items.map((f) => (
+                  <div key={f.key}>
+                    <Row id={f.key} label={f.label} desc={f.desc}>
+                      <Toggle
+                        checked={flags[f.key]}
+                        onChange={() => {
+                          const next = !flags[f.key];
+                          setFeatureEnabled(f.key, next);
+                          setFlags((prev) => ({ ...prev, [f.key]: next }));
+                        }}
+                      />
+                    </Row>
+                    {featureExtras[f.key] && (
+                      <div className={`ml-4 pl-4 border-l border-white/10 ${flags[f.key] ? "" : "opacity-40 pointer-events-none"}`}>
+                        {featureExtras[f.key]}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </SectionCard>
+      )}
+    </div>
   );
 };
 
@@ -812,8 +854,63 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 );
 
 // â”€â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Search index: one entry per settings row/section that carries a data-setting id.
+const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
+  { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
+  { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
+  { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
+  { id: "background", page: "appearance", label: "Background Theme", keywords: "background colour color dark" },
+  { id: "theme", page: "appearance", label: "Terminal Color Scheme", keywords: "theme palette ansi colors import" },
+  { id: "font", page: "appearance", label: "Font Family", keywords: "font typeface monospace" },
+  { id: "font-size", page: "appearance", label: "Font Size", keywords: "text size zoom" },
+  { id: "line-height", page: "appearance", label: "Line Height", keywords: "spacing" },
+  { id: "scrollback", page: "appearance", label: "Scrollback Buffer", keywords: "history lines memory" },
+  { id: "cursor-style", page: "appearance", label: "Cursor Style", keywords: "block underline bar" },
+  { id: "cursor-blink", page: "appearance", label: "Cursor Blinking", keywords: "blink" },
+  { id: "webgl", page: "appearance", label: "WebGL Acceleration", keywords: "gpu rendering performance" },
+  { id: "bell", page: "appearance", label: "Terminal Bell", keywords: "beep sound notification" },
+  { id: "right-click", page: "terminal", label: "Right-Click", keywords: "paste copy context menu mouse smart" },
+  { id: "copy-on-select", page: "terminal", label: "Copy on select", keywords: "clipboard selection" },
+  { id: "open-links", page: "terminal", label: "Open Links", keywords: "ctrl click url file path hyperlink" },
+  { id: "auto-copy-output", page: "terminal", label: "Auto-copy command output", keywords: "clipboard output" },
+  { id: "auto-close", page: "terminal", label: "Auto-close tab on exit", keywords: "exit close shell tab" },
+  { id: "audit-download", page: "terminal", label: "Download audit on exit", keywords: "transcript log save" },
+  { id: "keepalive", page: "terminal", label: "SSH Keep-Alive", keywords: "ping nat timeout idle disconnect" },
+  { id: "command-widget", page: "terminal", label: "Command Widget", keywords: "output pill dismiss timer" },
+  { id: "banner-buttons", page: "terminal", label: "Session-End Banner Buttons", keywords: "copy output download audit" },
+  { id: "triggers", page: "terminal", label: "Terminal Triggers & Alert Keywords", keywords: "alert regex keyword error highlight notify" },
+  { id: "ssh-mode", page: "features", label: "When you type ssh / sftp", keywords: "local terminal saved server auto ask quick connect" },
+  { id: "file-types", page: "features", label: "Clickable file types", keywords: "extensions editor open file click" },
+];
+
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
-  const [activeCategory, setActiveCategory] = useState<CategoryId>("appearance");
+  const [activeCategory, setActiveCategory] = useState<CategoryId>("general");
+  const [query, setQuery] = useState("");
+
+  const searchResults = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const words = q.split(/\s+/);
+    const featureEntries = FEATURES.map((f) => ({ id: f.key, page: "features" as CategoryId, label: f.label, keywords: f.desc }));
+    return [...SETTINGS_INDEX, ...featureEntries]
+      .filter((e) => {
+        const hay = `${e.label} ${e.keywords}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      })
+      .slice(0, 12);
+  })();
+
+  const jumpToSetting = (page: CategoryId, id: string) => {
+    setActiveCategory(page);
+    setQuery("");
+    window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-setting="${id}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.classList.add("ring-2", "ring-primary/60", "rounded-lg");
+      window.setTimeout(() => el.classList.remove("ring-2", "ring-primary/60"), 1600);
+    }, 80);
+  };
 
   const needsUnlock = (id: CategoryId) => !isUnlocked && LOCKED_CATEGORIES.includes(id);
 
@@ -823,8 +920,10 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       return <LockedPage label={current.label} onRequestUnlock={onRequestUnlock} />;
     }
     switch (activeCategory) {
-      case "appearance":    return <PageAppearance settings={settings} setSettings={setSettings} />;
-      case "terminal":      return <PageTerminal settings={settings} setSettings={setSettings} />;
+      case "general":       return <PageTerminal part="general" settings={settings} setSettings={setSettings} />;
+      case "appearance":    return <div className="space-y-6"><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
+      case "terminal":      return <PageTerminal part="terminal" settings={settings} setSettings={setSettings} />;
+      case "features":      return <PageTerminal part="features" settings={settings} setSettings={setSettings} />;
       case "servers":       return <PageServers settings={settings} setSettings={setSettings} servers={servers} />;
       case "monitoring":    return <PageMonitoring settings={settings} setSettings={setSettings} />;
       case "cloud":         return <PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />;
@@ -860,6 +959,38 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
             <p className="text-[10px] text-amber-300/80 leading-tight">Unlock to access protected settings</p>
           </div>
         )}
+        <div className="px-2 pt-2">
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setQuery("");
+                if (e.key === "Enter" && searchResults[0]) jumpToSetting(searchResults[0].page, searchResults[0].id);
+              }}
+              placeholder="Search settings"
+              className="w-full h-8 pl-7 pr-2 rounded-lg bg-black/40 border border-white/10 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-primary/50"
+            />
+          </div>
+        </div>
+        {query.trim() ? (
+          <div className="flex-1 p-2 space-y-0.5 mt-1">
+            {searchResults.length === 0 ? (
+              <p className="px-3 py-2 text-[11px] text-zinc-500">No settings match "{query}".</p>
+            ) : searchResults.map((r) => (
+              <button
+                key={`${r.page}-${r.id}`}
+                onClick={() => jumpToSetting(r.page, r.id)}
+                className="w-full px-3 py-2 rounded-xl text-left text-zinc-300 hover:bg-white/[0.06] border border-transparent"
+              >
+                <div className="text-xs font-semibold truncate">{r.label}</div>
+                <div className="text-[10px] text-zinc-500">{CATEGORIES.find((c) => c.id === r.page)?.label}</div>
+              </button>
+            ))}
+          </div>
+        ) : (
         <nav className="flex-1 p-2 space-y-0.5 mt-1">
           {CATEGORIES.map((cat) => {
             const active = cat.id === activeCategory;
@@ -881,6 +1012,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
             );
           })}
         </nav>
+        )}
         <div className="p-3 border-t border-white/5">
           <p className="text-[10px] text-zinc-600 leading-relaxed">Preferences are local and do not sync with your cloud profile.</p>
         </div>

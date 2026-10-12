@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(settings)` — Reorganised Settings with search**:
+  Settings now has **General** (startup, Remote Desktop), **Appearance** (colours plus terminal theme and fonts), **Terminal** (mouse and clipboard, sessions, command widget, triggers) and **Features** pages. A feature's own options sit under its toggle and grey out while it is off, and a search box jumps straight to any setting.
+
 - **`feat(terminal)` — Smart right-click, Ctrl+Click links, ssh/sftp detection**:
   Right-click in the terminal now copies the selection if there is one, otherwise pastes; Shift+right-click opens the full menu (Settings → Right-Click Action). The terminal keeps keyboard focus after right-click and after the menu closes. URLs and file paths in output open on Ctrl/Cmd+Click (Settings → Open Links can restore plain click). Typing `ssh`/`sftp <host>` in a local terminal opens the matching saved server, or offers to save the host / Quick Connect it (the file panel for `sftp`); Settings → ssh in Local Terminal chooses between asking first and opening saved servers automatically, and the shell's own ssh is stopped once the native session opens; aliases, `-p`, `-l` and `-i` are honoured, passwords are never captured, and it can be turned off under Feature Toggles. Settings → On Startup chooses what opens after unlock: the server list (default), your last session, or a new local terminal (servers marked Autostart still open first). Typing `exit` in a local session now closes the tab on Windows.
 
