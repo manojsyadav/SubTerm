@@ -14,6 +14,8 @@ export interface ProfileVaultSettings {
 export interface UseProfileVaultOptions {
   settings: ProfileVaultSettings;
   onAutostartSessions?: (sessions: Server[]) => void;
+  /** Called after unlock when nothing was autostarted, with the full server list. */
+  onStartupView?: (servers: Server[]) => void;
   onLoggedOut?: () => void;
 }
 
@@ -287,6 +289,8 @@ export function useProfileVault(options: UseProfileVaultOptions) {
         if (toStart.length > 0) {
           options.onAutostartSessions?.(toStart);
           addLog(`Autostart: opened ${toStart.length} node${toStart.length === 1 ? "" : "s"}.`, "info");
+        } else {
+          options.onStartupView?.(list);
         }
       } catch (e) {
         addLog(`AUTOSTART_LOAD_FAILED: ${e}`, "error");

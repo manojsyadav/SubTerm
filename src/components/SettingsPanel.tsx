@@ -575,6 +575,17 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
           <option value="paste">Paste Immediately (PuTTY style)</option>
         </select>
       </Row>
+      <Row label="On Startup" desc="What to show after a profile is unlocked (servers marked Autostart always open first)">
+        <select
+          value={settings.startupView || 'servers'}
+          onChange={(e) => setSettings({ ...settings, startupView: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="servers">Server List</option>
+          <option value="last">Reopen Last Session</option>
+          {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
+        </select>
+      </Row>
       <Row label="Open Links" desc="How URLs and file paths in terminal output are opened (touch devices always use tap)">
         <select
           value={settings.linkOpenMode || 'ctrl-click'}

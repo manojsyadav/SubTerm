@@ -15,6 +15,7 @@ import MasterUnlockPage from "./components/MasterUnlockPage";
 import WorkspaceSwitcherModal from "./components/WorkspaceSwitcherModal";
 import logoUrl from "./assets/logo.png";
 import QuickConnectModal, { QuickAuth } from "./components/QuickConnectModal";
+import { IS_MOBILE_OS } from "./util/platform";
 import { useConfirm, useTextPrompt } from "./ui/confirm";
 import { RenameInput } from "./ui/renameInput";
 import { useIsNarrow } from "./hooks/useViewport";
@@ -116,6 +117,7 @@ function DesktopApp() {
     terminalWebgl: localStorage.getItem('subterm-terminal-webgl') !== 'false',
     rightClickAction: localStorage.getItem('subterm-right-click-action') || 'smart',
     linkOpenMode: localStorage.getItem('subterm-link-open-mode') || 'ctrl-click',
+    startupView: localStorage.getItem('subterm-startup-view') || 'servers',
     copyOnSelect: localStorage.getItem('subterm-copy-on-select') !== 'false',
     terminalTheme: localStorage.getItem('subterm-terminal-theme') || 'subterm-dark',
     terminalCursorStyle: localStorage.getItem('subterm-terminal-cursor-style') || 'block',
@@ -176,6 +178,17 @@ function DesktopApp() {
 
   const [tabNames, setTabNames] = useState<Record<string, string>>({});
 
+  // Remember the most recent real session so "On startup: Last session" can reopen it.
+  // Quick-connect sessions are skipped: they carry inline credentials we do not persist.
+  useEffect(() => {
+    const s = sessions.find((x) => x.id === activeView);
+    if (!s || s.quickAuth) return;
+    try {
+      const last = s.isLocal ? { kind: 'local', shell: s.localShell } : s.serverId > 0 ? { kind: 'server', id: s.serverId } : null;
+      if (last) localStorage.setItem('subterm-last-session', JSON.stringify(last));
+    } catch { /* storage unavailable */ }
+  }, [activeView, sessions]);
+
   const vault = useProfileVault({
     settings: {
       autoSync: appSettings.autoSync,
@@ -194,6 +207,24 @@ function DesktopApp() {
         return [...prev, ...fresh];
       });
       setActiveView(newSessions[0].id);
+    },
+    onStartupView: (list) => {
+      // Read at call time: this runs right after unlock, before any settings re-render.
+      const mode = localStorage.getItem('subterm-startup-view') || 'servers';
+      if (mode === 'local' && !IS_MOBILE_OS) {
+        openLocalTerminal();
+      } else if (mode === 'last') {
+        try {
+          const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as
+            | { kind: 'server'; id: number } | { kind: 'local'; shell?: string } | null;
+          if (last?.kind === 'local' && !IS_MOBILE_OS) {
+            openLocalTerminal(last.shell);
+          } else if (last?.kind === 'server') {
+            const srv = list.find((s) => s.id === last.id);
+            if (srv) openServer(srv);
+          }
+        } catch { /* unreadable value: stay on the server list */ }
+      }
     },
     onLoggedOut: () => {
       setSessions([]);
@@ -553,6 +584,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-terminal-webgl', appSettings.terminalWebgl !== false ? 'true' : 'false');
     localStorage.setItem('subterm-right-click-action', appSettings.rightClickAction || 'smart');
     localStorage.setItem('subterm-link-open-mode', appSettings.linkOpenMode || 'ctrl-click');
+    localStorage.setItem('subterm-startup-view', appSettings.startupView || 'servers');
     localStorage.setItem('subterm-copy-on-select', appSettings.copyOnSelect !== false ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-theme', appSettings.terminalTheme || 'subterm-dark');
     localStorage.setItem('subterm-terminal-cursor-style', appSettings.terminalCursorStyle || 'block');

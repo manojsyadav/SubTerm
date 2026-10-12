@@ -19,6 +19,7 @@ export interface AppSettings {
   terminalWebgl: boolean;
   rightClickAction: string;
   linkOpenMode: string;
+  startupView: string;
   copyOnSelect: boolean;
   terminalTheme: string;
   terminalCursorStyle: string;
