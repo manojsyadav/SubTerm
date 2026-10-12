@@ -239,7 +239,7 @@ The frontend listens for both events and, for any session currently mid-backoff 
 
 ## 5. Settings Panel Architecture
 
-The Settings interface (`src/components/SettingsPanel.tsx`) uses a 13-page vertical sidebar model with a search box:
+The Settings interface (`src/components/SettingsPanel.tsx`) uses a 11-page vertical sidebar model with a search box:
 
 | Category ID | Display Name | Protection Level | Primary Operations |
 |---|---|---|---|
@@ -248,16 +248,14 @@ The Settings interface (`src/components/SettingsPanel.tsx`) uses a 13-page verti
 | `terminal` | Terminal | Unrestricted | Right-click, copy on select, link opening, session behaviour, command widget, triggers |
 | `features` | Features | Unrestricted | Feature flags (`src/featureFlags.ts`) with per-feature options nested beneath |
 | `monitoring` | Monitoring | Unrestricted | Polling toggles, interval configurations |
-| `shortcuts` | Keyboard Shortcuts | Unrestricted | Global keybinding customizer & recorder |
-| `quickaccess` | Quick Access Servers | **Vault Locked** | Pin/unpin top-bar nodes, host/IP display |
+| `quick` | Quick Access | Per tab | Segmented page: pinned top-bar servers and quick commands (**Vault Locked**), keyboard shortcuts (unrestricted) |
 | `cloud` | Cloud & Sync | **Vault Locked** | Cloud API endpoint, auth, push/pull sync |
 | `profile` | Profiles & Vault | **Vault Locked** | Create/delete/rename profiles, master password |
-| `commands` | Quick Commands | **Vault Locked** | Manage executable scripts & sensitive snippets |
 | `security` | Known Hosts | **Vault Locked** | Trusted SSH host keys and fingerprints, revocation |
 | `maintenance` | Maintenance | **Vault Locked** | Factory reset preferences, storage cleanup |
 | `activity` | Activity Log | **Vault Locked** | Session audits, connection diagnostic timeline |
 
-`general`, `appearance`, `terminal` and `features` are four views of one component, `PageTerminal`, selected by its `part` prop, because they share state (theme list, flags, triggers). On windows 1280 px wide or more these four pages lay their cards out in two CSS columns (`COLUMNS` in `SettingsPanel.tsx`; cards use `break-inside-avoid`, so a card is never split), and the content area widens from `max-w-2xl` to `max-w-6xl`; narrower windows stay single-column. The other pages keep the narrow single column. Rows and sections carry a `data-setting` id; `SETTINGS_INDEX` (plus the `FEATURES` list) feeds the sidebar search, which switches page and scrolls to that id. A new row only shows up in search once it has an id and an index entry; a test fails if a rendered id is missing from the index.
+`general`, `appearance`, `terminal` and `features` are four views of one component, `PageTerminal`, selected by its `part` prop, because they share state (theme list, flags, triggers). On windows 1280 px wide or more these four pages lay their cards out in two CSS columns, three from 1700 px wide (`COLUMNS` in `SettingsPanel.tsx`; cards use `break-inside-avoid`, so a card is never split), and the content area widens from `max-w-2xl` to `max-w-[2000px]`; narrower windows stay single-column. The other pages keep the narrow single column. Rows and sections carry a `data-setting` id; `SETTINGS_INDEX` (plus the `FEATURES` list) feeds the sidebar search, which switches page and scrolls to that id. A new row only shows up in search once it has an id and an index entry; a test fails if a rendered id is missing from the index.
 
 `src/settingsDefaults.ts` holds the factory values for these pages and the row-id to setting-key map. It drives the changed-from-default dot (`SettingsMetaContext` in `SettingsPanel.tsx`), per-row reset and **Reset this page**. Feature flags count as changed when disabled. Keep `SETTING_DEFAULTS` in step with the fallbacks in `DesktopApp.tsx`.
 

@@ -11,7 +11,7 @@ import { toExportableServers, serversToJson, serversToCsv } from "../export/serv
 import {
   Settings, Palette, RefreshCw, List, Cloud, User,
   ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
-  Plus, Terminal, Keyboard, ChevronRight, Lock, ShieldCheck,
+  Plus, Terminal, ChevronRight, Lock, ShieldCheck,
   Download, X, SlidersHorizontal, ToggleRight, Search,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
@@ -24,7 +24,7 @@ import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
 import { TerminalTrigger, TriggerAction, getTerminalTriggers, saveTerminalTriggers, newTrigger } from "../terminal/triggers";
 
-type CategoryId = "general" | "appearance" | "terminal" | "features" | "servers" | "monitoring" | "cloud" | "profile" | "quickcommands" | "shortcuts" | "security" | "maintenance" | "logs";
+type CategoryId = "general" | "appearance" | "terminal" | "features" | "quick" | "monitoring" | "cloud" | "profile" | "security" | "maintenance" | "logs";
 
 interface Category {
   id: CategoryId;
@@ -34,19 +34,18 @@ interface Category {
 }
 
 // Categories that require the vault to be unlocked before use.
-const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "quickcommands", "servers", "security", "maintenance", "logs"];
+// "quick" is not listed: its keyboard-shortcuts tab works while locked, and the page gates its other tabs itself.
+const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "security", "maintenance", "logs"];
 
 const CATEGORIES: Category[] = [
   { id: "general",       label: "General",            icon: <SlidersHorizontal size={16} />, description: "Startup and remote desktop" },
   { id: "appearance",    label: "Appearance",        icon: <Palette size={16} />,     description: "Colors, fonts, and terminal theme" },
   { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,    description: "Mouse, clipboard, sessions, triggers" },
   { id: "features",      label: "Features",           icon: <ToggleRight size={16} />, description: "Turn optional features on or off" },
-  { id: "servers",       label: "Quick Access",       icon: <Server size={16} />,      description: "Pinned servers in the top bar" },
+  { id: "quick",         label: "Quick Access",       icon: <Server size={16} />,      description: "Pinned servers, quick commands, keyboard shortcuts" },
   { id: "monitoring",    label: "Monitoring",         icon: <Activity size={16} />,    description: "Resource polling and alerts" },
   { id: "cloud",         label: "Cloud and Sync",     icon: <Cloud size={16} />,       description: "Cloud account and sync settings" },
   { id: "profile",       label: "Profile",            icon: <User size={16} />,        description: "Manage and switch profiles" },
-  { id: "quickcommands", label: "Quick Commands",     icon: <List size={16} />,        description: "OS / environment quick commands" },
-  { id: "shortcuts",     label: "Keyboard Shortcuts", icon: <Keyboard size={16} />,    description: "Rebind keyboard shortcuts" },
   { id: "security",      label: "Known Hosts",        icon: <ShieldCheck size={16} />, description: "Trusted host keys and fingerprints" },
   { id: "maintenance",   label: "Maintenance",        icon: <RefreshCw size={16} />,   description: "Reset defaults and diagnostics" },
   { id: "logs",          label: "Activity Log",       icon: <List size={16} />,        description: "Session diagnostics timeline" },
@@ -822,9 +821,50 @@ const PageProfile = ({ onUnlocked, activeProfile, onSwitchProfile, isUnlocked, o
   </div>
 );
 
-const PageQuickCommands = () => <div className="space-y-6"><SettingsQuickCommands /></div>;
 
-const PageShortcuts = () => <div className="space-y-6"><SettingsKeyboardShortcuts /></div>;
+type QuickTab = "servers" | "commands" | "shortcuts";
+
+// Pinned servers, quick commands and keyboard shortcuts share one page behind a
+// segmented control, so three short pages become one with no long scroll. Shortcuts
+// need no vault; the other two tabs show the unlock prompt while the vault is locked.
+const PageQuick = ({ settings, setSettings, servers, isUnlocked, onRequestUnlock }: SettingsPageProps & {
+  servers: PinnableServer[]; isUnlocked: boolean; onRequestUnlock?: () => void;
+}) => {
+  const [tab, setTab] = useState<QuickTab>(isUnlocked ? "servers" : "shortcuts");
+  const tabs: { id: QuickTab; label: string; locked: boolean }[] = [
+    { id: "servers", label: "Pinned Servers", locked: !isUnlocked },
+    { id: "commands", label: "Quick Commands", locked: !isUnlocked },
+    { id: "shortcuts", label: "Keyboard Shortcuts", locked: false },
+  ];
+  const current = tabs.find((t) => t.id === tab)!;
+  return (
+    <div className="space-y-6">
+      <div role="tablist" className="flex flex-wrap gap-1 p-1 rounded-xl bg-black/30 border border-white/5 w-fit">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-3.5 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${tab === t.id ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
+          >
+            {t.label}
+            {t.locked && <Lock size={10} className="text-amber-500/70" />}
+          </button>
+        ))}
+      </div>
+      {current.locked ? (
+        <LockedPage label={current.label} onRequestUnlock={onRequestUnlock} />
+      ) : tab === "servers" ? (
+        <PageServers settings={settings} setSettings={setSettings} servers={servers} />
+      ) : tab === "commands" ? (
+        <SettingsQuickCommands />
+      ) : (
+        <SettingsKeyboardShortcuts />
+      )}
+    </div>
+  );
+};
 
 const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: SettingsPageProps & { servers?: ServerRecord[]; folders?: Folder[] }) => {
   const [exporting, setExporting] = useState<"json" | "csv" | null>(null);
@@ -938,7 +978,8 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
 ];
 
 // Two columns on wide windows; cards never split. Narrow windows stay single-column.
-const COLUMNS = "space-y-6 xl:space-y-0 xl:columns-2 xl:gap-6 xl:[&>*]:mb-6";
+// Two columns from 1280 px, three from 1700 px (a 1920 px monitor); cards never split.
+const COLUMNS = "space-y-6 xl:space-y-0 xl:columns-2 min-[1700px]:columns-3 xl:gap-6 xl:[&>*]:mb-6";
 const WIDE_PAGES: CategoryId[] = ["general", "appearance", "terminal", "features"];
 
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
@@ -988,12 +1029,10 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       case "appearance":    return <div className={COLUMNS}><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
       case "terminal":      return <div className={COLUMNS}><PageTerminal part="terminal" settings={settings} setSettings={setSettings} /></div>;
       case "features":      return <div className={COLUMNS}><PageTerminal part="features" settings={settings} setSettings={setSettings} /></div>;
-      case "servers":       return <PageServers settings={settings} setSettings={setSettings} servers={servers} />;
+      case "quick":         return <PageQuick settings={settings} setSettings={setSettings} servers={servers} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />;
       case "monitoring":    return <PageMonitoring settings={settings} setSettings={setSettings} />;
       case "cloud":         return <PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />;
       case "profile":       return <PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />;
-      case "quickcommands": return <PageQuickCommands />;
-      case "shortcuts":     return <PageShortcuts />;
       case "security":      return <SettingsKnownHosts />;
       case "maintenance":   return <PageMaintenance settings={settings} setSettings={setSettings} servers={servers} folders={folders} />;
       case "logs":          return <PageLogs onOpenLogs={onOpenLogs} />;
@@ -1082,7 +1121,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className={`p-6 sm:p-8 ${WIDE_PAGES.includes(activeCategory) ? "max-w-6xl" : "max-w-2xl"}`}>
+        <div className={`p-6 sm:p-8 ${WIDE_PAGES.includes(activeCategory) ? "max-w-[2000px]" : activeCategory === "quick" ? "max-w-4xl" : "max-w-2xl"}`}>
           <div className="mb-6">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <span className="text-primary">{current.icon}</span>

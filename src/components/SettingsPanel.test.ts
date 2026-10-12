@@ -123,4 +123,23 @@ describe("SettingsPanel layout", () => {
     click([...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Reset this page")));
     expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ rightClickAction: "smart", linkOpenMode: "ctrl-click" }));
   });
+
+  it("merges pinned servers, quick commands and keyboard shortcuts into one Quick Access page", () => {
+    const labels = [...host.querySelectorAll("nav button")].map((b) => b.textContent);
+    expect(labels.some((l) => l?.includes("Quick Access"))).toBe(true);
+    expect(labels.some((l) => l?.includes("Quick Commands"))).toBe(false);
+    expect(labels.some((l) => l?.includes("Keyboard Shortcuts"))).toBe(false);
+    click(nav("Quick Access"));
+    const tabs = [...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+    expect(tabs).toEqual(["Pinned Servers", "Quick Commands", "Keyboard Shortcuts"]);
+  });
+
+  it("keeps the shortcuts tab usable while the vault is locked", () => {
+    act(() => { root.render(createElement(SettingsPanel as never, { settings, setSettings, isUnlocked: false })); });
+    click(nav("Quick Access"));
+    const selected = host.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected?.textContent).toContain("Keyboard Shortcuts");
+    click([...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent?.includes("Pinned")));
+    expect(host.textContent).toContain("Vault is locked");
+  });
 });

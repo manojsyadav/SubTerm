@@ -213,7 +213,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 ## 3. Configuration & Customization
 
-SubTerm includes a **Settings Panel** with 13 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
+SubTerm includes a **Settings Panel** with 11 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
 
 - **General**: **On Startup** chooses what opens after you unlock a profile: *Server List* (default), *Reopen Last Session* (saved servers and local shells; Quick Connect sessions fall back to the list) or *New Local Terminal*. Servers marked **Autostart** always open first. **Remote Desktop (RDP)** chooses where RDP servers open.
 - **Appearance**: Accent color, background, and the terminal theme, font, line height, scrollback, cursor, WebGL and bell options listed below.
@@ -234,7 +234,7 @@ SubTerm includes a **Settings Panel** with 13 pages and a search box that jumps 
   - **Clipboard & Mouse Behavior**: Right-click mode (Smart, Context Menu or PuTTY-style paste), Copy on Select and whether links open on Ctrl+Click or plain click.
   - **SSH Keep-Alive Interval**: Configure keep-alive ping frequency (Disabled, 15s, 30s, 60s, 120s) to keep remote SSH tunnels and terminal sessions resilient across unstable networks and strict NAT firewalls.
   - **Terminal Triggers & Alert Keywords**: Define keyword or regex patterns matched against live output in any session. Each trigger fires one of: a toast notification, the audible bell chime, the visual bell flash, or an entry in the Activity Log — useful for noticing `ERROR`/`FATAL`/`Exception` in a background session tab.
-- **Keyboard Shortcuts**: Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
+- **Quick Access**: one page with three tabs. **Pinned Servers** (pin up to 5 servers to the top bar) and **Quick Commands** need the vault unlocked; **Keyboard Shortcuts** do not. Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
 - **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
 - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization. Under **What to sync on this device** you can leave out servers, credentials, saved commands or notes on this device only; unchecked data is neither uploaded nor downloaded.
 - **Profiles & Workspaces**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
@@ -266,4 +266,4 @@ Press `Ctrl+Alt+T` or click the **Local Shell** button in the top navigation bar
 SubTerm detects both and retries automatically — you don't need to manually reconnect. A sleep/resume cycle or a network change (Wi-Fi roam, VPN toggle, cable unplug) triggers an immediate reconnect attempt instead of waiting for the passive connection-health check to notice. If the server is still unreachable, retries continue with increasing backoff (2s, 4s, 8s, up to 30s) until it comes back, shown as a "Reconnecting · attempt N" banner. A connection you disconnected yourself (right-click → Disconnect) never auto-reconnects — click **Reconnect** on the banner when you're ready.
 
 ### Q: Why are some settings categories showing a lock screen?
-Sensitive settings categories (Profiles, Cloud Sync, Quick Commands, Quick Access Servers, Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
+Sensitive settings categories (Profiles, Cloud Sync, the Pinned Servers and Quick Commands tabs of Quick Access, Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
