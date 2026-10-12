@@ -216,6 +216,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 SubTerm includes a **Settings Panel** with 7 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
 
 - **General**: **On Startup** chooses what opens after you unlock a profile: *Server List* (default), *Reopen Last Session* (saved servers and local shells; Quick Connect sessions fall back to the list) or *New Local Terminal*. Servers marked **Autostart** always open first. **Remote Desktop (RDP)** chooses where RDP servers open.
+- **Security** (a card on **General**): **Auto-lock when idle** locks the vault after 1 to 60 minutes without mouse or keyboard input (terminal output does not count); **Lock when the window is hidden** locks on minimise; **Clear clipboard on lock** empties the clipboard, best effort because the system only allows it while SubTerm has focus. A lock from the idle timer or a hidden window does not ask first: it closes the vault and disconnects open SSH sessions, while local terminals stay open.
 - **Appearance**: Accent color, background, and the terminal theme, font, line height, scrollback, cursor, WebGL and bell options listed below.
 - **Features**: On/off switches for optional features (editor highlighting, command blocks, command history, session recording, Session Wall, ssh/sftp detection and more). A feature's own options, such as clickable file types or the ssh Ask/Auto mode, sit under its switch and grey out while it is off.
 - **Terminal**:

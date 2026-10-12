@@ -45,6 +45,7 @@ import { LibraryView } from "./components/LibraryView";
 import { LoginsView } from "./components/LoginsView";
 import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
+import { useIdleLock, useLockOnHidden } from "./hooks/useIdleLock";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
 import { publishOpenSessions } from "./fs/sessionRegistry";
@@ -129,6 +130,9 @@ function DesktopApp() {
     terminalBell: localStorage.getItem('subterm-terminal-bell') || 'visual',
     terminalFontFamily: localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
     terminalLineHeight: parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15'),
+    autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
+    lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
+    clearClipboardOnLock: localStorage.getItem('subterm-clear-clipboard-on-lock') === 'true',
     pasteReviewLines: Math.max(0, parseInt(localStorage.getItem('subterm-paste-review-lines') || '3', 10) || 0),
     wordSeparators: localStorage.getItem('subterm-word-separators') ?? " ()[]{}',\"`",
     scrollOnInput: localStorage.getItem('subterm-scroll-on-input') !== 'false',
@@ -352,9 +356,11 @@ function DesktopApp() {
     setActiveView("nodes");
   });
 
-  const handleLockProfile = async () => {
+  // `automatic` locks (idle timer, window hidden) never ask: nobody may be there to answer, and
+  // the point is to close the vault. They disconnect open SSH sessions just like a manual lock.
+  const lockVault = async (automatic: boolean) => {
     const remoteSessions = sessions.filter((s) => !s.isLocal);
-    if (remoteSessions.length > 0) {
+    if (remoteSessions.length > 0 && !automatic) {
       const ok = await confirm({
         title: "Lock SubTerm Vault?",
         message: `You have ${remoteSessions.length} open remote SSH session${remoteSessions.length === 1 ? "" : "s"}. Locking will disconnect them.`,
@@ -363,12 +369,14 @@ function DesktopApp() {
         destructive: true,
       });
       if (!ok) return;
-      for (const s of remoteSessions) {
-        try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
-      }
+    }
+    for (const s of remoteSessions) {
+      try { await invoke("disconnect_session", { sessionId: s.id }); } catch {}
     }
     try { await invoke("close_profile"); } catch {}
     setIsUnlocked(false);
+    // Best effort: the webview only allows clipboard writes while it has focus.
+    if (localStorage.getItem('subterm-clear-clipboard-on-lock') === 'true') navigator.clipboard.writeText('').catch(() => {});
     const remainingLocal = sessions.filter((s) => s.isLocal);
     if (remainingLocal.length === 0) {
       if ((localStorage.getItem('subterm-startup-view') || 'servers') === 'local' && !IS_MOBILE_OS) {
@@ -387,8 +395,12 @@ function DesktopApp() {
     setFolders([]);
     setCommands([]);
     setNotes([]);
-    addLog(`Vault locked. Local terminal remains active.`, "info");
+    addLog(automatic ? `Vault locked automatically. Local terminal remains active.` : `Vault locked. Local terminal remains active.`, "info");
   };
+  const handleLockProfile = () => lockVault(false);
+
+  useIdleLock({ enabled: isUnlocked, minutes: appSettings.autoLockMin, onIdle: () => { void lockVault(true); } });
+  useLockOnHidden(isUnlocked && appSettings.lockOnMinimize, () => { void lockVault(true); });
 
   const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
 
@@ -641,6 +653,9 @@ function DesktopApp() {
     localStorage.setItem('subterm-scroll-on-input', appSettings.scrollOnInput === false ? 'false' : 'true');
     localStorage.setItem('subterm-cursor-color', appSettings.terminalCursorColor || '');
     localStorage.setItem('subterm-terminal-padding', String(appSettings.terminalPadding ?? 0));
+    localStorage.setItem('subterm-auto-lock-min', String(appSettings.autoLockMin ?? 0));
+    localStorage.setItem('subterm-lock-on-minimize', appSettings.lockOnMinimize ? 'true' : 'false');
+    localStorage.setItem('subterm-clear-clipboard-on-lock', appSettings.clearClipboardOnLock ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-line-height', String(appSettings.terminalLineHeight || 1.15));
     localStorage.setItem('subterm-terminal-scrollback', String(appSettings.terminalScrollback || 5000));
     localStorage.setItem('subterm-ssh-keepalive-sec', String(appSettings.sshKeepaliveSec || 20));

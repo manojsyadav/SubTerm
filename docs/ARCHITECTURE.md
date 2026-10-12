@@ -257,6 +257,8 @@ The Settings interface (`src/components/SettingsPanel.tsx`) uses a 7-page vertic
 
 Terminal options (`subterm-paste-review-lines`, `-word-separators`, `-scroll-on-input`, `-cursor-color`, `-terminal-padding`) are read by `TerminalView` from storage at creation and again on `subterm-settings-changed`, so changes reach open terminals without a restart. `withCursorColor` (`src/terminal/cursorColor.ts`) layers the cursor override on the active theme.
 
+Auto-lock lives in `src/hooks/useIdleLock.ts` (`useIdleLock` polls last-input time every 10 s; `useLockOnHidden` watches `visibilitychange`). `DesktopApp.lockVault(automatic)` is the single lock path: manual locks confirm when remote sessions are open, automatic ones never prompt.
+
 Settings are stored one `localStorage` key per value (`subterm-*`), written from `DesktopApp.tsx`; a few are also pushed to the backend at runtime.
 
 ### Sidebar pages

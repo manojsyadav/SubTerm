@@ -30,6 +30,12 @@ export interface AppSettings {
   terminalBell: string;
   terminalFontFamily: string;
   terminalLineHeight: number;
+  /** Minutes without input before the vault locks; 0 = never. */
+  autoLockMin: number;
+  /** Lock as soon as the window is minimised or hidden. */
+  lockOnMinimize: boolean;
+  /** Empty the clipboard whenever the vault locks. */
+  clearClipboardOnLock: boolean;
   /** Pasted text with at least this many non-empty lines asks for review first; 0 = never ask. */
   pasteReviewLines: number;
   /** Characters that end a word for double-click selection. */

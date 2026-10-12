@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(security)` — Auto-lock**:
+  Settings > General > Security adds auto-lock after an idle period, lock when the window is hidden, and clear clipboard on lock. Automatic locks close the vault and disconnect open SSH sessions without asking; local terminals stay open.
+
 - **`feat(terminal)` — More terminal settings**:
   New options: review multi-line paste threshold (was fixed at 3 lines; 0 turns it off), word separators for double-click selection, scroll-to-bottom on typing, cursor colour override and terminal padding. All apply to open terminals immediately.
 

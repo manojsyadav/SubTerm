@@ -570,6 +570,24 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
               </Row>
             )}
           </SectionCard>
+          <SectionCard id="security" title="Security" subtitle="Locking closes the vault and disconnects open SSH sessions; local terminals stay open.">
+            <Row id="auto-lock" label="Auto-lock when idle" desc="Lock after this long without mouse or keyboard input. Output arriving in a terminal does not count as activity.">
+              <select
+                value={settings.autoLockMin ?? 0}
+                onChange={(e) => setSettings({ ...settings, autoLockMin: parseInt(e.target.value, 10) || 0 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={0}>Never</option>
+                {[1, 5, 10, 15, 30, 60].map((m) => <option key={m} value={m}>{m} minute{m === 1 ? "" : "s"}</option>)}
+              </select>
+            </Row>
+            <Row id="lock-on-minimize" label="Lock when the window is hidden" desc="Lock as soon as SubTerm is minimised or covered by the system.">
+              <Toggle checked={!!settings.lockOnMinimize} onChange={() => setSettings({ ...settings, lockOnMinimize: !settings.lockOnMinimize })} />
+            </Row>
+            <Row id="clear-clipboard" label="Clear clipboard on lock" desc="Empty the clipboard when the vault locks. Best effort: the system only allows it while SubTerm has focus.">
+              <Toggle checked={!!settings.clearClipboardOnLock} onChange={() => setSettings({ ...settings, clearClipboardOnLock: !settings.clearClipboardOnLock })} />
+            </Row>
+          </SectionCard>
           <SectionCard id="monitoring" title="Resource Monitoring">
             <Row id="enable-monitoring" label="Enable monitoring" desc="Show the Monitor page and poll CPU, RAM, disk and outages in the background.">
               <Toggle checked={settings.enableMonitoring !== false} onChange={() => setSettings({ ...settings, enableMonitoring: !(settings.enableMonitoring !== false) })} />
@@ -1044,6 +1062,10 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
   { id: "startup", page: "general", label: "Startup", keywords: "launch open start" },
   { id: "local-shell", page: "general", label: "Default local shell", keywords: "powershell pwsh cmd bash wsl git shell terminal local" },
+  { id: "security", page: "general", label: "Security", keywords: "lock idle auto lock clipboard minimise" },
+  { id: "auto-lock", page: "general", label: "Auto-lock when idle", keywords: "lock idle timeout inactivity security" },
+  { id: "lock-on-minimize", page: "general", label: "Lock when the window is hidden", keywords: "lock minimise minimize hidden security" },
+  { id: "clear-clipboard", page: "general", label: "Clear clipboard on lock", keywords: "clipboard clear lock security password" },
   { id: "monitoring", page: "general", label: "Resource Monitoring", keywords: "monitor cpu ram disk outage polling" },
   { id: "enable-monitoring", page: "general", label: "Enable monitoring", keywords: "monitor cpu ram disk outage polling" },
   { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
