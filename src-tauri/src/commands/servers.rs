@@ -1369,7 +1369,17 @@ pub async fn find_saved_servers(
 ) -> Result<Vec<SavedServerMatch>, String> {
     let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
     let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
-    let alias = alias.unwrap_or_else(|| host.clone());
+    find_saved_servers_in(conn, &host, alias.as_deref(), port, username.as_deref())
+}
+
+fn find_saved_servers_in(
+    conn: &rusqlite::Connection,
+    host: &str,
+    alias: Option<&str>,
+    port: i32,
+    username: Option<&str>,
+) -> Result<Vec<SavedServerMatch>, String> {
+    let alias = alias.unwrap_or(host);
     let mut stmt = conn
         .prepare(
             "SELECT id, name, host, port, COALESCE(username,'') FROM servers              WHERE deleted = 0 AND COALESCE(protocol,'ssh') != 'rdp' AND port = ?1                AND (LOWER(host) = LOWER(?2) OR LOWER(host) = LOWER(?3) OR LOWER(name) = LOWER(?3))              ORDER BY position, id",
@@ -1383,9 +1393,60 @@ pub async fn find_saved_servers(
     let want = username.filter(|u| !u.trim().is_empty());
     Ok(rows
         .filter_map(|r| r.ok())
-        .filter(|m| match &want {
-            Some(u) => m.username.is_empty() || m.username == *u,
+        .filter(|m| match want {
+            Some(u) => m.username.is_empty() || m.username == u,
             None => true,
         })
         .collect())
+}
+
+#[cfg(test)]
+mod saved_server_lookup_tests {
+    use super::*;
+
+    fn db() -> rusqlite::Connection {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE servers (id INTEGER PRIMARY KEY, name TEXT, host TEXT, port INTEGER, username TEXT,                 protocol TEXT, deleted INTEGER DEFAULT 0, position INTEGER DEFAULT 0);
+             INSERT INTO servers (id,name,host,port,username,protocol) VALUES
+               (1,'web','10.0.0.11',22,'root','ssh'),
+               (2,'web-alt','10.0.0.11',22,'deploy','ssh'),
+               (3,'db','10.0.0.12',2222,'','ssh'),
+               (4,'win','10.0.0.13',3389,'admin','rdp'),
+               (5,'old','10.0.0.14',22,'root','ssh');
+             UPDATE servers SET deleted = 1 WHERE id = 5;",
+        )
+        .unwrap();
+        c
+    }
+
+    fn ids(v: Vec<SavedServerMatch>) -> Vec<i32> { v.into_iter().map(|m| m.id).collect() }
+
+    #[test]
+    fn matches_by_host_and_ignores_user_when_not_typed() {
+        assert_eq!(ids(find_saved_servers_in(&db(), "10.0.0.11", None, 22, None).unwrap()), vec![1, 2]);
+    }
+
+    #[test]
+    fn typed_user_must_match() {
+        assert_eq!(ids(find_saved_servers_in(&db(), "10.0.0.11", None, 22, Some("deploy")).unwrap()), vec![2]);
+        assert!(find_saved_servers_in(&db(), "10.0.0.11", None, 22, Some("nobody")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn node_without_a_stored_user_matches_any_typed_user() {
+        assert_eq!(ids(find_saved_servers_in(&db(), "10.0.0.12", None, 2222, Some("bob")).unwrap()), vec![3]);
+    }
+
+    #[test]
+    fn matches_alias_to_node_name_and_is_case_insensitive() {
+        assert_eq!(ids(find_saved_servers_in(&db(), "10.0.0.11", Some("WEB"), 22, Some("root")).unwrap()), vec![1]);
+    }
+
+    #[test]
+    fn port_must_match_and_rdp_and_deleted_are_excluded() {
+        assert!(find_saved_servers_in(&db(), "10.0.0.11", None, 2200, None).unwrap().is_empty());
+        assert!(find_saved_servers_in(&db(), "10.0.0.13", None, 3389, None).unwrap().is_empty());
+        assert!(find_saved_servers_in(&db(), "10.0.0.14", None, 22, None).unwrap().is_empty());
+    }
 }
