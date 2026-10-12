@@ -76,7 +76,7 @@ const ChangedDot = ({ id }: { id?: string }) => {
 };
 
 const SectionCard = ({ id, title, subtitle, children }: { id?: string; title: string; subtitle?: string; children: React.ReactNode }) => (
-  <div data-setting={id} className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl">
+  <div data-setting={id} className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl break-inside-avoid">
     <div className="mb-4">
       <h3 className="text-sm font-bold text-white">{title}<ChangedDot id={id} /></h3>
       {subtitle && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{subtitle}</p>}
@@ -98,7 +98,7 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void 
 );
 
 const Row = ({ id, label, desc, children }: { id?: string; label: string; desc?: string; children: React.ReactNode }) => (
-  <div data-setting={id} className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-0">
+  <div data-setting={id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 border-b border-white/5 last:border-0">
     <div className="min-w-0">
       <div className="text-sm font-semibold text-zinc-200">{label}<ChangedDot id={id} /></div>
       {desc && <div className="text-xs text-zinc-500 mt-0.5">{desc}</div>}
@@ -170,7 +170,7 @@ interface SettingsPanelProps extends SettingsPageProps, CloudSyncExtras, Compone
 }
 
 const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
-  <div className="space-y-6">
+  <>
     <SectionCard id="accent" title="Primary Accent Color">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs text-zinc-500">Pick a preset or enter a custom hex value</span>
@@ -199,7 +199,7 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
         ))}
       </div>
     </SectionCard>
-  </div>
+  </>
 );
 
 type TerminalPart = "appearance" | "general" | "terminal" | "features";
@@ -286,7 +286,7 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
   };
 
   return (
-    <div className="space-y-6">
+    <>
       {part === 'appearance' && (
         <>
       <SectionCard id="display" title="Display & Theme">
@@ -673,39 +673,39 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
         </>
       )}
 
-      {part === 'features' && (
-        <SectionCard id="features" title="Feature Toggles" subtitle="Turn optional features off to skip loading and running their code. Options for a feature sit under it and are greyed out while it is off. Changes apply immediately.">
-          {(["Editor", "Terminal", "Panels", "AI"] as const).map((group) => {
-            const items = FEATURES.filter((f) => f.group === group);
-            if (items.length === 0) return null;
-            return (
-              <div key={group}>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 pt-2 pb-1">{group}</div>
-                {items.map((f) => (
-                  <div key={f.key}>
-                    <Row id={f.key} label={f.label} desc={f.desc}>
-                      <Toggle
-                        checked={flags[f.key]}
-                        onChange={() => {
-                          const next = !flags[f.key];
-                          setFeatureEnabled(f.key, next);
-                          setFlags((prev) => ({ ...prev, [f.key]: next }));
-                        }}
-                      />
-                    </Row>
-                    {featureExtras[f.key] && (
-                      <div className={`ml-4 pl-4 border-l border-white/10 ${flags[f.key] ? "" : "opacity-40 pointer-events-none"}`}>
-                        {featureExtras[f.key]}
-                      </div>
-                    )}
+      {part === 'features' && (["Editor", "Terminal", "Panels", "AI"] as const).map((group) => {
+        const items = FEATURES.filter((f) => f.group === group);
+        if (items.length === 0) return null;
+        return (
+          <SectionCard
+            key={group}
+            id={`features-${group.toLowerCase()}`}
+            title={`${group} features`}
+            subtitle={group === "Editor" ? "Turn optional features off to skip loading and running their code. A feature's options sit under it and grey out while it is off. Changes apply immediately." : undefined}
+          >
+            {items.map((f) => (
+              <div key={f.key}>
+                <Row id={f.key} label={f.label} desc={f.desc}>
+                  <Toggle
+                    checked={flags[f.key]}
+                    onChange={() => {
+                      const next = !flags[f.key];
+                      setFeatureEnabled(f.key, next);
+                      setFlags((prev) => ({ ...prev, [f.key]: next }));
+                    }}
+                  />
+                </Row>
+                {featureExtras[f.key] && (
+                  <div className={`ml-4 pl-4 border-l border-white/10 ${flags[f.key] ? "" : "opacity-40 pointer-events-none"}`}>
+                    {featureExtras[f.key]}
                   </div>
-                ))}
+                )}
               </div>
-            );
-          })}
-        </SectionCard>
-      )}
-    </div>
+            ))}
+          </SectionCard>
+        );
+      })}
+    </>
   );
 };
 
@@ -911,10 +911,17 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "command-widget", page: "terminal", label: "Command Widget", keywords: "output pill dismiss timer" },
   { id: "banner-buttons", page: "terminal", label: "Session-End Banner Buttons", keywords: "copy output download audit" },
   { id: "triggers", page: "terminal", label: "Terminal Triggers & Alert Keywords", keywords: "alert regex keyword error highlight notify" },
-  { id: "features", page: "features", label: "Feature Toggles", keywords: "features optional enable disable switch" },
+  { id: "features-editor", page: "features", label: "Editor features", keywords: "features optional enable disable switch editor" },
+  { id: "features-terminal", page: "features", label: "Terminal features", keywords: "features optional enable disable switch terminal" },
+  { id: "features-panels", page: "features", label: "Panels features", keywords: "features optional enable disable switch panels sftp docker" },
+  { id: "features-ai", page: "features", label: "AI features", keywords: "features optional enable disable switch ai copilot" },
   { id: "ssh-mode", page: "features", label: "When you type ssh / sftp", keywords: "local terminal saved server auto ask quick connect" },
   { id: "file-types", page: "features", label: "Clickable file types", keywords: "extensions editor open file click" },
 ];
+
+// Two columns on wide windows; cards never split. Narrow windows stay single-column.
+const COLUMNS = "space-y-6 xl:space-y-0 xl:columns-2 xl:gap-6 xl:[&>*]:mb-6";
+const WIDE_PAGES: CategoryId[] = ["general", "appearance", "terminal", "features"];
 
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
   const [activeCategory, setActiveCategory] = useState<CategoryId>("general");
@@ -959,10 +966,10 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       return <LockedPage label={current.label} onRequestUnlock={onRequestUnlock} />;
     }
     switch (activeCategory) {
-      case "general":       return <PageTerminal part="general" settings={settings} setSettings={setSettings} />;
-      case "appearance":    return <div className="space-y-6"><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
-      case "terminal":      return <PageTerminal part="terminal" settings={settings} setSettings={setSettings} />;
-      case "features":      return <PageTerminal part="features" settings={settings} setSettings={setSettings} />;
+      case "general":       return <div className={COLUMNS}><PageTerminal part="general" settings={settings} setSettings={setSettings} /></div>;
+      case "appearance":    return <div className={COLUMNS}><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
+      case "terminal":      return <div className={COLUMNS}><PageTerminal part="terminal" settings={settings} setSettings={setSettings} /></div>;
+      case "features":      return <div className={COLUMNS}><PageTerminal part="features" settings={settings} setSettings={setSettings} /></div>;
       case "servers":       return <PageServers settings={settings} setSettings={setSettings} servers={servers} />;
       case "monitoring":    return <PageMonitoring settings={settings} setSettings={setSettings} />;
       case "cloud":         return <PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />;
@@ -1057,7 +1064,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="p-6 sm:p-8 max-w-2xl">
+        <div className={`p-6 sm:p-8 ${WIDE_PAGES.includes(activeCategory) ? "max-w-6xl" : "max-w-2xl"}`}>
           <div className="mb-6">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <span className="text-primary">{current.icon}</span>
