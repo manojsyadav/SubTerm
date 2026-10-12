@@ -203,6 +203,11 @@ This document provides a technical reference for all Tauri IPC commands register
 - **Input Arguments**: `{ strict: boolean }`
 - **Return Type**: `Result<(), String>`
 
+### `cmd_history_prune`
+- **Description**: Applies the command-history limits: keeps at most `max_entries` newest rows (clamped to 50 to 50,000) and drops rows older than `max_age_days` (0 = no age limit). `cmd_history_add` takes an optional `max_entries` for the same cap on every insert.
+- **Input Arguments**: `{ maxEntries: number; maxAgeDays: number }`
+- **Return Type**: `Result<(), String>`
+
 ### `set_ssh_connect_timeout`
 - **Description**: Sets how long the initial TCP connect (direct, SOCKS5 or HTTP proxy) may take. Clamped to 3 to 120 seconds; applies to the next connection.
 - **Input Arguments**: `{ secs: number }`

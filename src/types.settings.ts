@@ -32,6 +32,12 @@ export interface AppSettings {
   terminalLineHeight: number;
   /** Whole-UI zoom in percent (webview zoom). */
   uiZoom: number;
+  /** Most command-history entries kept (older ones are dropped). */
+  historyMaxEntries: number;
+  /** Drop history older than this many days; 0 = keep by age. */
+  historyRetentionDays: number;
+  /** Ask before closing the window while sessions are open. */
+  confirmOnClose: boolean;
   /** What a transfer does when the target exists: "ask" (dialog), "skip" or "overwrite". */
   overwritePolicy: string;
   /** Quick Editor: spaces per tab (1-8). */

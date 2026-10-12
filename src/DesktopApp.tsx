@@ -134,6 +134,9 @@ function DesktopApp() {
     editorWordWrap: localStorage.getItem('subterm-editor-word-wrap') === 'true',
     editorFontSize: Math.min(24, Math.max(9, parseInt(localStorage.getItem('subterm-editor-font-size') || '12', 10) || 12)),
     overwritePolicy: ['skip', 'overwrite'].includes(localStorage.getItem('subterm-overwrite-policy') || '') ? (localStorage.getItem('subterm-overwrite-policy') as string) : 'ask',
+    historyMaxEntries: Math.min(50000, Math.max(50, parseInt(localStorage.getItem('subterm-history-max') || '1000', 10) || 1000)),
+    historyRetentionDays: Math.max(0, parseInt(localStorage.getItem('subterm-history-days') || '0', 10) || 0),
+    confirmOnClose: localStorage.getItem('subterm-confirm-on-close') !== 'false',
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -420,6 +423,12 @@ function DesktopApp() {
   useIdleLock({ enabled: isUnlocked, minutes: appSettings.autoLockMin, onIdle: () => { void lockVault(true); } });
   useLockOnHidden(isUnlocked && appSettings.lockOnMinimize, () => { void lockVault(true); });
 
+  // Apply the command-history limits (Settings > Terminal > Privacy) once the vault is open and when they change.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    invoke('cmd_history_prune', { maxEntries: appSettings.historyMaxEntries || 1000, maxAgeDays: appSettings.historyRetentionDays || 0 }).catch(() => {});
+  }, [isUnlocked, appSettings.historyMaxEntries, appSettings.historyRetentionDays]);
+
   const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
 
   const reloadAvailableProfiles = useCallback(async () => {
@@ -678,6 +687,9 @@ function DesktopApp() {
     localStorage.setItem('subterm-editor-word-wrap', appSettings.editorWordWrap ? 'true' : 'false');
     localStorage.setItem('subterm-editor-font-size', String(appSettings.editorFontSize ?? 12));
     localStorage.setItem('subterm-overwrite-policy', appSettings.overwritePolicy || 'ask');
+    localStorage.setItem('subterm-history-max', String(appSettings.historyMaxEntries ?? 1000));
+    localStorage.setItem('subterm-history-days', String(appSettings.historyRetentionDays ?? 0));
+    localStorage.setItem('subterm-confirm-on-close', appSettings.confirmOnClose === false ? 'false' : 'true');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));
@@ -737,6 +749,7 @@ function DesktopApp() {
     appWindow.onCloseRequested(async (event) => {
       const n = sessionsRef.current.length;
       if (n === 0) return; // nothing to lose — let the close proceed
+      if (localStorage.getItem('subterm-confirm-on-close') === 'false') return; // Settings > General > Security
       event.preventDefault();
       const ok = await confirm({
         title: "Close SubTerm?",

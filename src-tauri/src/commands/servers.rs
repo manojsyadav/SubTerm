@@ -1049,12 +1049,27 @@ pub async fn get_commands(state: tauri::State<'_, DbState>) -> Result<Vec<serde_
 
 const CMD_HISTORY_CAP: i64 = 1000;
 
+/// Keeps the newest `max_entries` rows and, when `cutoff_ts` is given, drops anything older than it.
+fn prune_history(conn: &rusqlite::Connection, max_entries: i64, cutoff_ts: Option<i64>) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM cmd_history WHERE id IN (
+            SELECT id FROM cmd_history ORDER BY ts DESC LIMIT -1 OFFSET ?1
+        )",
+        rusqlite::params![max_entries.clamp(50, 50_000)],
+    )?;
+    if let Some(cutoff) = cutoff_ts {
+        conn.execute("DELETE FROM cmd_history WHERE ts < ?1", rusqlite::params![cutoff])?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn cmd_history_add(
     state: tauri::State<'_, DbState>,
     server_id: Option<i32>,
     server_name: String,
     command: String,
+    max_entries: Option<i64>,
 ) -> Result<i64, String> {
     let trimmed = command.trim().to_string();
     if trimmed.is_empty() {
@@ -1096,14 +1111,8 @@ pub async fn cmd_history_add(
 
     let new_id = conn.last_insert_rowid();
 
-    // Prune the tail so the table stays bounded. LIMIT/OFFSET in a subquery
-    // gives us "keep the newest N, drop everything older".
-    let _ = conn.execute(
-        "DELETE FROM cmd_history WHERE id IN (
-            SELECT id FROM cmd_history ORDER BY ts DESC LIMIT -1 OFFSET ?1
-        )",
-        rusqlite::params![CMD_HISTORY_CAP],
-    );
+    // Prune the tail so the table stays bounded (newest N kept; N is Settings > Terminal > Privacy).
+    let _ = prune_history(conn, max_entries.unwrap_or(CMD_HISTORY_CAP), None);
 
     // History isn't secret but the encrypted vault is the only place it can
     // land; we DO NOT call save_vault_internal on every keystroke — that'd
@@ -1177,6 +1186,20 @@ pub async fn cmd_history_list(
         out
     };
     Ok(rows)
+}
+
+/// Applies the history limits from Settings > Terminal > Privacy: at most `max_entries` rows, and
+/// nothing older than `max_age_days` (0 = keep by age). Run after unlock and when the limits change.
+#[tauri::command]
+pub async fn cmd_history_prune(state: tauri::State<'_, DbState>, max_entries: i64, max_age_days: i64) -> Result<(), String> {
+    let now: i64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let cutoff = (max_age_days > 0).then(|| now - max_age_days.min(3650) * 86_400_000);
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    prune_history(conn, max_entries, cutoff).map_err(|e| format!("[DATABASE] CMD_HISTORY_PRUNE_FAILED: {}", e))
 }
 
 #[tauri::command]
@@ -1448,5 +1471,43 @@ mod saved_server_lookup_tests {
         assert!(find_saved_servers_in(&db(), "10.0.0.11", None, 2200, None).unwrap().is_empty());
         assert!(find_saved_servers_in(&db(), "10.0.0.13", None, 3389, None).unwrap().is_empty());
         assert!(find_saved_servers_in(&db(), "10.0.0.14", None, 22, None).unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod history_prune_tests {
+    use super::prune_history;
+
+    fn db(rows: &[i64]) -> rusqlite::Connection {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE cmd_history (id INTEGER PRIMARY KEY AUTOINCREMENT, command TEXT NOT NULL, ts INTEGER NOT NULL);").unwrap();
+        for ts in rows {
+            c.execute("INSERT INTO cmd_history (command, ts) VALUES ('x', ?1)", [ts]).unwrap();
+        }
+        c
+    }
+    fn count(c: &rusqlite::Connection) -> i64 { c.query_row("SELECT COUNT(*) FROM cmd_history", [], |r| r.get(0)).unwrap() }
+
+    #[test]
+    fn keeps_the_newest_rows_up_to_the_limit() {
+        let c = db(&(1..=120).collect::<Vec<_>>());
+        prune_history(&c, 50, None).unwrap();
+        assert_eq!(count(&c), 50);
+        let oldest: i64 = c.query_row("SELECT MIN(ts) FROM cmd_history", [], |r| r.get(0)).unwrap();
+        assert_eq!(oldest, 71);
+    }
+
+    #[test]
+    fn limit_is_clamped_to_a_sane_minimum() {
+        let c = db(&(1..=120).collect::<Vec<_>>());
+        prune_history(&c, 1, None).unwrap();
+        assert_eq!(count(&c), 50);
+    }
+
+    #[test]
+    fn age_cutoff_drops_older_rows_only() {
+        let c = db(&[10, 20, 30, 40]);
+        prune_history(&c, 1000, Some(30)).unwrap();
+        assert_eq!(count(&c), 2);
     }
 }

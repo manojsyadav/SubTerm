@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(privacy)` — Command history limits and clear**:
+  Settings > Terminal > Privacy sets how many commands the history keeps (was fixed at 1000), an optional age limit and a Clear history button (the clear command existed but had no button). Settings > General > Security can switch off the confirm-on-close prompt.
+
 - **`feat(sftp)` — Default for existing files**:
   Settings > Terminal > File Transfers lets uploads and downloads skip or overwrite an existing file automatically instead of asking (Ask remains the default).
 

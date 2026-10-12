@@ -320,7 +320,7 @@ pub fn run() {
             commands::servers::get_credentials, commands::servers::generate_ssh_key,
             commands::servers::add_folder, commands::servers::rename_folder, commands::servers::delete_folder, commands::servers::get_folders,
             commands::servers::add_command, commands::servers::edit_command, commands::servers::delete_command, commands::servers::get_commands,
-            commands::servers::cmd_history_add, commands::servers::cmd_history_list, commands::servers::cmd_history_clear,
+            commands::servers::cmd_history_add, commands::servers::cmd_history_list, commands::servers::cmd_history_clear, commands::servers::cmd_history_prune,
             commands::servers::add_note, commands::servers::edit_note, commands::servers::delete_note, commands::servers::get_notes,
             commands::mirror::mirror_dry_run,
             commands::mirror::start_mirror,

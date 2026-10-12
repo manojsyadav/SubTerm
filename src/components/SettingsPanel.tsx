@@ -253,6 +253,16 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
     if (part !== 'general' || IS_MOBILE_OS) return;
     invoke<{ id: string; name: string }[]>('get_available_local_shells').then(setLocalShells).catch(() => setLocalShells([]));
   }, [part]);
+  const [historyMsg, setHistoryMsg] = useState<string | null>(null);
+  const clearHistory = async () => {
+    if (!window.confirm("Delete all saved command history? This cannot be undone.")) return;
+    try {
+      await invoke("cmd_history_clear");
+      setHistoryMsg("Command history cleared.");
+    } catch (e) {
+      setHistoryMsg(`Could not clear history: ${e}`);
+    }
+  };
   const [backupMsg, setBackupMsg] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
   const exportPrefs = async () => {
     try {
@@ -655,6 +665,9 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
             <Row id="lock-on-minimize" label="Lock when the window is hidden" desc="Lock as soon as SubTerm is minimised or covered by the system.">
               <Toggle checked={!!settings.lockOnMinimize} onChange={() => setSettings({ ...settings, lockOnMinimize: !settings.lockOnMinimize })} />
             </Row>
+            <Row id="confirm-on-close" label="Confirm before closing" desc="Ask before the window closes while sessions are open, since closing disconnects them and stops transfers.">
+              <Toggle checked={settings.confirmOnClose !== false} onChange={() => setSettings({ ...settings, confirmOnClose: settings.confirmOnClose === false })} />
+            </Row>
             <Row id="clear-clipboard" label="Clear clipboard on lock" desc="Empty the clipboard when the vault locks. Best effort: the system only allows it while SubTerm has focus.">
               <Toggle checked={!!settings.clearClipboardOnLock} onChange={() => setSettings({ ...settings, clearClipboardOnLock: !settings.clearClipboardOnLock })} />
             </Row>
@@ -820,6 +833,32 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
             <Row id="default-agent" label="Forward SSH agent on new servers" desc="Turns agent forwarding on in the add-server form. Only enable it for hosts you fully trust: a forwarded agent lets that host use your keys while you are connected.">
               <Toggle checked={!!settings.defaultAgentForward} onChange={() => setSettings({ ...settings, defaultAgentForward: !settings.defaultAgentForward })} />
             </Row>
+          </SectionCard>
+
+          <SectionCard id="privacy" title="Privacy" subtitle="Command history is the list behind Ctrl+R search. Turn it off entirely under Features. It is stored inside the encrypted vault.">
+            <Row id="history-max" label="Keep up to" desc="Older entries are dropped as new ones arrive">
+              <select
+                value={settings.historyMaxEntries ?? 1000}
+                onChange={(e) => setSettings({ ...settings, historyMaxEntries: parseInt(e.target.value, 10) || 1000 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                {[100, 500, 1000, 5000, 10000].map((n) => <option key={n} value={n}>{n.toLocaleString()} commands{n === 1000 ? " (default)" : ""}</option>)}
+              </select>
+            </Row>
+            <Row id="history-days" label="Delete after" desc="Also drop entries older than this">
+              <select
+                value={settings.historyRetentionDays ?? 0}
+                onChange={(e) => setSettings({ ...settings, historyRetentionDays: parseInt(e.target.value, 10) || 0 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={0}>Never (default)</option>
+                {[7, 30, 90, 365].map((n) => <option key={n} value={n}>{n} days</option>)}
+              </select>
+            </Row>
+            <Row id="history-clear" label="Clear history now" desc="Needs the vault to be unlocked">
+              <button type="button" onClick={() => { void clearHistory(); }} className="px-3 h-8 rounded-lg border border-rose-500/40 text-rose-300 text-xs font-bold hover:bg-rose-500/10">Clear</button>
+            </Row>
+            {historyMsg && <p role="status" className="text-[11px] mt-2 text-zinc-400">{historyMsg}</p>}
           </SectionCard>
 
           <SectionCard id="transfers" title="File Transfers" subtitle="Uploads and downloads run one at a time per session so two transfers never write the same file together.">
@@ -1213,6 +1252,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "security", page: "general", label: "Security", keywords: "lock idle auto lock clipboard minimise" },
   { id: "auto-lock", page: "general", label: "Auto-lock when idle", keywords: "lock idle timeout inactivity security" },
   { id: "lock-on-minimize", page: "general", label: "Lock when the window is hidden", keywords: "lock minimise minimize hidden security" },
+  { id: "confirm-on-close", page: "general", label: "Confirm before closing", keywords: "close quit exit sessions confirm" },
   { id: "clear-clipboard", page: "general", label: "Clear clipboard on lock", keywords: "clipboard clear lock security password" },
   { id: "monitoring", page: "general", label: "Resource Monitoring", keywords: "monitor cpu ram disk outage polling" },
   { id: "enable-monitoring", page: "general", label: "Enable monitoring", keywords: "monitor cpu ram disk outage polling" },
@@ -1243,6 +1283,10 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "paste-review", page: "terminal", label: "Review multi-line paste", keywords: "paste lines confirm script safety" },
   { id: "word-separators", page: "terminal", label: "Word separators", keywords: "double click select word" },
   { id: "scroll-on-input", page: "terminal", label: "Scroll to bottom on typing", keywords: "scroll keypress output" },
+  { id: "privacy", page: "terminal", label: "Privacy", keywords: "history command privacy retention clear" },
+  { id: "history-max", page: "terminal", label: "History size", keywords: "command history keep entries limit" },
+  { id: "history-days", page: "terminal", label: "History age", keywords: "command history delete days retention" },
+  { id: "history-clear", page: "terminal", label: "Clear history now", keywords: "command history clear delete privacy" },
   { id: "transfers", page: "terminal", label: "File Transfers", keywords: "sftp upload download transfer" },
   { id: "overwrite-policy", page: "terminal", label: "When a file already exists", keywords: "overwrite skip existing conflict replace sftp transfer" },
   { id: "right-click", page: "terminal", label: "Right-Click", keywords: "paste copy context menu mouse smart" },

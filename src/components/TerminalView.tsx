@@ -1200,6 +1200,7 @@ const TerminalView = ({
               serverId: serverId > 0 ? serverId : null,
               serverName: serverName || "",
               command: line,
+              maxEntries: Math.min(50000, Math.max(50, parseInt(localStorage.getItem('subterm-history-max') || '1000', 10) || 1000)),
             }).catch(() => { /* silent — history logging is best-effort */ });
           }
         } else if (ch === 0x7f /* DEL */ || ch === 0x08 /* BS */) {
