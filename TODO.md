@@ -66,7 +66,7 @@ This document tracks active development tasks, pending architectural optimizatio
   - To re-run the smoke test: stand up any local `sshd` with a throwaway keypair in its `authorized_keys`, then `SMOKE_SSH_PORT=<port> SMOKE_SSH_KEY=<path> SMOKE_SSH_USER=<user> cargo run --example russh_smoke_test [--features full-ssh-algos]` from `src-tauri`.
 
 - [ ] 🟡 **P2 · M** — **Further `DesktopApp.tsx` decomposition (session-tab sidebar)**
-  - Library, Logins, Logs and (now) the Fleet Wall are separate components (`src/components/{LibraryView,LoginsView,LogsView,WallView}.tsx`); `DesktopApp.tsx` is ~2,480 lines, down from 2,991. `WallView` has jsdom component tests.
+  - Snippets (`LibraryView`), Credentials (`LoginsView`), Logs and (now) the Fleet Wall are separate components (`src/components/{LibraryView,LoginsView,LogsView,WallView}.tsx`); `DesktopApp.tsx` is ~2,480 lines, down from 2,991. `WallView` has jsdom component tests.
   - Still in `DesktopApp.tsx`: the session-tab sidebar / drag-reorder / tiling logic. It reads and writes `activeView` and session refs throughout, and a slip breaks live SSH sessions, so cut it only with a manual click-through (tab switch, drag-reorder, split, close, reconnect) after each step.
 
 - [ ] 🟡 **P2 · S** — **Manual click-through for session-only verified features**

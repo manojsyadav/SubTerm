@@ -91,6 +91,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Backend**: Rust 1.70+, Tokio async runtime, Tauri 2.1+
 - **SSH & SFTP**: `russh` 0.63, `russh-sftp`
 - **Local PTY**: `portable-pty`
+- **Desktop plugins**: `tauri-plugin-window-state` (remembers window size and position) and `tauri-plugin-autostart` (start on sign-in, pinned to 2.5.1 so it does not force a tauri upgrade)
 - **Crypto & Compression**: `argon2` 0.5, `aes-gcm` 0.10, `zstd`
 - **Database**: `rusqlite` (in-memory deserialized SQLite with serialized encrypted blob storage)
 - **Frontend**: React 18, TypeScript 5, Vite 5, TailwindCSS, `xterm.js` 5.3+
