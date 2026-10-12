@@ -22,7 +22,7 @@ SubTerm employs a tiered testing strategy designed to balance fast feedback loop
 ## 2. Frontend Testing
 
 ### 2.1 Unit Tests (Vitest)
-Pure TypeScript modules (diffing algorithms, server list import/export, terminal alert triggers) are tested using [Vitest](https://vitest.dev/):
+Pure TypeScript modules (diffing algorithms, server list import/export, terminal alert triggers, settings logic) and React components are tested using [Vitest](https://vitest.dev/). There are 35 test files and about 200 tests:
 
 ```bash
 # Run all frontend unit tests once
@@ -36,6 +36,16 @@ Test files live adjacent to the source code under test:
 - `src/fs/diff.test.ts`: Unified diff computation and chunking for SFTP file compare.
 - `src/export/serverExport.test.ts`: Serialization of server profiles into portable JSON/CSV formats, verifying credential stripping.
 - `src/terminal/triggers.test.ts`: Regex and keyword matching engine for terminal output alert triggers.
+- `src/terminal/sshCommand.test.ts`: Detecting a plain `ssh`/`sftp` connect (flags, `user@host`, ports, key paths), reading it from the screen line so Tab completion and history recall work, and recognising when the client has ended.
+- `src/utils/quickTarget.test.ts`: What the Servers search box treats as a connection target (`10.0.0.5`, `user@host:port`, IPv6) versus a plain search word.
+- `src/settingsDefaults.test.ts` and `src/settingsBackup.test.ts`: Changed-from-default detection and per-row/per-page/all reset, and the preferences export/import filter (machine-bound and credential-like keys are excluded; imported files are treated as untrusted).
+- `src/ssh/reconnectPolicy.test.ts`, `src/hooks/useIdleLock.test.ts` (fake timers), `src/ui/reduceMotion.test.ts`, `src/ui/overwritePolicy.test.ts`, `src/util/desktopNotify.test.ts`, `src/editor/editorPrefs.test.ts`, `src/terminal/cursorColor.test.ts`: the pure logic behind the matching settings.
+
+### 2.1.1 Component Tests (jsdom)
+Components that matter for layout and behaviour are rendered with `react-dom` under jsdom (the file starts with `// @vitest-environment jsdom`; no testing-library is used, so tests dispatch DOM events inside `act`). Tauri's `invoke` and `listen` are mocked per file.
+- `src/components/SettingsPanel.test.ts`: the seven pages and their order, that every page uses the same wide column container, the nested feature options, search jumping to a setting, changed-from-default dots and resets, lock gating, and a check that every rendered `data-setting` id is in the search index.
+- `src/components/NodeGrid.test.ts`: the Servers header (split Add server menu, lightning button) and the Enter behaviour of the search box (open the single match, connect to an address, ignore a bare word).
+- `src/components/Sidebar.test.ts` and `src/components/ServerPickerView.test.ts`: sidebar entries and order, and the SFTP/RDP server picker.
 
 ### 2.2 TypeScript Typecheck & Linting
 ```bash
@@ -56,7 +66,7 @@ Backend tests cover path traversal sanitization, cryptographic primitives, hybri
 ```bash
 cd src-tauri
 
-# Run all 45+ unit tests
+# Run all 110+ unit tests
 cargo test
 
 # Run tests with the legacy SSH algorithm compatibility profile
@@ -69,6 +79,9 @@ Key test suites:
 - `commands::sync::sync_engine_tests`: CRDT-like last-write-wins (LWW) convergent replication and tombstone tracking.
 - `tunnel::tunnel_tests`: Tokio bidirectional TCP channel streaming, half-close propagation, and keep-alive reaper.
 - `tests::dir_entry_name_*`: Path traversal (`../`) and separator defense in SFTP directory listings.
+- `commands::servers::saved_server_lookup_tests`: matching a typed `ssh` target to saved servers (host, optional user, alias, port, RDP and deleted rows excluded).
+- `commands::servers::history_prune_tests`: command-history size and age limits against an in-memory table.
+- `ssh_manager::host_key_policy_tests`: the strict host-key policy decision (refuse only untrusted keys).
 
 ### 3.2 Compilation & Clippy Checks
 ```bash
