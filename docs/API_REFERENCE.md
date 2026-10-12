@@ -198,6 +198,11 @@ This document provides a technical reference for all Tauri IPC commands register
   ```
 - **Return Type**: `Result<{ id: number; name: string; host: string; port: number; username: string }[], String>`
 
+### `set_ui_zoom`
+- **Description**: Sets the webview zoom for the calling window (Settings > Appearance > Interface Zoom). Clamped to 0.5 to 2.0; a no-op on mobile.
+- **Input Arguments**: `{ factor: number }` (1.0 = 100%)
+- **Return Type**: `Result<(), String>`
+
 ## 3. SSH Credentials & Private Keys
 
 ### `get_credentials`

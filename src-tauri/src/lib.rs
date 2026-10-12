@@ -308,6 +308,7 @@ pub fn run() {
             commands::sync::set_editor_label,
             commands::sync::get_sync_excluded,
             commands::profile::save_text_file,
+            commands::diagnostics::set_ui_zoom,
             commands::rdp::launch_rdp,
             commands::rdp_session::rdp_connect,
             commands::rdp_session::rdp_send_input,

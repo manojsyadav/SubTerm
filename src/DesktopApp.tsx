@@ -130,6 +130,7 @@ function DesktopApp() {
     terminalBell: localStorage.getItem('subterm-terminal-bell') || 'visual',
     terminalFontFamily: localStorage.getItem('subterm-terminal-font-family') || 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
     terminalLineHeight: parseFloat(localStorage.getItem('subterm-terminal-line-height') || '1.15'),
+    uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
     clearClipboardOnLock: localStorage.getItem('subterm-clear-clipboard-on-lock') === 'true',
@@ -148,6 +149,12 @@ function DesktopApp() {
       return [];
     })() as number[],
   });
+
+  // Webview-level zoom (Settings > Appearance). Skipped on mobile, where the OS owns scaling.
+  useEffect(() => {
+    if (IS_MOBILE_OS) return;
+    invoke('set_ui_zoom', { factor: (appSettings.uiZoom || 100) / 100 }).catch(() => {});
+  }, [appSettings.uiZoom]);
 
   const wallManager = useWallManager();
   const {
@@ -656,6 +663,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-auto-lock-min', String(appSettings.autoLockMin ?? 0));
     localStorage.setItem('subterm-lock-on-minimize', appSettings.lockOnMinimize ? 'true' : 'false');
     localStorage.setItem('subterm-clear-clipboard-on-lock', appSettings.clearClipboardOnLock ? 'true' : 'false');
+    localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-terminal-line-height', String(appSettings.terminalLineHeight || 1.15));
     localStorage.setItem('subterm-terminal-scrollback', String(appSettings.terminalScrollback || 5000));
     localStorage.setItem('subterm-ssh-keepalive-sec', String(appSettings.sshKeepaliveSec || 20));

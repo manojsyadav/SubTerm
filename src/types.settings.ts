@@ -30,6 +30,8 @@ export interface AppSettings {
   terminalBell: string;
   terminalFontFamily: string;
   terminalLineHeight: number;
+  /** Whole-UI zoom in percent (webview zoom). */
+  uiZoom: number;
   /** Minutes without input before the vault locks; 0 = never. */
   autoLockMin: number;
   /** Lock as soon as the window is minimised or hidden. */

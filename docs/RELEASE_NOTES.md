@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(settings)` — Interface zoom**:
+  Settings > Appearance > Interface Zoom scales the whole window (80% to 175%) with the webview's zoom, so xterm sizing stays correct.
+
 - **`feat(settings)` — Backup & restore preferences**:
   Settings > General > Backup & Restore exports your preferences to a JSON file and imports one back. Useful for moving to another install or the portable build; servers, credentials and keys are not included.
 

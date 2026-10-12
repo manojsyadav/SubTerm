@@ -535,3 +535,20 @@ pub(crate) async fn ssh_kill_process(
         used_sudo: true,
     })
 }
+
+/// Scale the whole UI (Settings > Appearance > Interface zoom). Uses the webview's own zoom
+/// rather than CSS `zoom` so xterm's cell measurement and the fit addon stay correct.
+#[tauri::command]
+pub fn set_ui_zoom(webview_window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        webview_window
+            .set_zoom(factor.clamp(0.5, 2.0))
+            .map_err(|e| format!("Could not set zoom: {e}"))
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = (webview_window, factor);
+        Ok(())
+    }
+}

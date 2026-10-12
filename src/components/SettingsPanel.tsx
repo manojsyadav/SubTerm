@@ -183,6 +183,19 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
         ))}
       </div>
     </SectionCard>
+    {!IS_MOBILE_OS && (
+      <SectionCard id="ui-zoom" title="Interface Zoom" subtitle="Scales the whole window, menus and terminal included. Useful on high-resolution or small screens.">
+        <Row id="ui-zoom-row" label="Zoom level">
+          <select
+            value={settings.uiZoom ?? 100}
+            onChange={(e) => setSettings({ ...settings, uiZoom: parseInt(e.target.value, 10) || 100 })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            {[80, 90, 100, 110, 125, 150, 175].map((z) => <option key={z} value={z}>{z}%{z === 100 ? " (default)" : ""}</option>)}
+          </select>
+        </Row>
+      </SectionCard>
+    )}
     <SectionCard id="background" title="Background Theme">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs text-zinc-500">App background colour preset</span>
@@ -1108,6 +1121,8 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
   { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
+  { id: "ui-zoom", page: "appearance", label: "Interface Zoom", keywords: "zoom scale size dpi large small interface ui" },
+  { id: "ui-zoom-row", page: "appearance", label: "Zoom level", keywords: "zoom scale size dpi" },
   { id: "background", page: "appearance", label: "Background Theme", keywords: "background colour color dark" },
   { id: "display", page: "appearance", label: "Display & Theme", keywords: "terminal display theme font cursor" },
   { id: "theme", page: "appearance", label: "Terminal Color Scheme", keywords: "theme palette ansi colors import" },
