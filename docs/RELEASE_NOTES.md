@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(notifications)` — Background notifications**:
+  Settings > Terminal > Notifications can show a system notification when a long command finishes (shell-integration shells only) or an SSH session drops, while the window is in the background. Off by default.
+
 - **`feat(privacy)` — Command history limits and clear**:
   Settings > Terminal > Privacy sets how many commands the history keeps (was fixed at 1000), an optional age limit and a Clear history button (the clear command existed but had no button). Settings > General > Security can switch off the confirm-on-close prompt.
 

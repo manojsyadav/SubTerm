@@ -38,6 +38,7 @@ import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
 import DistroLogo from "./DistroLogo";
 import { RenameInput } from "../ui/renameInput";
 import { reconnectDelayMs, readReconnectSettings, shouldGiveUp } from "../ssh/reconnectPolicy";
+import { notifyDesktop } from "../util/desktopNotify";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -1093,6 +1094,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       setDisconnectReason(reason);
       resetSecondaryStatus();
       addLog(`SSH_DISCONNECTED [${session.serverName}]: ${reason}`, "error");
+      if (!userInitiated && localStorage.getItem('subterm-notify-disconnect') === 'true') {
+        void notifyDesktop('SSH session lost', `${session.serverName}: ${reason}`);
+      }
       // User-initiated disconnect (right-click → Disconnect) should NOT
       // bounce straight into auto-reconnect — the user explicitly asked
       // for the session to be dead. The "Reconnect" banner button is

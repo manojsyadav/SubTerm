@@ -835,6 +835,22 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
             </Row>
           </SectionCard>
 
+          <SectionCard id="notifications" title="Notifications" subtitle="System notifications while SubTerm is in the background. They depend on the system allowing them for this app; the Activity Log records session drops either way.">
+            <Row id="notify-long" label="Long command finished" desc="Needs shell integration (the shell must send OSC 133 markers), otherwise SubTerm cannot tell when a command ends.">
+              <select
+                value={settings.notifyLongCommandSec ?? 0}
+                onChange={(e) => setSettings({ ...settings, notifyLongCommandSec: parseInt(e.target.value, 10) || 0 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={0}>Off (default)</option>
+                {[15, 30, 60, 120, 300].map((n) => <option key={n} value={n}>After {n} seconds</option>)}
+              </select>
+            </Row>
+            <Row id="notify-disconnect" label="SSH session lost" desc="Notify when a session drops unexpectedly (not when you disconnect it yourself)">
+              <Toggle checked={!!settings.notifyOnDisconnect} onChange={() => setSettings({ ...settings, notifyOnDisconnect: !settings.notifyOnDisconnect })} />
+            </Row>
+          </SectionCard>
+
           <SectionCard id="privacy" title="Privacy" subtitle="Command history is the list behind Ctrl+R search. Turn it off entirely under Features. It is stored inside the encrypted vault.">
             <Row id="history-max" label="Keep up to" desc="Older entries are dropped as new ones arrive">
               <select
@@ -1283,6 +1299,9 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "paste-review", page: "terminal", label: "Review multi-line paste", keywords: "paste lines confirm script safety" },
   { id: "word-separators", page: "terminal", label: "Word separators", keywords: "double click select word" },
   { id: "scroll-on-input", page: "terminal", label: "Scroll to bottom on typing", keywords: "scroll keypress output" },
+  { id: "notifications", page: "terminal", label: "Notifications", keywords: "notify notification alert background long command disconnect" },
+  { id: "notify-long", page: "terminal", label: "Long command finished", keywords: "notify notification long command finished build" },
+  { id: "notify-disconnect", page: "terminal", label: "SSH session lost", keywords: "notify notification disconnect dropped session" },
   { id: "privacy", page: "terminal", label: "Privacy", keywords: "history command privacy retention clear" },
   { id: "history-max", page: "terminal", label: "History size", keywords: "command history keep entries limit" },
   { id: "history-days", page: "terminal", label: "History age", keywords: "command history delete days retention" },

@@ -23,6 +23,7 @@ import { IS_MOBILE_OS } from '../util/platform';
 import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
+import { notifyDesktop, shouldNotifyLongCommand } from '../util/desktopNotify';
 import { playTerminalBellChime } from '../terminal/bell';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
 
@@ -656,6 +657,7 @@ const TerminalView = ({
   // Command block separation and output capture (OSC 133 + buffer parsing)
   const lastCommandRef = useRef<{
     command: string;
+    startedAt?: number;
     exitCode?: number;
     startLine: number;
     outputStartLine: number;
@@ -665,6 +667,7 @@ const TerminalView = ({
 
   const [lastCommand, setLastCommand] = useState<{
     command: string;
+    startedAt?: number;
     exitCode?: number;
     startLine: number;
     outputStartLine: number;
@@ -783,6 +786,16 @@ const TerminalView = ({
             };
             lastCommandRef.current = updated;
             setLastCommand(updated);
+
+            // Only this path knows the command really ended (the shell said so); the output-settling
+            // fallback below cannot tell a finished command from a quiet one, so it never notifies.
+            const longSec = Math.max(0, parseInt(localStorage.getItem('subterm-notify-long-sec') || '0', 10) || 0);
+            if (updated.startedAt && shouldNotifyLongCommand(Date.now() - updated.startedAt, longSec)) {
+              void notifyDesktop(
+                updated.exitCode ? `Command failed (exit ${updated.exitCode})` : 'Command finished',
+                `${serverName || 'Terminal'}: ${updated.command.slice(0, 120)}`,
+              );
+            }
 
             if (localStorage.getItem('subterm-auto-copy-output') === 'true') {
               copyCommandOutput(updated);
@@ -1167,6 +1180,7 @@ const TerminalView = ({
             const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
             const newBlock = {
               command: line,
+              startedAt: Date.now(),
               startLine: currentLine,
               outputStartLine: currentLine + 1,
               running: true,

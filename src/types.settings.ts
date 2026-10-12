@@ -32,6 +32,10 @@ export interface AppSettings {
   terminalLineHeight: number;
   /** Whole-UI zoom in percent (webview zoom). */
   uiZoom: number;
+  /** Notify when a command that took at least this many seconds finishes in the background; 0 = off. */
+  notifyLongCommandSec: number;
+  /** Notify when an SSH session drops while the window is in the background. */
+  notifyOnDisconnect: boolean;
   /** Most command-history entries kept (older ones are dropped). */
   historyMaxEntries: number;
   /** Drop history older than this many days; 0 = keep by age. */

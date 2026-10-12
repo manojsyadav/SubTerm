@@ -137,6 +137,8 @@ function DesktopApp() {
     historyMaxEntries: Math.min(50000, Math.max(50, parseInt(localStorage.getItem('subterm-history-max') || '1000', 10) || 1000)),
     historyRetentionDays: Math.max(0, parseInt(localStorage.getItem('subterm-history-days') || '0', 10) || 0),
     confirmOnClose: localStorage.getItem('subterm-confirm-on-close') !== 'false',
+    notifyLongCommandSec: Math.max(0, parseInt(localStorage.getItem('subterm-notify-long-sec') || '0', 10) || 0),
+    notifyOnDisconnect: localStorage.getItem('subterm-notify-disconnect') === 'true',
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -690,6 +692,8 @@ function DesktopApp() {
     localStorage.setItem('subterm-history-max', String(appSettings.historyMaxEntries ?? 1000));
     localStorage.setItem('subterm-history-days', String(appSettings.historyRetentionDays ?? 0));
     localStorage.setItem('subterm-confirm-on-close', appSettings.confirmOnClose === false ? 'false' : 'true');
+    localStorage.setItem('subterm-notify-long-sec', String(appSettings.notifyLongCommandSec ?? 0));
+    localStorage.setItem('subterm-notify-disconnect', appSettings.notifyOnDisconnect ? 'true' : 'false');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));
