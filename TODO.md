@@ -24,6 +24,8 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
+- 🟢 **P3 / S** — Toolbar/tab-bar button that opens the full terminal context menu (Smart right-click otherwise reserves the menu for Shift+right-click).
+
 
 ---
 

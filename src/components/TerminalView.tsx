@@ -1216,8 +1216,22 @@ const TerminalView = ({
     const onContextMenu = async (ev: MouseEvent) => {
       ev.preventDefault();
       if (disabledRef.current) return;
-      const rightClickAction = localStorage.getItem('subterm-right-click-action') || 'menu';
-      if (rightClickAction === 'paste') {
+      const rightClickAction = localStorage.getItem('subterm-right-click-action') || 'smart';
+      // Keep keyboard focus in this pane; the contextmenu event alone
+      // doesn't focus xterm (matters for split panes).
+      term.focus();
+      if (rightClickAction === 'smart' && !ev.shiftKey) {
+        const sel = term.getSelection();
+        if (sel) {
+          try {
+            await navigator.clipboard.writeText(sel);
+            term.clearSelection();
+            notify('Copied');
+          } catch { notify('Clipboard write denied', 'err'); }
+          return;
+        }
+      }
+      if ((rightClickAction === 'paste' || rightClickAction === 'smart') && !ev.shiftKey) {
         let text = '';
         try { text = await navigator.clipboard.readText(); }
         catch { notify('Clipboard read denied', 'err'); return; }
@@ -2058,7 +2072,7 @@ const TerminalView = ({
       {contextMenu && (
         <TerminalContextMenu
           menu={contextMenu}
-          onClose={() => setContextMenu(null)}
+          onClose={() => { setContextMenu(null); xtermRef.current?.focus(); }}
           onCopy={handleContextCopy}
           onPaste={handleContextPaste}
           onSelectAll={handleContextSelectAll}

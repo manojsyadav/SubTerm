@@ -566,10 +566,11 @@ const PageTerminal = ({ settings, setSettings }: SettingsPageProps) => {
       </Row>
       <Row label="Right-Click Action" desc="Behavior when right-clicking inside the terminal viewport">
         <select
-          value={settings.rightClickAction || 'menu'}
+          value={settings.rightClickAction || 'smart'}
           onChange={(e) => setSettings({ ...settings, rightClickAction: e.target.value })}
           className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
         >
+          <option value="smart">Smart: Copy Selection, Else Paste (Shift+Right-Click for Menu)</option>
           <option value="menu">Open Context Menu</option>
           <option value="paste">Paste Immediately (PuTTY style)</option>
         </select>
