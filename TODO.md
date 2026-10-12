@@ -24,6 +24,12 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
+- 🟢 **P3 / M** — High-contrast mode. Needs a pass over the colour tokens (borders, muted text) rather than a global override, so it was not bolted on with Reduce motion.
+- 🟢 **P3 / M** — Terminal window opacity / blur. Needs window transparency in `tauri.conf.json` and per-platform testing.
+- 🟢 **P3 / L** — In-app update check. There is no update feed or signing setup yet; this is a release-infrastructure task before it is a setting.
+- 🟢 **P3 / S** — Notifications for long commands only work with shells that emit OSC 133. Consider injecting shell integration for local PowerShell/bash so the setting works out of the box.
+- 🟡 **P2 / S** — Verify background notifications and clipboard-clear-on-lock in the packaged Windows build; both depend on webview/OS permissions that tests cannot cover.
+
 
 
 ---
@@ -70,3 +76,12 @@ This document tracks active development tasks, pending architectural optimizatio
     - Cross-pane file diff/compare tool (`FileDiffModal`) and the four extracted `VaultEditPanels` (open/edit/save/cancel for a command, note, credential, SSH key).
     - The three newly-extracted views (`LibraryView`, `LoginsView`, `LogsView`): search/filter, add/edit/delete flows, and the commands/notes tab toggle.
     - Sudo-elevated SFTP file save to a root-owned path, with and without a saved session password.
+
+---
+
+## Settled decisions (not doing, and why)
+
+- **No transfer-concurrency setting.** Uploads and downloads take one slot per session on purpose (`acquireTransferSlot`): two transfers aimed at the same path would both pass the backend's exists check and write into the file together. Revisit only with a per-path lock.
+- **No "trim trailing spaces on copy" or "Alt as Meta" options.** Selection text already omits trailing whitespace, and xterm already sends Alt as an ESC prefix on desktop.
+- **No separate "show hidden files by default" setting.** The file browser's own toggle already remembers the choice.
+- **Monitoring intervals and alert thresholds stay on the Monitor page.** Settings only holds the on/off switch and a link; duplicating them would put one value in two places.
