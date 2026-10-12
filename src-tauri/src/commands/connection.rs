@@ -200,6 +200,14 @@ pub(crate) fn apply_tcp_keepalive(stream: &tokio::net::TcpStream) {
 
 pub static SSH_KEEPALIVE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(20);
 
+/// How long the first TCP connect (direct or to a proxy) may take before the attempt fails.
+/// Settings > Terminal > SSH Connection; bounded so a typo cannot hang or instantly fail every connect.
+pub static SSH_CONNECT_TIMEOUT_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(10);
+
+pub(crate) fn ssh_connect_timeout() -> std::time::Duration {
+    std::time::Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS.load(std::sync::atomic::Ordering::Relaxed).clamp(3, 120))
+}
+
 /// How much a wall-clock tick can overshoot its expected interval before we
 /// treat it as "the OS was asleep", not scheduler jitter. Laptops routinely
 /// stall a tokio timer by tens of ms under load; a multi-second gap only
@@ -1099,7 +1107,7 @@ pub(crate) async fn initiate_connection(
                 
                 let proxy_addr = format!("{}:{}", p_host, p_port);
                 match tokio::time::timeout(
-                    Duration::from_secs(10),
+                    ssh_connect_timeout(),
                     tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), (host.as_str(), port as u16))
                 ).await {
                     Ok(Ok(stream)) => {
@@ -1133,7 +1141,7 @@ pub(crate) async fn initiate_connection(
 
                 let proxy_addr = format!("{}:{}", p_host, p_port);
                 match tokio::time::timeout(
-                    Duration::from_secs(10),
+                    ssh_connect_timeout(),
                     tokio::net::TcpStream::connect(proxy_addr)
                 ).await {
                     Ok(Ok(mut tcp_stream)) => {
@@ -1171,7 +1179,7 @@ pub(crate) async fn initiate_connection(
             _ => {
                 emit_log(&format!("Connecting directly to {}:{}...", host, port), "info");
                 match tokio::time::timeout(
-                    Duration::from_secs(10),
+                    ssh_connect_timeout(),
                     tokio::net::TcpStream::connect((host.as_str(), port as u16))
                 ).await {
                     Ok(Ok(stream)) => {

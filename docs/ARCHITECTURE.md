@@ -259,6 +259,8 @@ Terminal options (`subterm-paste-review-lines`, `-word-separators`, `-scroll-on-
 
 `src/settingsBackup.ts` builds and applies the preferences backup. It exports every `subterm-*` / `submarine-*` localStorage key except an exclusion list (biometric handles, last workspace/session, pinned server ids, connection history, anything that looks like a credential), and import runs the same filter plus a value-size cap because the file is untrusted. Import writes to storage and reloads so `DesktopApp` re-reads its settings.
 
+Auto-reconnect pacing is `src/ssh/reconnectPolicy.ts` (backoff doubling from 2 s up to a configurable ceiling, optional attempt limit; unlimited by default). The first TCP connect timeout is the `SSH_CONNECT_TIMEOUT_SECS` atomic in `commands/connection.rs`, set through `set_ssh_connect_timeout`.
+
 Auto-lock lives in `src/hooks/useIdleLock.ts` (`useIdleLock` polls last-input time every 10 s; `useLockOnHidden` watches `visibilitychange`). `DesktopApp.lockVault(automatic)` is the single lock path: manual locks confirm when remote sessions are open, automatic ones never prompt.
 
 Settings are stored one `localStorage` key per value (`subterm-*`), written from `DesktopApp.tsx`; a few are also pushed to the backend at runtime.

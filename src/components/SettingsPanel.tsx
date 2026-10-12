@@ -736,6 +736,57 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
                 <option value={0}>Disabled</option>
               </select>
             </Row>
+            <Row id="connect-timeout" label="Connection timeout" desc="How long to wait for a server (or its proxy) to accept the TCP connection before giving up">
+              <select
+                value={settings.sshConnectTimeoutSec ?? 10}
+                onChange={(e) => setSettings({ ...settings, sshConnectTimeoutSec: parseInt(e.target.value, 10) || 10 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                {[5, 10, 20, 30, 60].map((n) => <option key={n} value={n}>{n} seconds{n === 10 ? " (default)" : ""}</option>)}
+              </select>
+            </Row>
+            <Row id="reconnect-attempts" label="Auto-reconnect attempts" desc="How many times to retry a dropped session. Applies when auto-reconnect is on (Features).">
+              <select
+                value={settings.reconnectMaxAttempts ?? 0}
+                onChange={(e) => setSettings({ ...settings, reconnectMaxAttempts: parseInt(e.target.value, 10) || 0 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={0}>Keep trying (default)</option>
+                {[3, 5, 10, 30, 100].map((n) => <option key={n} value={n}>{n} attempts</option>)}
+              </select>
+            </Row>
+            <Row id="reconnect-delay" label="Longest wait between retries" desc="Retries start at 2 s and double up to this limit">
+              <select
+                value={settings.reconnectMaxDelaySec ?? 30}
+                onChange={(e) => setSettings({ ...settings, reconnectMaxDelaySec: parseInt(e.target.value, 10) || 30 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                {[5, 10, 30, 60, 120].map((n) => <option key={n} value={n}>{n} seconds{n === 30 ? " (default)" : ""}</option>)}
+              </select>
+            </Row>
+            <Row id="default-port" label="Default port" desc="Prefilled when you add a server">
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={settings.defaultSshPort ?? 22}
+                onChange={(e) => setSettings({ ...settings, defaultSshPort: Math.min(65535, Math.max(1, parseInt(e.target.value, 10) || 22)) })}
+                className="w-24 h-8 bg-black/60 border border-white/10 rounded-lg px-2 text-xs text-white text-center outline-none focus:border-primary/50"
+              />
+            </Row>
+            <Row id="default-user" label="Default username" desc="Prefilled when you add a server (leave empty to use none)">
+              <input
+                type="text"
+                value={settings.defaultSshUser ?? ""}
+                onChange={(e) => setSettings({ ...settings, defaultSshUser: e.target.value })}
+                spellCheck={false}
+                aria-label="Default username"
+                className="w-40 h-8 bg-black/60 border border-white/10 rounded-lg px-2 text-xs text-white outline-none focus:border-primary/50"
+              />
+            </Row>
+            <Row id="default-agent" label="Forward SSH agent on new servers" desc="Turns agent forwarding on in the add-server form. Only enable it for hosts you fully trust: a forwarded agent lets that host use your keys while you are connected.">
+              <Toggle checked={!!settings.defaultAgentForward} onChange={() => setSettings({ ...settings, defaultAgentForward: !settings.defaultAgentForward })} />
+            </Row>
           </SectionCard>
 
           <SectionCard id="command-widget" title="Command Widget">
@@ -1148,6 +1199,12 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "auto-close", page: "terminal", label: "Auto-close tab on exit", keywords: "exit close shell tab" },
   { id: "audit-download", page: "terminal", label: "Download audit on exit", keywords: "transcript log save" },
   { id: "ssh-connection", page: "terminal", label: "SSH Connection", keywords: "ssh connection keep alive timeout reconnect" },
+  { id: "connect-timeout", page: "terminal", label: "Connection timeout", keywords: "ssh connect timeout seconds slow" },
+  { id: "reconnect-attempts", page: "terminal", label: "Auto-reconnect attempts", keywords: "reconnect retry attempts give up drop" },
+  { id: "reconnect-delay", page: "terminal", label: "Longest wait between retries", keywords: "reconnect retry backoff delay" },
+  { id: "default-port", page: "terminal", label: "Default port", keywords: "ssh port new server default" },
+  { id: "default-user", page: "terminal", label: "Default username", keywords: "ssh user username new server default" },
+  { id: "default-agent", page: "terminal", label: "Forward SSH agent on new servers", keywords: "agent forwarding ssh-agent new server default security" },
   { id: "keepalive", page: "terminal", label: "SSH Keep-Alive", keywords: "ping nat timeout idle disconnect" },
   { id: "command-widget", page: "terminal", label: "Command Widget", keywords: "output pill dismiss timer" },
   { id: "banner-buttons", page: "terminal", label: "Session-End Banner Buttons", keywords: "copy output download audit" },

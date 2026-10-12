@@ -50,6 +50,16 @@ export interface AppSettings {
   terminalPadding: number;
   terminalScrollback: number;
   sshKeepaliveSec: number;
+  /** Seconds the first TCP connect (direct or to a proxy) may take. */
+  sshConnectTimeoutSec: number;
+  /** Auto-reconnect attempts before giving up; 0 = retry forever. */
+  reconnectMaxAttempts: number;
+  /** Ceiling of the auto-reconnect backoff, in seconds. */
+  reconnectMaxDelaySec: number;
+  /** Prefilled in the add-server form. */
+  defaultSshPort: number;
+  defaultSshUser: string;
+  defaultAgentForward: boolean;
   quickAccessServerIds: number[];
 }
 

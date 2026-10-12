@@ -570,4 +570,10 @@ pub fn set_ssh_keepalive_interval(secs: u64) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn set_ssh_connect_timeout(secs: u64) -> Result<(), String> {
+    crate::commands::connection::SSH_CONNECT_TIMEOUT_SECS.store(secs.clamp(3, 120), std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
 

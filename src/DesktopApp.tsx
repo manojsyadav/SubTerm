@@ -141,6 +141,12 @@ function DesktopApp() {
     terminalPadding: Math.max(0, parseInt(localStorage.getItem('subterm-terminal-padding') || '0', 10) || 0),
     terminalScrollback: parseInt(localStorage.getItem('subterm-terminal-scrollback') || '5000', 10),
     sshKeepaliveSec: parseInt(localStorage.getItem('subterm-ssh-keepalive-sec') || '20', 10),
+    sshConnectTimeoutSec: Math.min(120, Math.max(3, parseInt(localStorage.getItem('subterm-ssh-connect-timeout-sec') || '10', 10) || 10)),
+    reconnectMaxAttempts: Math.max(0, parseInt(localStorage.getItem('subterm-reconnect-max-attempts') || '0', 10) || 0),
+    reconnectMaxDelaySec: Math.min(300, Math.max(2, parseInt(localStorage.getItem('subterm-reconnect-max-delay-sec') || '30', 10) || 30)),
+    defaultSshPort: Math.min(65535, Math.max(1, parseInt(localStorage.getItem('subterm-default-ssh-port') || '22', 10) || 22)),
+    defaultSshUser: localStorage.getItem('subterm-default-ssh-user') || '',
+    defaultAgentForward: localStorage.getItem('subterm-default-agent-forward') === 'true',
     quickAccessServerIds: (() => {
       try {
         const raw = localStorage.getItem('subterm-quick-access-servers');
@@ -574,7 +580,7 @@ function DesktopApp() {
 
   const defaultNode: NodeFormState = {
     id: null as number | null,
-    name: "", host: "", port: 22, username: "", password: "",
+    name: "", host: "", port: appSettings.defaultSshPort || 22, username: appSettings.defaultSshUser || "", password: "",
     // "custom_pass" picked as default because most users adding a new
     // server have a password in hand; the vault option is mainly useful
     // *after* they've saved a few credentials and want to reuse one.
@@ -607,7 +613,7 @@ function DesktopApp() {
     password_dirty: false,
     is_production: false,
     icon: "server",
-    forward_agent: false,
+    forward_agent: !!appSettings.defaultAgentForward,
     protocol: "ssh",
   };
 
@@ -664,10 +670,17 @@ function DesktopApp() {
     localStorage.setItem('subterm-lock-on-minimize', appSettings.lockOnMinimize ? 'true' : 'false');
     localStorage.setItem('subterm-clear-clipboard-on-lock', appSettings.clearClipboardOnLock ? 'true' : 'false');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
+    localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));
+    localStorage.setItem('subterm-reconnect-max-attempts', String(appSettings.reconnectMaxAttempts ?? 0));
+    localStorage.setItem('subterm-reconnect-max-delay-sec', String(appSettings.reconnectMaxDelaySec ?? 30));
+    localStorage.setItem('subterm-default-ssh-port', String(appSettings.defaultSshPort ?? 22));
+    localStorage.setItem('subterm-default-ssh-user', appSettings.defaultSshUser || '');
+    localStorage.setItem('subterm-default-agent-forward', appSettings.defaultAgentForward ? 'true' : 'false');
     localStorage.setItem('subterm-terminal-line-height', String(appSettings.terminalLineHeight || 1.15));
     localStorage.setItem('subterm-terminal-scrollback', String(appSettings.terminalScrollback || 5000));
     localStorage.setItem('subterm-ssh-keepalive-sec', String(appSettings.sshKeepaliveSec || 20));
     invoke('set_ssh_keepalive_interval', { secs: appSettings.sshKeepaliveSec || 20 }).catch(console.error);
+    invoke('set_ssh_connect_timeout', { secs: appSettings.sshConnectTimeoutSec || 10 }).catch(console.error);
     localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {

@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(ssh)` — SSH connection settings**:
+  Settings > Terminal > SSH Connection adds a connection timeout, a limit on auto-reconnect attempts and the longest wait between retries (defaults keep today's behaviour: 10 s, retry forever, 30 s), and default port, username and agent forwarding for new servers.
+
 - **`feat(settings)` — Interface zoom**:
   Settings > Appearance > Interface Zoom scales the whole window (80% to 175%) with the webview's zoom, so xterm sizing stays correct.
 

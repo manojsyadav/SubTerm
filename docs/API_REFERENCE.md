@@ -198,6 +198,11 @@ This document provides a technical reference for all Tauri IPC commands register
   ```
 - **Return Type**: `Result<{ id: number; name: string; host: string; port: number; username: string }[], String>`
 
+### `set_ssh_connect_timeout`
+- **Description**: Sets how long the initial TCP connect (direct, SOCKS5 or HTTP proxy) may take. Clamped to 3 to 120 seconds; applies to the next connection.
+- **Input Arguments**: `{ secs: number }`
+- **Return Type**: `Result<(), String>`
+
 ### `set_ui_zoom`
 - **Description**: Sets the webview zoom for the calling window (Settings > Appearance > Interface Zoom). Clamped to 0.5 to 2.0; a no-op on mobile.
 - **Input Arguments**: `{ factor: number }` (1.0 = 100%)

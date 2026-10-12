@@ -37,6 +37,7 @@ import { useTextPrompt } from "../ui/confirm";
 import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
 import DistroLogo from "./DistroLogo";
 import { RenameInput } from "../ui/renameInput";
+import { reconnectDelayMs, readReconnectSettings, shouldGiveUp } from "../ssh/reconnectPolicy";
 
 // Compact "run this tab on its own dedicated SSH connection" toggle, shown in
 // the SFTP and Port-Forwarding tab headers. The status dot reflects the live
@@ -890,10 +891,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   //
   // Backoff ramps 2s -> 4s -> 8s -> 16s, capped at 30s, so a server that's
   // down for minutes doesn't get hammered every 5s the whole time it's gone.
-  const RECONNECT_BASE_MS = 2000;
-  const RECONNECT_MAX_MS = 30000;
-  const reconnectDelayFor = (attempt: number) =>
-    Math.min(RECONNECT_BASE_MS * 2 ** Math.max(0, attempt - 1), RECONNECT_MAX_MS);
+  // The ceiling and an optional attempt limit come from Settings > Terminal > SSH Connection
+  // (unlimited and 30 s by default, which keeps the behaviour described above).
+  const reconnectDelayFor = (attempt: number) => reconnectDelayMs(attempt, readReconnectSettings());
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [nextReconnectAt, setNextReconnectAt] = useState<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -1162,6 +1162,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   }, [nextReconnectAt]);
 
   const scheduleReconnect = (attempt: number, delayOverrideMs?: number) => {
+    if (shouldGiveUp(attempt, readReconnectSettings())) {
+      cancelReconnect();
+      addLog(`SSH_RECONNECT_GAVE_UP [${session.serverName}]: stopped after ${attempt - 1} attempts. Use Reconnect to try again.`, "warning");
+      return;
+    }
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
