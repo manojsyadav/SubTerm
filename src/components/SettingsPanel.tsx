@@ -24,7 +24,7 @@ import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
 import { TerminalTrigger, TriggerAction, getTerminalTriggers, saveTerminalTriggers, newTrigger } from "../terminal/triggers";
 
-type CategoryId = "general" | "appearance" | "terminal" | "features" | "quick" | "monitoring" | "cloud" | "profile" | "system";
+type CategoryId = "general" | "appearance" | "terminal" | "features" | "quick" | "accounts" | "system";
 
 interface Category {
   id: CategoryId;
@@ -35,7 +35,7 @@ interface Category {
 
 // Categories that require the vault to be unlocked before use.
 // "quick" is not listed: its keyboard-shortcuts tab works while locked, and the page gates its other tabs itself.
-const LOCKED_CATEGORIES: CategoryId[] = ["cloud", "profile", "system"];
+const LOCKED_CATEGORIES: CategoryId[] = ["accounts", "system"];
 
 const CATEGORIES: Category[] = [
   { id: "general",       label: "General",            icon: <SlidersHorizontal size={16} />, description: "Startup and remote desktop" },
@@ -43,9 +43,7 @@ const CATEGORIES: Category[] = [
   { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,    description: "Mouse, clipboard, sessions, triggers" },
   { id: "features",      label: "Features",           icon: <ToggleRight size={16} />, description: "Turn optional features on or off" },
   { id: "quick",         label: "Quick Access",       icon: <Server size={16} />,      description: "Pinned servers, quick commands, keyboard shortcuts" },
-  { id: "monitoring",    label: "Monitoring",         icon: <Activity size={16} />,    description: "Resource polling and alerts" },
-  { id: "cloud",         label: "Cloud and Sync",     icon: <Cloud size={16} />,       description: "Cloud account and sync settings" },
-  { id: "profile",       label: "Profile",            icon: <User size={16} />,        description: "Manage and switch profiles" },
+  { id: "accounts",      label: "Accounts & Sync",    icon: <User size={16} />,        description: "Profiles, cloud account and sync" },
   { id: "system",        label: "System",             icon: <ShieldCheck size={16} />, description: "Known hosts, maintenance and the activity log" },
 ];
 
@@ -163,6 +161,7 @@ interface SettingsPanelProps extends SettingsPageProps, CloudSyncExtras, Compone
   folders?: Folder[];
   isMobile?: boolean;
   onOpenLogs?: () => void;
+  onOpenMonitor?: () => void;
   onClose?: () => void;
 }
 
@@ -201,7 +200,7 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
 
 type TerminalPart = "appearance" | "general" | "terminal" | "features";
 
-const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { part: TerminalPart }) => {
+const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPageProps & { part: TerminalPart; onOpenMonitor?: () => void }) => {
   const [themesList, setThemesList] = useState<TerminalThemeConfig[]>(getAllTerminalThemes());
   const [flags, setFlags] = useState<Record<FeatureKey, boolean>>(() =>
     Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>,
@@ -544,6 +543,18 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
               </Row>
             )}
           </SectionCard>
+          <SectionCard id="monitoring" title="Resource Monitoring">
+            <Row id="enable-monitoring" label="Enable monitoring" desc="Show the Monitor page and poll CPU, RAM, disk and outages in the background.">
+              <Toggle checked={settings.enableMonitoring !== false} onChange={() => setSettings({ ...settings, enableMonitoring: !(settings.enableMonitoring !== false) })} />
+            </Row>
+            {settings.enableMonitoring !== false && onOpenMonitor && (
+              <Row label="Polling and alerts" desc="Interval, timeouts, outage threshold, notifications and beep are set on the Monitor page.">
+                <button type="button" onClick={onOpenMonitor} className="px-3 h-8 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold hover:bg-primary/20">
+                  Open Monitor
+                </button>
+              </Row>
+            )}
+          </SectionCard>
       <SectionCard id="rdp" title="Remote Desktop (RDP)" subtitle="Where RDP servers open when you click them.">
         <SettingsRdpMode />
       </SectionCard>
@@ -593,6 +604,9 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
             <Row id="audit-download" label="Download audit on exit" desc="Save a transcript when the session ends">
               <Toggle checked={!!settings.downloadAuditOnExit} onChange={() => setSettings({ ...settings, downloadAuditOnExit: !settings.downloadAuditOnExit })} />
             </Row>
+          </SectionCard>
+
+          <SectionCard id="ssh-connection" title="SSH Connection">
             <Row id="keepalive" label="SSH Keep-Alive" desc="Ping interval that stops NAT and firewalls from dropping idle connections">
               <select
                 value={settings.sshKeepaliveSec || 20}
@@ -779,20 +793,6 @@ const PageServers = ({ settings, setSettings, servers }: SettingsPageProps & { s
   );
 };
 
-const PageMonitoring = ({ settings, setSettings }: SettingsPageProps) => (
-  <div className="space-y-6">
-    <SectionCard title="Resource Monitoring">
-      <Row label="Enable monitoring" desc="Show the Monitor tab and start background polling for CPU, RAM, disk, and outage detection.">
-        <Toggle checked={settings.enableMonitoring !== false} onChange={() => setSettings({ ...settings, enableMonitoring: !(settings.enableMonitoring !== false) })} />
-      </Row>
-      {settings.enableMonitoring !== false
-        ? <p className="text-[11px] text-zinc-400 mt-3">Real-time polling, sparklines, and outage detection are active in the Monitor tab.</p>
-        : <p className="text-[11px] text-zinc-500 italic mt-3">Monitoring is disabled. The Monitor tab is hidden and background polling is halted.</p>
-      }
-    </SectionCard>
-  </div>
-);
-
 const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: SettingsPageProps & CloudSyncExtras) => {
   const [cloudOpen, setCloudOpen] = useState(false);
   return (
@@ -844,6 +844,27 @@ type QuickTab = "servers" | "commands" | "shortcuts";
 // Pinned servers, quick commands and keyboard shortcuts share one page behind a
 // segmented control, so three short pages become one with no long scroll. Shortcuts
 // need no vault; the other two tabs show the unlock prompt while the vault is locked.
+type AccountsTab = "profiles" | "cloud";
+
+// Profiles (workspaces) and the cloud account/sync are two halves of "who am I and where does my
+// data live", so they share one page. Both need the vault, which the category gate enforces.
+const PageAccounts = ({ cloud, profile }: { cloud: React.ReactNode; profile: React.ReactNode }) => {
+  const [tab, setTab] = useState<AccountsTab>("profiles");
+  return (
+    <div className="space-y-6">
+      <SegmentedTabs
+        tabs={[
+          { id: "profiles" as AccountsTab, label: "Profiles" },
+          { id: "cloud" as AccountsTab, label: "Cloud & Sync" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === "profiles" ? profile : cloud}
+    </div>
+  );
+};
+
 const PageQuick = ({ settings, setSettings, servers, isUnlocked, onRequestUnlock }: SettingsPageProps & {
   servers: PinnableServer[]; isUnlocked: boolean; onRequestUnlock?: () => void;
 }) => {
@@ -973,6 +994,8 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
   { id: "startup", page: "general", label: "Startup", keywords: "launch open start" },
   { id: "local-shell", page: "general", label: "Default local shell", keywords: "powershell pwsh cmd bash wsl git shell terminal local" },
+  { id: "monitoring", page: "general", label: "Resource Monitoring", keywords: "monitor cpu ram disk outage polling" },
+  { id: "enable-monitoring", page: "general", label: "Enable monitoring", keywords: "monitor cpu ram disk outage polling" },
   { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
   { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
@@ -995,6 +1018,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "auto-copy-output", page: "terminal", label: "Auto-copy command output", keywords: "clipboard output" },
   { id: "auto-close", page: "terminal", label: "Auto-close tab on exit", keywords: "exit close shell tab" },
   { id: "audit-download", page: "terminal", label: "Download audit on exit", keywords: "transcript log save" },
+  { id: "ssh-connection", page: "terminal", label: "SSH Connection", keywords: "ssh connection keep alive timeout reconnect" },
   { id: "keepalive", page: "terminal", label: "SSH Keep-Alive", keywords: "ping nat timeout idle disconnect" },
   { id: "command-widget", page: "terminal", label: "Command Widget", keywords: "output pill dismiss timer" },
   { id: "banner-buttons", page: "terminal", label: "Session-End Banner Buttons", keywords: "copy output download audit" },
@@ -1012,7 +1036,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
 const COLUMNS = "space-y-6 xl:space-y-0 xl:columns-2 min-[1700px]:columns-3 xl:gap-6 xl:[&>*]:mb-6";
 const WIDE_PAGES: CategoryId[] = ["general", "appearance", "terminal", "features"];
 
-const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
+const SettingsPanel = ({ settings, setSettings, onOpenLogs, onOpenMonitor, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
   const [activeCategory, setActiveCategory] = useState<CategoryId>("general");
   const [query, setQuery] = useState("");
   const resettable = ["general", "appearance", "terminal", "features"].includes(activeCategory) ? (activeCategory as ResettablePage) : null;
@@ -1055,14 +1079,17 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
       return <LockedPage label={current.label} onRequestUnlock={onRequestUnlock} />;
     }
     switch (activeCategory) {
-      case "general":       return <div className={COLUMNS}><PageTerminal part="general" settings={settings} setSettings={setSettings} /></div>;
+      case "general":       return <div className={COLUMNS}><PageTerminal part="general" settings={settings} setSettings={setSettings} onOpenMonitor={onOpenMonitor} /></div>;
       case "appearance":    return <div className={COLUMNS}><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
       case "terminal":      return <div className={COLUMNS}><PageTerminal part="terminal" settings={settings} setSettings={setSettings} /></div>;
       case "features":      return <div className={COLUMNS}><PageTerminal part="features" settings={settings} setSettings={setSettings} /></div>;
       case "quick":         return <PageQuick settings={settings} setSettings={setSettings} servers={servers} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />;
-      case "monitoring":    return <PageMonitoring settings={settings} setSettings={setSettings} />;
-      case "cloud":         return <PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />;
-      case "profile":       return <PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />;
+      case "accounts":      return (
+        <PageAccounts
+          profile={<PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />}
+          cloud={<PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />}
+        />
+      );
       case "system":        return <PageSystemTabs settings={settings} setSettings={setSettings} servers={servers} folders={folders} onOpenLogs={onOpenLogs} />;
       default:              return null;
     }

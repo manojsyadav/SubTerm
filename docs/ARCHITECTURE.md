@@ -239,18 +239,16 @@ The frontend listens for both events and, for any session currently mid-backoff 
 
 ## 5. Settings Panel Architecture
 
-The Settings interface (`src/components/SettingsPanel.tsx`) uses a 9-page vertical sidebar model with a search box:
+The Settings interface (`src/components/SettingsPanel.tsx`) uses a 7-page vertical sidebar model with a search box:
 
 | Category ID | Display Name | Protection Level | Primary Operations |
 |---|---|---|---|
-| `general` | General | Unrestricted | Startup view, RDP mode |
+| `general` | General | Unrestricted | Startup view, default local shell, monitoring switch (links to the Monitor page for intervals and alerts), RDP mode |
 | `appearance` | Appearance | Unrestricted | Accent/background colors, terminal theme, fonts, cursor, WebGL, bell |
 | `terminal` | Terminal | Unrestricted | Right-click, copy on select, link opening, session behaviour, command widget, triggers |
 | `features` | Features | Unrestricted | Feature flags (`src/featureFlags.ts`) with per-feature options nested beneath |
-| `monitoring` | Monitoring | Unrestricted | Polling toggles, interval configurations |
 | `quick` | Quick Access | Per tab | Segmented page: pinned top-bar servers and quick commands (**Vault Locked**), keyboard shortcuts (unrestricted) |
-| `cloud` | Cloud & Sync | **Vault Locked** | Cloud API endpoint, auth, push/pull sync |
-| `profile` | Profiles & Vault | **Vault Locked** | Create/delete/rename profiles, master password |
+| `accounts` | Accounts & Sync | **Vault Locked** | Segmented page: Profiles (create/delete/rename, master password) and Cloud & Sync (API endpoint, auth, push/pull) |
 | `system` | System | **Vault Locked** | Segmented page: Known Hosts (trusted keys, revocation), Maintenance (factory reset, export, cleanup), Activity Log (session audits, diagnostics) |
 
 `general`, `appearance`, `terminal` and `features` are four views of one component, `PageTerminal`, selected by its `part` prop, because they share state (theme list, flags, triggers). On windows 1280 px wide or more these four pages lay their cards out in two CSS columns, three from 1700 px wide (`COLUMNS` in `SettingsPanel.tsx`; cards use `break-inside-avoid`, so a card is never split), and the content area widens from `max-w-2xl` to `max-w-[2000px]`; narrower windows stay single-column. The other pages keep the narrow single column. Rows and sections carry a `data-setting` id; `SETTINGS_INDEX` (plus the `FEATURES` list) feeds the sidebar search, which switches page and scrolls to that id. A new row only shows up in search once it has an id and an index entry; a test fails if a rendered id is missing from the index.

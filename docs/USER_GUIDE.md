@@ -213,7 +213,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 ## 3. Configuration & Customization
 
-SubTerm includes a **Settings Panel** with 9 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
+SubTerm includes a **Settings Panel** with 7 pages and a search box that jumps straight to any setting (accessible via the gear icon or `Ctrl+,`):
 
 - **General**: **On Startup** chooses what opens after you unlock a profile: *Server List* (default), *Reopen Last Session* (saved servers and local shells; Quick Connect sessions fall back to the list) or *New Local Terminal*. Servers marked **Autostart** always open first. **Remote Desktop (RDP)** chooses where RDP servers open.
 - **Appearance**: Accent color, background, and the terminal theme, font, line height, scrollback, cursor, WebGL and bell options listed below.
@@ -235,9 +235,10 @@ SubTerm includes a **Settings Panel** with 9 pages and a search box that jumps s
   - **SSH Keep-Alive Interval**: Configure keep-alive ping frequency (Disabled, 15s, 30s, 60s, 120s) to keep remote SSH tunnels and terminal sessions resilient across unstable networks and strict NAT firewalls.
   - **Terminal Triggers & Alert Keywords**: Define keyword or regex patterns matched against live output in any session. Each trigger fires one of: a toast notification, the audible bell chime, the visual bell flash, or an entry in the Activity Log — useful for noticing `ERROR`/`FATAL`/`Exception` in a background session tab.
 - **Quick Access**: one page with three tabs. **Pinned Servers** (pin up to 5 servers to the top bar) and **Quick Commands** need the vault unlocked; **Keyboard Shortcuts** do not. Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
-- **Monitoring**: Adjust background polling intervals (default: 5 seconds) and CPU/RAM alert thresholds.
-- **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization. Under **What to sync on this device** you can leave out servers, credentials, saved commands or notes on this device only; unchecked data is neither uploaded nor downloaded.
-- **Profiles & Workspaces**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
+- **Monitoring** (under **General**): turn background resource monitoring on or off. Polling interval, timeouts, the outage threshold, notifications and the outage beep are on the **Monitor** page; **Open Monitor** in Settings jumps there.
+- **Accounts & Sync**: one page with two tabs.
+  - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization. Under **What to sync on this device** you can leave out servers, credentials, saved commands or notes on this device only; unchecked data is neither uploaded nor downloaded.
+  - **Profiles**: Create isolated profiles (e.g. "Work", "Personal", "Staging") each encrypted with its own master password.
 - **System**: one page with three tabs, all behind the vault lock.
   - **Known Hosts**: Review all trusted SSH host keys and fingerprints, copy fingerprints to clipboard, and revoke stale keys when a server is re-imaged.
 - **Changed-from-default markers**: on the General, Appearance, Terminal and Features pages a small dot appears beside any setting you have changed; click it to restore that one setting. **Reset this page to defaults** under the page title restores the whole page.

@@ -1964,6 +1964,7 @@ function DesktopApp() {
                 folders={folders}
                 isMobile={isMobile}
                 onOpenLogs={() => setActiveView("logs")}
+                onOpenMonitor={() => setActiveView("monitor")}
                 onClose={() => setActiveView("nodes")}
                 onUnlocked={handleProfileUnlocked}
                 onSync={handleCloudSync}

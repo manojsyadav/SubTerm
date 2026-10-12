@@ -164,4 +164,21 @@ describe("SettingsPanel layout", () => {
     expect(host.textContent).toContain("Vault is locked");
     expect(host.querySelector('[role="tab"]')).toBeNull();
   });
+
+  it("has seven pages: monitoring, profile and cloud no longer stand alone", () => {
+    const labels = [...host.querySelectorAll("nav button")].map((b) => (b.textContent ?? "").trim());
+    expect(labels).toEqual(["General", "Appearance", "Terminal", "Features", "Quick Access", "Accounts & Sync", "System"]);
+  });
+
+  it("puts the monitoring switch on General and the SSH keep-alive under SSH Connection", () => {
+    expect(host.querySelector('[data-setting="enable-monitoring"]')).toBeTruthy();
+    click(nav("Terminal"));
+    const ssh = host.querySelector('[data-setting="ssh-connection"]')!;
+    expect(ssh.querySelector('[data-setting="keepalive"]')).toBeTruthy();
+  });
+
+  it("combines Profiles and Cloud & Sync as tabs and locks the page", () => {
+    click(nav("Accounts & Sync"));
+    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Profiles", "Cloud & Sync"]);
+  });
 });
