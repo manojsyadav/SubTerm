@@ -32,7 +32,7 @@ export const LoginsView = ({
   <div className="flex-1 flex flex-col p-4 sm:p-8 space-y-6 sm:space-y-8 animate-in overflow-y-auto custom-scrollbar">
     <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b border-zinc-700 pb-5 sm:pb-6 shrink-0">
       <div className="min-w-0">
-        <h2 className="text-[18px] sm:text-[22px] font-bold text-white tracking-tight">Logins</h2>
+        <h2 className="text-[18px] sm:text-[22px] font-bold text-white tracking-tight">Credentials</h2>
         <p className="hidden sm:block text-[13px] text-zinc-400">Your saved passwords and SSH keys.</p>
       </div>
       <div className="flex flex-wrap gap-2">

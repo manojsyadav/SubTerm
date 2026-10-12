@@ -139,7 +139,7 @@ export const FEATURES = [
   {
     key: "panelLibrary",
     group: "Panels",
-    label: "Library panel",
+    label: "Snippets panel",
     desc: "Saved commands and notes tab in the session toolbar.",
   },
   {

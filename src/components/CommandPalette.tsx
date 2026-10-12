@@ -193,7 +193,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     list.push({
       id: "nav-library",
       category: "Action",
-      title: "Go to: Library (Snippets & Notes)",
+      title: "Go to: Snippets (Commands & Notes)",
       subtitle: "Browse saved commands and runbooks",
       icon: <Bookmark size={14} className="text-amber-400" />,
       action: () => onSelectView("library"),
@@ -221,7 +221,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     list.push({
       id: "nav-vault",
       category: "Action",
-      title: "Go to: Credential Vault",
+      title: "Go to: Credentials",
       subtitle: "Manage saved SSH keys and credentials",
       icon: <Settings size={14} className="text-zinc-400" />,
       action: () => onSelectView("vault"),

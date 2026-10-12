@@ -64,7 +64,7 @@ export const LibraryView = ({
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-[18px] sm:text-[22px] font-bold text-white tracking-tight flex items-center gap-2">
-              Library
+              Snippets
               <span
                 title="All entries are AES-256-GCM encrypted inside the current profile vault."
                 className="inline-flex items-center gap-1 h-5 px-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-wider text-emerald-300"
