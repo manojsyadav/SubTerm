@@ -10,7 +10,7 @@ import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
 import { WebglAddon } from 'xterm-addon-webgl';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
+import { MoreVertical, AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
 import 'xterm/css/xterm.css';
 import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
@@ -20,7 +20,7 @@ const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ defa
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
-import { parseSshCommand, sshTargetKey, SshTarget } from '../terminal/sshCommand';
+import { parseSshCommand, sshTargetKey, SshTarget, SSH_ENDED_RE } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { playTerminalBellChime } from '../terminal/bell';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
@@ -473,6 +473,10 @@ const TerminalView = ({
   const [sshOffer, setSshOffer] = useState<SshOffer | null>(null);
   const sshOfferTimerRef = useRef<number | null>(null);
   const sshDismissedRef = useRef<Set<string>>(new Set());
+  // True from the moment a typed ssh/sftp line is detected until the client reports an end
+  // (closed / refused / unreachable / auth failure). While set, typed lines go to the remote
+  // shell, so ssh typed there must not trigger an offer. Best effort: it is cleared from output text.
+  const sshForegroundRef = useRef(false);
   const clearSshOfferTimer = () => {
     if (sshOfferTimerRef.current) window.clearTimeout(sshOfferTimerRef.current);
   };
@@ -486,6 +490,8 @@ const TerminalView = ({
   // Stop the shell's own ssh (still running when the user accepts) so only the native session remains.
   const interruptShellSsh = () => {
     invoke('write_terminal_data', { terminalId, data: [0x03] }).catch(() => {});
+    // Ctrl+C ends ssh without printing anything, so the output-based reset would never fire.
+    sshForegroundRef.current = false;
   };
   // `how`: 'saved' opens a matching saved server, 'save' saves + opens, 'quick' opens without saving.
   const openSshOffer = (offer: SshOffer, how: 'saved' | 'save' | 'quick', serverId?: number) => {
@@ -520,6 +526,11 @@ const TerminalView = ({
   };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const openMenuAt = (x: number, y: number) => {
+    const term = xtermRef.current;
+    if (!term) return;
+    setContextMenu({ x, y, hasSelection: !!term.getSelection(), hasSavedPassword: !isLocal });
+  };
 
   const handleStartRecording = (withInput: boolean) => {
     const term = xtermRef.current;
@@ -1143,9 +1154,12 @@ const TerminalView = ({
           }
           commandBufRef.current = "";
           // Local shell only: offer to save/open a typed ssh/sftp target natively.
-          if (isLocal && isFeatureEnabled('sshDetect') && !looksLikePasswordPrompt(recentOutputRef.current)) {
+          if (isLocal && isFeatureEnabled('sshDetect') && !sshForegroundRef.current && !looksLikePasswordPrompt(recentOutputRef.current)) {
             const target = parseSshCommand(line);
-            if (target && !sshDismissedRef.current.has(sshTargetKey(target))) void handleSshTyped(target);
+            if (target) {
+              sshForegroundRef.current = true;
+              if (!sshDismissedRef.current.has(sshTargetKey(target))) void handleSshTyped(target);
+            }
           }
           // Do NOT persist what was typed at a no-echo password/passphrase
           // prompt — otherwise sudo/su/mysql -p/gpg secrets land verbatim in
@@ -1506,6 +1520,7 @@ const TerminalView = ({
         const txt = new TextDecoder().decode(data);
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
+        if (sshForegroundRef.current && SSH_ENDED_RE.test(txt)) sshForegroundRef.current = false;
 
         // Best-effort prompt CWD detection (e.g. user@hostname:path$ or user@hostname:path#)
         // ANSI colours are stripped first: stock Debian/Ubuntu prompts are coloured, which hid the path.
@@ -1872,6 +1887,20 @@ const TerminalView = ({
             </button>
           </div>
         </div>
+      )}
+
+      {!contextMenu && (
+        <button
+          type="button"
+          // mousedown default would move focus off the terminal before the menu opens
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); openMenuAt(r.right, r.bottom + 4); }}
+          title="Terminal menu (same as Shift+Right-Click)"
+          aria-label="Terminal menu"
+          className="absolute top-1.5 right-4 z-10 h-5 w-5 rounded flex items-center justify-center text-zinc-500 opacity-40 hover:opacity-100 hover:bg-white/10 hover:text-white transition-opacity select-none"
+        >
+          <MoreVertical size={13} />
+        </button>
       )}
 
       {recording && recordingEnabled && (

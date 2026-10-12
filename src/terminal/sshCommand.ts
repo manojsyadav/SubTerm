@@ -129,3 +129,7 @@ export function parseSshCommand(line: string): SshTarget | null {
 export function sshTargetKey(t: SshTarget): string {
   return `${t.username ?? ""}@${t.host}:${t.port ?? ""}`;
 }
+
+/** Output that means the ssh/sftp client has returned to the local shell. */
+export const SSH_ENDED_RE =
+  /Connection to .+ closed|Connection closed by|Connection (?:refused|reset|timed out)|Could not resolve hostname|Permission denied|No route to host|Host key verification failed|Network is unreachable|^logout$/im;

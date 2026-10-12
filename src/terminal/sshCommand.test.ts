@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSshCommand } from "./sshCommand";
+import { parseSshCommand, SSH_ENDED_RE } from "./sshCommand";
 
 describe("parseSshCommand", () => {
   it("parses user@host", () => {
@@ -42,5 +42,18 @@ describe("parseSshCommand", () => {
     expect(parseSshCommand("ssh -p abc host")).toBeNull();
     expect(parseSshCommand("scp a b:c")).toBeNull();
     expect(parseSshCommand("echo ssh host")).toBeNull();
+  });
+});
+
+describe("SSH_ENDED_RE", () => {
+  it("recognises the client returning to the local shell", () => {
+    for (const t of [
+      "Connection to 10.0.0.5 closed.\r\n",
+      "ssh: connect to host x port 22: Connection refused",
+      "ssh: Could not resolve hostname nope",
+      "user@h: Permission denied (publickey).",
+      "logout\r\n",
+    ]) expect(SSH_ENDED_RE.test(t), t).toBe(true);
+    expect(SSH_ENDED_RE.test("total 8\r\ndrwxr-xr-x  2 root root")).toBe(false);
   });
 });
