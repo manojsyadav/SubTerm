@@ -1,0 +1,98 @@
+import type { AppSettings } from "./types.settings";
+import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "./featureFlags";
+
+/**
+ * Factory values for the settings that live on the General / Appearance /
+ * Terminal / Features pages. These mirror the fallbacks used when `appSettings`
+ * is first built in DesktopApp.tsx; keep the two in step.
+ */
+export const SETTING_DEFAULTS = {
+  startupView: "servers",
+  primaryColor: "#60a5fa",
+  backgroundColor: "#0a0a0c",
+  terminalTheme: "subterm-dark",
+  terminalFontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
+  terminalFontSize: 14,
+  terminalLineHeight: 1.15,
+  terminalScrollback: 5000,
+  terminalCursorStyle: "block",
+  terminalCursorBlink: true,
+  terminalWebgl: true,
+  terminalBell: "visual",
+  rightClickAction: "smart",
+  copyOnSelect: true,
+  linkOpenMode: "ctrl-click",
+  autoCopyOutput: false,
+  autoCloseOnExit: false,
+  downloadAuditOnExit: false,
+  sshKeepaliveSec: 20,
+  commandDismissSec: 4,
+  showAuditCopy: true,
+  showAuditDownload: true,
+  sshDetectMode: "prompt",
+} as const satisfies Partial<AppSettings>;
+
+type DefaultKey = keyof typeof SETTING_DEFAULTS;
+
+/** Settings-row id (the `data-setting` attribute) -> the setting it edits. */
+export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
+  "startup-view": "startupView",
+  accent: "primaryColor",
+  background: "backgroundColor",
+  theme: "terminalTheme",
+  font: "terminalFontFamily",
+  "font-size": "terminalFontSize",
+  "line-height": "terminalLineHeight",
+  scrollback: "terminalScrollback",
+  "cursor-style": "terminalCursorStyle",
+  "cursor-blink": "terminalCursorBlink",
+  webgl: "terminalWebgl",
+  bell: "terminalBell",
+  "right-click": "rightClickAction",
+  "copy-on-select": "copyOnSelect",
+  "open-links": "linkOpenMode",
+  "auto-copy-output": "autoCopyOutput",
+  "auto-close": "autoCloseOnExit",
+  "audit-download": "downloadAuditOnExit",
+  keepalive: "sshKeepaliveSec",
+  "command-widget": "commandDismissSec",
+  "ssh-mode": "sshDetectMode",
+};
+
+export type ResettablePage = "general" | "appearance" | "terminal" | "features";
+
+const PAGE_ROWS: Record<ResettablePage, string[]> = {
+  general: ["startup-view"],
+  appearance: ["accent", "background", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-blink", "webgl", "bell"],
+  terminal: ["right-click", "copy-on-select", "open-links", "auto-copy-output", "auto-close", "audit-download", "keepalive", "command-widget"],
+  features: ["ssh-mode", ...FEATURES.map((f) => f.key as string)],
+};
+
+const isFeatureId = (id: string): id is FeatureKey => FEATURES.some((f) => f.key === id);
+
+export function isSettingChanged(id: string, settings: AppSettings): boolean {
+  if (isFeatureId(id)) return !isFeatureEnabled(id);
+  const key = ROW_SETTING_KEY[id];
+  if (!key) return false;
+  const current = settings[key];
+  // Unset (undefined) means the default is in effect.
+  return current !== undefined && current !== SETTING_DEFAULTS[key];
+}
+
+/** Returns settings with one row restored; feature flags are written straight to storage. */
+export function resetSetting(id: string, settings: AppSettings): AppSettings {
+  if (isFeatureId(id)) {
+    setFeatureEnabled(id, true);
+    return settings;
+  }
+  const key = ROW_SETTING_KEY[id];
+  return key ? { ...settings, [key]: SETTING_DEFAULTS[key] } : settings;
+}
+
+export function pageHasChanges(page: ResettablePage, settings: AppSettings): boolean {
+  return PAGE_ROWS[page].some((id) => isSettingChanged(id, settings));
+}
+
+export function resetPage(page: ResettablePage, settings: AppSettings): AppSettings {
+  return PAGE_ROWS[page].reduce((acc, id) => resetSetting(id, acc), settings);
+}

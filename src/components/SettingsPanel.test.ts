@@ -11,22 +11,31 @@ vi.mock("@tauri-apps/api/core", () => ({
   Channel: class {},
 }));
 
-const { default: SettingsPanel } = await import("./SettingsPanel");
+const { default: SettingsPanel, SETTINGS_INDEX } = await import("./SettingsPanel");
+const { FEATURES } = await import("../featureFlags");
 
 let host: HTMLDivElement;
 let root: Root;
 
-const settings = { primaryColor: "#60a5fa", backgroundColor: "#050505" } as never;
+const setSettings = vi.fn();
+let settings: Record<string, unknown> = { primaryColor: "#60a5fa", backgroundColor: "#0a0a0c" };
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() => {
-    root.render(createElement(SettingsPanel as never, { settings, setSettings: vi.fn(), isUnlocked: true }));
-  });
+  setSettings.mockReset();
+  localStorage.clear();
+  settings = { primaryColor: "#60a5fa", backgroundColor: "#0a0a0c" };
+  render();
 });
+
+function render() {
+  act(() => {
+    root.render(createElement(SettingsPanel as never, { settings, setSettings, isUnlocked: true }));
+  });
+}
 
 afterEach(() => {
   act(() => root.unmount());
@@ -74,5 +83,44 @@ describe("SettingsPanel layout", () => {
     const result = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Right-Click"));
     click(result);
     expect(host.querySelector('[data-setting="right-click"]')).toBeTruthy();
+  });
+
+  it("indexes every settings row and section so search can find it", () => {
+    const known = new Set([...SETTINGS_INDEX.map((e) => e.id), ...FEATURES.map((f) => f.key as string)]);
+    const missing: string[] = [];
+    for (const label of ["General", "Appearance", "Terminal", "Features"]) {
+      click(nav(label));
+      host.querySelectorAll("[data-setting]").forEach((el) => {
+        const id = el.getAttribute("data-setting")!;
+        if (!known.has(id)) missing.push(`${label}:${id}`);
+      });
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("marks a changed setting and offers to reset it", () => {
+    settings = { ...settings, rightClickAction: "menu" };
+    render();
+    click(nav("Terminal"));
+    const row = host.querySelector('[data-setting="right-click"]')!;
+    const dot = row.querySelector('button[aria-label="Reset to default"]');
+    click(dot);
+    expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ rightClickAction: "smart" }));
+  });
+
+  it("shows no dots and no page reset when everything is at default", () => {
+    click(nav("Terminal"));
+    expect(host.querySelector('button[aria-label="Reset to default"]')).toBeNull();
+    expect(host.textContent).not.toContain("Reset this page to defaults");
+  });
+
+  it("resets a whole page", () => {
+    settings = { ...settings, rightClickAction: "menu", linkOpenMode: "click" };
+    render();
+    click(nav("Terminal"));
+    vi.stubGlobal("confirm", () => true);
+    window.confirm = () => true;
+    click([...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Reset this page")));
+    expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ rightClickAction: "smart", linkOpenMode: "ctrl-click" }));
   });
 });

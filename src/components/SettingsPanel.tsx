@@ -2,8 +2,9 @@ import type { Server as ServerRecord, Folder } from "../types";
 import type { AppSettings, SetAppSettings } from "../types.settings";
 import { SettingsFileLinkTypes } from "./SettingsFileLinkTypes";
 import { SettingsRdpMode } from "./SettingsRdpMode";
-import { FEATURES, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
-import { useState, type ComponentProps } from "react";
+import { FEATURES, FEATURE_FLAGS_CHANGED_EVENT, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
+import { isSettingChanged, resetSetting, pageHasChanges, resetPage, type ResettablePage } from "../settingsDefaults";
+import { useState, useEffect, createContext, useContext, type ComponentProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IS_MOBILE_OS } from "../util/platform";
 import { toExportableServers, serversToJson, serversToCsv } from "../export/serverExport";
@@ -52,10 +53,32 @@ const CATEGORIES: Category[] = [
 ];
 
 // â”€â”€â”€ Reusable primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Lets any Row/SectionCard show a "changed from default" dot that resets it on click.
+const SettingsMetaContext = createContext<{ changed: (id: string) => boolean; reset: (id: string) => void }>({
+  changed: () => false,
+  reset: () => {},
+});
+
+const ChangedDot = ({ id }: { id?: string }) => {
+  const meta = useContext(SettingsMetaContext);
+  if (!id || !meta.changed(id)) return null;
+  return (
+    <button
+      type="button"
+      title="Changed from default. Click to reset."
+      aria-label="Reset to default"
+      onClick={() => meta.reset(id)}
+      className="inline-flex items-center justify-center w-3 h-3 ml-2 align-middle"
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+    </button>
+  );
+};
+
 const SectionCard = ({ id, title, subtitle, children }: { id?: string; title: string; subtitle?: string; children: React.ReactNode }) => (
   <div data-setting={id} className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl">
     <div className="mb-4">
-      <h3 className="text-sm font-bold text-white">{title}</h3>
+      <h3 className="text-sm font-bold text-white">{title}<ChangedDot id={id} /></h3>
       {subtitle && <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{subtitle}</p>}
     </div>
     {children}
@@ -77,7 +100,7 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void 
 const Row = ({ id, label, desc, children }: { id?: string; label: string; desc?: string; children: React.ReactNode }) => (
   <div data-setting={id} className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-0">
     <div className="min-w-0">
-      <div className="text-sm font-semibold text-zinc-200">{label}</div>
+      <div className="text-sm font-semibold text-zinc-200">{label}<ChangedDot id={id} /></div>
       {desc && <div className="text-xs text-zinc-500 mt-0.5">{desc}</div>}
     </div>
     <div className="shrink-0">{children}</div>
@@ -186,6 +209,11 @@ const PageTerminal = ({ settings, setSettings, part }: SettingsPageProps & { par
   const [flags, setFlags] = useState<Record<FeatureKey, boolean>>(() =>
     Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>,
   );
+  useEffect(() => {
+    const sync = () => setFlags(Object.fromEntries(FEATURES.map((f) => [f.key, isFeatureEnabled(f.key)])) as Record<FeatureKey, boolean>);
+    window.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(FEATURE_FLAGS_CHANGED_EVENT, sync);
+  }, []);
   const [importThemeModal, setImportThemeModal] = useState(false);
   const [importThemeText, setImportThemeText] = useState("");
   const [importThemeError, setImportThemeError] = useState("");
@@ -855,11 +883,13 @@ const PageLogs = ({ onOpenLogs }: { onOpenLogs?: () => void }) => (
 
 // â”€â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Search index: one entry per settings row/section that carries a data-setting id.
-const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
+export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: string }[] = [
+  { id: "startup", page: "general", label: "Startup", keywords: "launch open start" },
   { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
   { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
   { id: "background", page: "appearance", label: "Background Theme", keywords: "background colour color dark" },
+  { id: "display", page: "appearance", label: "Display & Theme", keywords: "terminal display theme font cursor" },
   { id: "theme", page: "appearance", label: "Terminal Color Scheme", keywords: "theme palette ansi colors import" },
   { id: "font", page: "appearance", label: "Font Family", keywords: "font typeface monospace" },
   { id: "font-size", page: "appearance", label: "Font Size", keywords: "text size zoom" },
@@ -869,6 +899,8 @@ const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: s
   { id: "cursor-blink", page: "appearance", label: "Cursor Blinking", keywords: "blink" },
   { id: "webgl", page: "appearance", label: "WebGL Acceleration", keywords: "gpu rendering performance" },
   { id: "bell", page: "appearance", label: "Terminal Bell", keywords: "beep sound notification" },
+  { id: "mouse", page: "terminal", label: "Mouse & Clipboard", keywords: "mouse clipboard copy paste links" },
+  { id: "sessions", page: "terminal", label: "Sessions", keywords: "session exit close keep alive audit" },
   { id: "right-click", page: "terminal", label: "Right-Click", keywords: "paste copy context menu mouse smart" },
   { id: "copy-on-select", page: "terminal", label: "Copy on select", keywords: "clipboard selection" },
   { id: "open-links", page: "terminal", label: "Open Links", keywords: "ctrl click url file path hyperlink" },
@@ -879,6 +911,7 @@ const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: s
   { id: "command-widget", page: "terminal", label: "Command Widget", keywords: "output pill dismiss timer" },
   { id: "banner-buttons", page: "terminal", label: "Session-End Banner Buttons", keywords: "copy output download audit" },
   { id: "triggers", page: "terminal", label: "Terminal Triggers & Alert Keywords", keywords: "alert regex keyword error highlight notify" },
+  { id: "features", page: "features", label: "Feature Toggles", keywords: "features optional enable disable switch" },
   { id: "ssh-mode", page: "features", label: "When you type ssh / sftp", keywords: "local terminal saved server auto ask quick connect" },
   { id: "file-types", page: "features", label: "Clickable file types", keywords: "extensions editor open file click" },
 ];
@@ -886,6 +919,12 @@ const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keywords: s
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
   const [activeCategory, setActiveCategory] = useState<CategoryId>("general");
   const [query, setQuery] = useState("");
+  const resettable = ["general", "appearance", "terminal", "features"].includes(activeCategory) ? (activeCategory as ResettablePage) : null;
+  const [, bump] = useState(0);
+  const meta = {
+    changed: (id: string) => isSettingChanged(id, settings),
+    reset: (id: string) => { setSettings(resetSetting(id, settings)); bump((n) => n + 1); },
+  };
 
   const searchResults = (() => {
     const q = query.trim().toLowerCase();
@@ -1026,8 +1065,22 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onClose, onUnlocked,
               {needsUnlock(current.id) && <Lock size={14} className="text-amber-400 ml-1" />}
             </h2>
             <p className="text-xs text-zinc-500 mt-1">{current.description}</p>
+            {resettable && pageHasChanges(resettable, settings) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Reset every setting on the ${current.label} page to its default?`)) {
+                    setSettings(resetPage(resettable, settings));
+                    bump((n) => n + 1);
+                  }
+                }}
+                className="mt-2 text-[11px] font-semibold text-primary hover:underline"
+              >
+                Reset this page to defaults
+              </button>
+            )}
           </div>
-          {renderPage()}
+          <SettingsMetaContext.Provider value={meta}>{renderPage()}</SettingsMetaContext.Provider>
         </div>
       </main>
     </div>
