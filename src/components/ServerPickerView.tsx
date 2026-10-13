@@ -13,6 +13,8 @@ interface ServerPickerViewProps {
   onOpen: (s: Server) => void;
   addLabel?: string;
   onAdd?: () => void;
+  /** Extra header buttons, shown before the add button. */
+  actions?: ReactNode;
   emptyText: string;
 }
 
@@ -20,7 +22,7 @@ interface ServerPickerViewProps {
 // flat, searchable list on purpose: folders and bulk actions stay on the
 // Servers page, this page is a one-click shortcut to a single activity.
 export const ServerPickerView = ({
-  title, subtitle, icon, servers, include, actionLabel, onOpen, addLabel, onAdd, emptyText,
+  title, subtitle, icon, servers, include, actionLabel, onOpen, addLabel, onAdd, actions, emptyText,
 }: ServerPickerViewProps) => {
   const [query, setQuery] = useState("");
 
@@ -56,6 +58,7 @@ export const ServerPickerView = ({
               className="h-9 w-48 sm:w-56 pl-8 pr-2 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-primary/50"
             />
           </div>
+          {actions}
           {onAdd && (
             <button
               type="button"

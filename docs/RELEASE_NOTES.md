@@ -12,6 +12,9 @@
 - **`feat(terminal)` — Built-in shell integration for local shells**:
   Local PowerShell and bash tabs now report when each command ends (OSC 133), so command blocks show exit codes and "Long command finished" notifications work without installing anything. It wraps your existing PowerShell prompt and sets `PROMPT_COMMAND` for bash (a `PROMPT_COMMAND` in your `.bashrc` takes precedence). Applies while Command blocks is on; local cmd and WSL are not covered.
 
+- **`feat(sftp)` — Browse this computer from the SFTP page**:
+  **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
+
 - **`feat(nav)` — Pick a shell from the sidebar**:
   Right-click **Local** in the sidebar to open PowerShell, CMD, Git Bash, WSL or any other installed shell; a plain click still opens the default one.
 

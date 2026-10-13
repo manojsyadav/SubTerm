@@ -1725,7 +1725,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               <Download size={10} /> Download
             </button>
           )}
-          {!isRemote && (
+          {!isRemote && sessionId && (
             <button
               onClick={() => uploadItems(sortedEntries.filter(e => selected.has(e.path)))}
               title={getOppositeDir?.()

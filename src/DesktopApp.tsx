@@ -45,6 +45,7 @@ import { LibraryView } from "./components/LibraryView";
 import { LoginsView } from "./components/LoginsView";
 import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
+import LocalFilesView from "./components/LocalFilesView";
 import { normalizeReduceMotion, shouldReduceMotion } from "./ui/reduceMotion";
 import { useIdleLock, useLockOnHidden } from "./hooks/useIdleLock";
 import { LogsView } from "./components/LogsView";
@@ -539,6 +540,7 @@ function DesktopApp() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isImportModalRequested, setIsImportModalRequested] = useState(false);
   const [isNetworkToolsOpen, setIsNetworkToolsOpen] = useState(false);
+  const [localFilesOpen, setLocalFilesOpen] = useState(false);
   const [isRecordingPlayerOpen, setIsRecordingPlayerOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [quickConnectPrefill, setQuickConnectPrefill] = useState<{ host: string; port: number; username: string } | null>(null);
@@ -2070,7 +2072,8 @@ function DesktopApp() {
               />
             )}
 
-            {activeView === "sftp" && (
+            {activeView === "sftp" && localFilesOpen && !IS_MOBILE_OS && <LocalFilesView onBack={() => setLocalFilesOpen(false)} />}
+            {activeView === "sftp" && !(localFilesOpen && !IS_MOBILE_OS) && (
               <ServerPickerView
                 title="SFTP"
                 subtitle="Pick a server to browse its files next to this computer's, full width."
@@ -2079,6 +2082,16 @@ function DesktopApp() {
                 include={(s) => s.protocol !== "rdp"}
                 actionLabel="Open file browser"
                 onOpen={(s) => openServer(s, "sftp", { fullWidth: true })}
+                actions={!IS_MOBILE_OS && (
+                  <button
+                    type="button"
+                    onClick={() => setLocalFilesOpen(true)}
+                    title="Browse this computer's files without a server"
+                    className="h-9 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/20 flex items-center gap-1.5"
+                  >
+                    <FolderOpen size={13} /> This computer
+                  </button>
+                )}
                 emptyText="No SSH servers saved yet. Add one on the Servers page."
               />
             )}
