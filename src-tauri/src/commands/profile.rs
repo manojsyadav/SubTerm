@@ -720,6 +720,22 @@ pub(crate) async fn save_binary_file(request: tauri::ipc::Request<'_>) -> Result
     }
 }
 
+/// Write a pasted image (raw request body, `x-filename` header) to
+/// `<temp>/subterm-paste/` and return its path, so the terminal can type it.
+#[tauri::command]
+pub(crate) async fn save_temp_file(request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Expected the file contents as raw bytes".into());
+    };
+    let name = request.headers().get("x-filename").and_then(|v| v.to_str().ok()).unwrap_or("paste.png");
+    // shortcut: files are never cleaned up (the OS temp cleaner removes them eventually); prune old ones here if the folder grows.
+    let dir = std::env::temp_dir().join("subterm-paste");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create {:?}: {}", dir, e))?;
+    let path = dir.join(safe_file_name(name));
+    std::fs::write(&path, bytes).map_err(|e| format!("Failed to write {:?}: {}", path, e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 /// Open a file picker and verify the chosen file looks like a Submarine
 /// vault (right header bytes). We do NOT decrypt — that requires the
 /// profile password, which the user enters after import via the regular

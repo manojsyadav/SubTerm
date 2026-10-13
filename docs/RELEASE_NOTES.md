@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(terminal)` — Paste images into a terminal**:
+  When the clipboard holds an image and no text (a Win+Shift+S screenshot, say), pasting it into a terminal (Ctrl+V, right-click paste or the menu's Paste) saves it as a PNG in the temp folder and inserts it like a dropped file: its path on a local shell, or an upload to `/tmp` on an SSH server. Handy for giving Claude Code a screenshot.
+
 - **`feat(terminal)` — Drop files onto a terminal**:
   Dropping files (a screenshot for Claude Code, say) onto a terminal types their paths at the prompt, quoted for the shell (PowerShell/cmd, bash, and WSL with `C:\` turned into `/mnt/c/`). On an SSH session each file is first uploaded to `/tmp/subterm-drop-…` on the server and that path is typed, so a tool running remotely can open it. Nothing is executed. Drops onto the file browser now also land on the right spot at display scaling other than 100%.
 

@@ -629,6 +629,11 @@ const TerminalView = ({
       notify('Clipboard read denied', 'err');
       return;
     }
+    if (!text) {
+      const image = await readClipboardImage();
+      if (image) await pasteImageRef.current(image).catch((e) => notify(`Image paste failed: ${e}`, 'err'));
+      return;
+    }
     if (text) {
       handlePasteRef.current(text);
     }
@@ -660,6 +665,52 @@ const TerminalView = ({
   // Tauri delivers OS drops as one global event; only the terminal under the cursor acts.
   const dropRef = useRef<{ disabled: boolean; isLocal: boolean; localShell?: string }>({ disabled, isLocal, localShell });
   dropRef.current = { disabled, isLocal, localShell };
+  // Type local file paths into this terminal (uploading them first on SSH sessions).
+  const insertFiles = async (paths: string[]) => {
+    const write = (text: string) =>
+      invoke('write_terminal_data', { terminalId, data: Array.from(new TextEncoder().encode(text)) }).catch(console.error);
+    if (dropRef.current.isLocal) {
+      const kind = localShellKind(dropRef.current.localShell, navigator.userAgent.includes('Windows'));
+      void write(quotePaths(paths, kind));
+      xtermRef.current?.focus();
+      return;
+    }
+    const uploaded: string[] = [];
+    for (const p of paths) {
+      const remote = remoteDropPath(p);
+      notify(`Uploading ${p.split(/[\\/]/).pop()}...`);
+      try {
+        await invoke('sftp_upload_file', { sessionId, localPath: p, remotePath: remote, overwrite: false });
+        uploaded.push(remote);
+      } catch (e) {
+        notify(`Upload failed: ${e}`, 'err');
+      }
+    }
+    if (uploaded.length) {
+      void write(uploaded.join(' ') + ' ');
+      notify(uploaded.length === 1 ? `Uploaded to ${uploaded[0]}` : `Uploaded ${uploaded.length} files to /tmp`);
+      xtermRef.current?.focus();
+    }
+  };
+  const insertFilesRef = useRef(insertFiles);
+  insertFilesRef.current = insertFiles;
+  // A pasted image (a screenshot, say) is saved as a temp PNG and inserted like a dropped file.
+  const pasteImageRef = useRef(async (blob: Blob) => {
+    const ext = blob.type === 'image/jpeg' ? 'jpg' : blob.type.replace(/^image\//, '') || 'png';
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const path = await invoke<string>('save_temp_file', bytes, { headers: { 'x-filename': `clipboard-${Date.now()}.${ext}` } });
+    await insertFilesRef.current([path]);
+  });
+  /** Image on the clipboard (via the async Clipboard API); null if there is none or no access. */
+  const readClipboardImage = async (): Promise<Blob | null> => {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith('image/'));
+        if (type) return await item.getType(type);
+      }
+    } catch { /* no permission or nothing readable */ }
+    return null;
+  };
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     let alive = true;
@@ -670,30 +721,7 @@ const TerminalView = ({
       const pt = toCssPoint(position);
       const hit = document.elementFromPoint(pt.x, pt.y);
       if (!hit || !root.contains(hit)) return;
-      const write = (text: string) =>
-        invoke('write_terminal_data', { terminalId, data: Array.from(new TextEncoder().encode(text)) }).catch(console.error);
-      if (dropRef.current.isLocal) {
-        const kind = localShellKind(dropRef.current.localShell, navigator.userAgent.includes('Windows'));
-        void write(quotePaths(paths, kind));
-        xtermRef.current?.focus();
-        return;
-      }
-      const uploaded: string[] = [];
-      for (const p of paths) {
-        const remote = remoteDropPath(p);
-        notify(`Uploading ${p.split(/[\\/]/).pop()}...`);
-        try {
-          await invoke('sftp_upload_file', { sessionId, localPath: p, remotePath: remote, overwrite: false });
-          uploaded.push(remote);
-        } catch (e) {
-          notify(`Upload failed: ${e}`, 'err');
-        }
-      }
-      if (uploaded.length) {
-        void write(uploaded.join(' ') + ' ');
-        notify(uploaded.length === 1 ? `Uploaded to ${uploaded[0]}` : `Uploaded ${uploaded.length} files to /tmp`);
-        xtermRef.current?.focus();
-      }
+      await insertFilesRef.current(paths);
     }).then((fn) => { if (alive) unlisten = fn; else fn(); });
     return () => { alive = false; unlisten?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1486,7 +1514,11 @@ const TerminalView = ({
         let text = '';
         try { text = await navigator.clipboard.readText(); }
         catch { notify('Clipboard read denied', 'err'); return; }
-        if (!text) return;
+        if (!text) {
+          const image = await readClipboardImage();
+          if (image) pasteImageRef.current(image).catch((e) => notify(`Image paste failed: ${e}`, 'err'));
+          return;
+        }
         handlePaste(text);
         return;
       }
@@ -1507,6 +1539,12 @@ const TerminalView = ({
       if (text) {
         ev.preventDefault();
         handlePaste(text);
+        return;
+      }
+      const image = [...(ev.clipboardData?.items ?? [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'))?.getAsFile();
+      if (image && !disabledRef.current) {
+        ev.preventDefault();
+        pasteImageRef.current(image).catch((e) => notify(`Image paste failed: ${e}`, 'err'));
       }
     };
 

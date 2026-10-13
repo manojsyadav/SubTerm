@@ -318,7 +318,7 @@ pub fn run() {
             commands::sync::sync_conflict_diff,
             commands::sync::set_editor_label,
             commands::sync::get_sync_excluded,
-            commands::profile::save_text_file, commands::profile::save_binary_file, commands::profile::recordings_dir, commands::profile::save_recording,
+            commands::profile::save_text_file, commands::profile::save_binary_file, commands::profile::save_temp_file, commands::profile::recordings_dir, commands::profile::save_recording,
             commands::diagnostics::set_ui_zoom,
             commands::diagnostics::get_autostart,
             commands::diagnostics::set_autostart,
