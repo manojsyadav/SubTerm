@@ -15,3 +15,8 @@ export const looksLikePasswordPrompt = (out: string): boolean =>
 // Only sudo's own prompt gets the saved-password offer: other prompts (su, mysql -p) want a different secret.
 export const looksLikeSudoPrompt = (out: string): boolean =>
   /\[sudo\] password for [^:\n]+:\s*$/i.test(promptTail(out));
+// Output that came back after typing a probe character (and erasing it) at a
+// prompt. A no-echo prompt sends nothing, or only sudo's `pwfeedback` stars
+// and their erase; anything else means the input is visible on screen.
+export const probeWasEchoed = (out: string): boolean =>
+  /[^*\b \x7f]/.test(promptTail(out).replace(/\n/g, ""));

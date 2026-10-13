@@ -25,7 +25,7 @@ import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
 import { notifyDesktop, shouldNotifyLongCommand } from '../util/desktopNotify';
 import { playTerminalBellChime } from '../terminal/bell';
-import { looksLikePasswordPrompt, looksLikeSudoPrompt } from '../terminal/passwordPrompt';
+import { looksLikePasswordPrompt, looksLikeSudoPrompt, probeWasEchoed } from '../terminal/passwordPrompt';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
@@ -612,8 +612,22 @@ const TerminalView = ({
     xtermRef.current?.focus();
   };
 
+  // Output received while the echo probe is running; null when no probe is active.
+  const probeOutputRef = useRef<string | null>(null);
   const handlePasteSavedPassword = async () => {
     try {
+      // Type "x" + Backspace and listen: a hidden prompt shows nothing back, so the
+      // password is only sent where it cannot end up on screen or in a shell line.
+      probeOutputRef.current = '';
+      await invoke('write_terminal_data', { terminalId, data: [0x78, 0x7f] });
+      // shortcut: fixed wait, an echo slower than this on a laggy link is missed; upgrade to a measured round trip if that shows up.
+      await new Promise((r) => setTimeout(r, 600));
+      const echoed = probeWasEchoed(probeOutputRef.current ?? '');
+      probeOutputRef.current = null;
+      if (echoed) {
+        notify('Not filled: this prompt shows what you type', 'err');
+        return;
+      }
       const injected = await invoke<boolean>('write_saved_password', { sessionId, terminalId });
       if (!injected) notify('No saved password for this session', 'err');
     } catch {
@@ -1573,6 +1587,7 @@ const TerminalView = ({
         const txt = new TextDecoder().decode(data);
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
+        if (probeOutputRef.current !== null) probeOutputRef.current += txt;
         if (sshForegroundRef.current && SSH_ENDED_RE.test(txt)) sshForegroundRef.current = false;
         if (!isLocal && !sudoOfferRef.current && looksLikeSudoPrompt(recentOutputRef.current)) {
           invoke<boolean>('has_saved_password', { sessionId })
