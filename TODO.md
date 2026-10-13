@@ -24,7 +24,7 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
-- 🔴 **P1 / M** — **Click-through of everything added in the settings/navigation overhaul, in a packaged Windows build.** None of it has been run in the app yet (automated checks only). Cover: smart right-click and Shift+right-click menu; `exit` closing a local PowerShell/cmd/bash tab; Ctrl+Click links; `ssh`/`sftp` detection (Tab completion, history recall, saved vs unsaved host, Ask and Auto modes, Ctrl+C of the shell's ssh); Servers search Enter (single match, IP, `user@ip`, bare word) and the lightning button; Local, SFTP (close returns to the terminal), RDP and Network Tools sidebar entries; On Startup modes; every Settings page at 1280, 1700 and 1920 px; search, dots and Reset; auto-lock, preferences export/import, interface zoom, start on sign-in, strict host-key policy.
+- 🔴 **P1 / M** — **Click-through of everything added in the settings/navigation overhaul, in a packaged Windows build.** Also: the embedded-RDP certificate prompt (first connect, a changed certificate, Cancel, closing the window at the prompt). None of it has been run in the app yet (automated checks only). Cover: smart right-click and Shift+right-click menu; `exit` closing a local PowerShell/cmd/bash tab; Ctrl+Click links; `ssh`/`sftp` detection (Tab completion, history recall, saved vs unsaved host, Ask and Auto modes, Ctrl+C of the shell's ssh); Servers search Enter (single match, IP, `user@ip`, bare word) and the lightning button; Local, SFTP (close returns to the terminal), RDP and Network Tools sidebar entries; On Startup modes; every Settings page at 1280, 1700 and 1920 px; search, dots and Reset; auto-lock, preferences export/import, interface zoom, start on sign-in, strict host-key policy.
 - 🟡 **P2 / S** — The Profile, Cloud Sync, Quick Commands and Known Hosts cards put their title above the card in small caps, unlike the standard settings cards (title inside). They own their markup, so matching them means touching each component.
 - 🟡 **P2 / S** — Right-click on the sidebar **Local** item to pick a shell (PowerShell, CMD, Git Bash, WSL) instead of always using the default.
 - 🟢 **P3 / M** — A local-only file browser on the SFTP page (no server). It needs a session to host it today.
@@ -53,7 +53,7 @@ This document tracks active development tasks, pending architectural optimizatio
 
 - [ ] 🟢 **P3 · L** — **RDP embedded view: finish and harden**
   - First slice is in (beta, opt-in in Settings): login, screen, keyboard, mouse, wheel, Ctrl+Alt+Del. The handshake was exercised against a local Windows RDP server (it reaches the credential check and returns the expected logon failure), but a full signed-in session — screen updates, input, disconnect — has not been verified; test it against a real host first.
-  - Still open: clipboard (`ironrdp-cliprdr`), resize on window change (display control), certificate trust-on-first-use instead of accepting any certificate, audio, dirty-rectangle batching for slow links, a real tab instead of a full-window view, shipping the helper in installer bundles (`tauri.conf.json` resources), Linux/macOS helper builds in CI.
+  - Still open: clipboard (`ironrdp-cliprdr`), resize on window change (display control), audio, dirty-rectangle batching for slow links, a real tab instead of a full-window view, shipping the helper in installer bundles (`tauri.conf.json` resources), Linux/macOS helper builds in CI.
   - Why a helper program: IronRDP pins `picky`/`curve25519-dalek` pre-release versions that cannot resolve in the same lockfile as `russh`. Revisit if either side moves.
 
 - [ ] 🟢 **P3 · L** — **iOS / iPadOS: first Mac build**
@@ -82,7 +82,6 @@ This document tracks active development tasks, pending architectural optimizatio
     - The three newly-extracted views (`LibraryView`, `LoginsView`, `LogsView`): search/filter, add/edit/delete flows, and the commands/notes tab toggle.
     - Sudo-elevated SFTP file save to a root-owned path, with and without a saved session password.
 
-- [ ] 🟡 **P2 · M** — **Embedded RDP accepts any TLS certificate** (`rdp-helper/src/main.rs:267-317`). On a hostile network the NTLM response can be captured. Pin `server_public_key` on first use and reuse the fingerprint prompt.
 
 ---
 

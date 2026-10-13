@@ -11,6 +11,14 @@ describe("parseEvent", () => {
     expect(parseEvent(Uint8Array.from([4]))).toEqual({ kind: "closed", reason: "" });
   });
 
+  it("reads a certificate question and ignores a malformed one", () => {
+    const ask = JSON.stringify({ sessionId: "rdp-1-1", fingerprint: "SHA256:abc", mismatch: true });
+    expect(parseEvent(Uint8Array.from([5, ...new TextEncoder().encode(ask)]))).toEqual({
+      kind: "cert", sessionId: "rdp-1-1", fingerprint: "SHA256:abc", mismatch: true,
+    });
+    expect(parseEvent(Uint8Array.from([5, ...new TextEncoder().encode("{")]))).toEqual({ kind: "unknown" });
+  });
+
   it("reads a screen update with its pixels", () => {
     const pixels = [1, 2, 3, 255, 4, 5, 6, 255];
     const ev = parseEvent(Uint8Array.from([2, 10, 0, 20, 0, 2, 0, 1, 0, ...pixels]));

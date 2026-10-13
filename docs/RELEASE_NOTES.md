@@ -146,6 +146,18 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(rdp)` — Embedded RDP pins the server certificate**:
+  It used to accept any TLS certificate, so on a hostile network the sign-in exchange could be captured. Now the first connection shows the certificate's `SHA256:` fingerprint and waits for **Trust and connect** before any credentials are sent. The fingerprint is saved under Settings > Known Hosts (type `rdp-tls`), and a changed certificate gets a red warning.
+
+- **`fix(ssh)` — Slow host-key approval no longer fails the connection**:
+  The 15-second handshake timeout kept running while the host-key prompt was open, so taking longer to check the fingerprint failed the connection and Accept did nothing. The clock now pauses while the prompt waits (the prompt keeps its own 90-second limit).
+
+- **`fix(sftp)` — Failed downloads no longer leave a truncated file**:
+  A read or write error during a file or folder download now deletes the partial local file, as cancelling already did.
+
+- **`fix(terminal)` — Split UTF-8 characters in output detection**:
+  Prompt and trigger detection decoded each output chunk separately, so a character split across two chunks became "�". It now uses one streaming decoder per terminal.
+
 - **`fix(info-panel)` — Processes, Services, and Ports tabs always showed "not available"**:
   The Info panel's parsers for these three tabs key off a literal `PSFMT:`/`ENGINE:` marker line that the backend's probe scripts never actually printed, so each tab always fell through to its "not available on this host" banner regardless of what the remote host actually had installed. The probe scripts now emit the marker the parser expects.
 

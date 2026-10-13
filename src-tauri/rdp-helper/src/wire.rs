@@ -5,8 +5,11 @@
 //!   2 UPDATE     x u16, y u16, w u16, h u16 (LE), then w*h*4 RGBA bytes
 //!   3 ERROR      UTF-8 text
 //!   4 CLOSED     UTF-8 text (may be empty)
+//!   5 CERT       the server certificate's public key (DER bytes); the helper
+//!                then waits for the app's one-byte answer before sending credentials
 //!
-//! app -> helper (stdin): first line is a JSON `Request`, then binary events:
+//! app -> helper (stdin): first line is a JSON `Request`, then one byte answering
+//! CERT (1 = trusted, anything else = abort), then binary events:
 //!   1 MOUSE_MOVE    x u16, y u16
 //!   2 MOUSE_BUTTON  button u8 (0 left, 1 middle, 2 right, 3 back, 4 forward), pressed u8
 //!   3 WHEEL         vertical u8 (1 = vertical), units i16
@@ -19,6 +22,7 @@ pub const OUT_CONNECTED: u8 = 1;
 pub const OUT_UPDATE: u8 = 2;
 pub const OUT_ERROR: u8 = 3;
 pub const OUT_CLOSED: u8 = 4;
+pub const OUT_CERT: u8 = 5;
 
 pub fn write_frame(out: &mut impl Write, kind: u8, payload: &[u8]) -> io::Result<()> {
     out.write_all(&[kind])?;

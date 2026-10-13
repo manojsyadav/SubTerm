@@ -5,8 +5,11 @@ export const EV_CONNECTED = 1;
 export const EV_UPDATE = 2;
 export const EV_ERROR = 3;
 export const EV_CLOSED = 4;
+/** The server's certificate is new or changed; answer with `rdp_answer_certificate`. */
+export const EV_CERT = 5;
 
 export type RdpEvent =
+  | { kind: "cert"; sessionId: string; fingerprint: string; mismatch: boolean }
   | { kind: "connected"; width: number; height: number }
   | { kind: "update"; x: number; y: number; width: number; height: number; pixels: Uint8ClampedArray<ArrayBuffer> }
   | { kind: "error"; message: string }
@@ -36,6 +39,15 @@ export function parseEvent(bytes: Uint8Array): RdpEvent {
       return { kind: "error", message: new TextDecoder().decode(body) };
     case EV_CLOSED:
       return { kind: "closed", reason: new TextDecoder().decode(body) };
+    case EV_CERT:
+      try {
+        const q = JSON.parse(new TextDecoder().decode(body));
+        return typeof q.sessionId === "string" && typeof q.fingerprint === "string"
+          ? { kind: "cert", sessionId: q.sessionId, fingerprint: q.fingerprint, mismatch: !!q.mismatch }
+          : { kind: "unknown" };
+      } catch {
+        return { kind: "unknown" };
+      }
     default:
       return { kind: "unknown" };
   }

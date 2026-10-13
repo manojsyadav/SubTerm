@@ -24,6 +24,8 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
   const [phase, setPhase] = useState<Phase>("password");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  // New or changed server certificate waiting for the user's decision.
+  const [cert, setCert] = useState<{ sessionId: string; fingerprint: string; mismatch: boolean } | null>(null);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,12 +66,16 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
         if (ctx) ctx.putImageData(new ImageData(ev.pixels, ev.width, ev.height), ev.x, ev.y);
         break;
       }
+      case "cert":
+        setCert({ sessionId: ev.sessionId, fingerprint: ev.fingerprint, mismatch: ev.mismatch });
+        break;
       case "error":
         errorRef.current = ev.message;
         setMessage(ev.message);
         break;
       case "closed":
         sessionRef.current = null;
+        setCert(null);
         setMessage((m) => errorRef.current ?? m ?? (ev.reason || "The session ended."));
         setPhase("ended");
         break;
@@ -170,6 +176,16 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
     send(out);
   };
 
+  const answerCert = (trust: boolean) => {
+    const c = cert;
+    setCert(null);
+    if (!c) return;
+    invoke("rdp_answer_certificate", { sessionId: c.sessionId, trust }).catch((e) => {
+      errorRef.current = String(e);
+      setMessage(String(e));
+    });
+  };
+
   const close = () => { disconnect(); onClose(); };
 
   return (
@@ -216,7 +232,32 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
           </form>
         )}
 
-        {phase === "connecting" && <div className="text-zinc-400 text-sm">Connecting to {serverName}…</div>}
+        {phase === "connecting" && !cert && <div className="text-zinc-400 text-sm">Connecting to {serverName}…</div>}
+
+        {phase === "connecting" && cert && (
+          <div role="alertdialog" aria-label="Server certificate" className="w-[26rem] max-w-full space-y-3 p-5 rounded-xl bg-[#15151a] border border-white/10">
+            <div className={`flex items-center gap-2 text-sm font-semibold ${cert.mismatch ? "text-rose-300" : "text-white"}`}>
+              <AlertTriangle size={16} className={cert.mismatch ? "text-rose-400" : "text-amber-400"} />
+              {cert.mismatch ? "The server's certificate has changed" : `First connection to ${serverName}`}
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              {cert.mismatch
+                ? "This is not the certificate you trusted before. If the server was not reinstalled or given a new certificate, someone may be intercepting the connection: do not continue."
+                : "Check that this fingerprint matches the server's certificate before you send your password. It is saved for future connections."}
+            </p>
+            <code className="block p-2 rounded bg-black/40 border border-white/10 text-[11px] text-zinc-200 break-all">{cert.fingerprint}</code>
+            <div className="flex justify-end gap-2">
+              <button type="button" autoFocus onClick={() => answerCert(false)} className="px-3 py-1.5 rounded-lg bg-white/5 text-zinc-200 text-[12px]">Cancel</button>
+              <button
+                type="button"
+                onClick={() => answerCert(true)}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-bold ${cert.mismatch ? "bg-rose-500/20 text-rose-200 border border-rose-500/40" : "bg-primary text-black"}`}
+              >
+                {cert.mismatch ? "Trust the new certificate" : "Trust and connect"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {phase === "ended" && (
           <div className="max-w-md text-center space-y-3 p-5">

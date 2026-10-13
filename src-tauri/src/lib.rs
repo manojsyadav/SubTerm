@@ -319,6 +319,7 @@ pub fn run() {
             commands::rdp_session::rdp_connect,
             commands::rdp_session::rdp_send_input,
             commands::rdp_session::rdp_disconnect,
+            commands::rdp_session::rdp_answer_certificate,
             commands::servers::set_server_protocol,
             commands::sftp_remote_copy::sftp_copy_between_sessions,
             commands::sync::set_sync_excluded,

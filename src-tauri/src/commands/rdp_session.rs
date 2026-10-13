@@ -22,6 +22,10 @@ type EventChannel = Channel<InvokeResponseBody>;
 struct RdpSession {
     stdin: Arc<Mutex<ChildStdin>>,
     child: Arc<Mutex<Child>>,
+    host: String,
+    port: u16,
+    /// Fingerprint of a certificate the user has been asked about and not answered yet.
+    pending_cert: Arc<Mutex<Option<String>>>,
 }
 
 #[derive(Default)]
@@ -85,6 +89,60 @@ pub(crate) fn read_frame(r: &mut impl Read) -> std::io::Result<Option<(u8, Vec<u
 
 const KIND_ERROR: u8 = 3;
 const KIND_CLOSED: u8 = 4;
+const KIND_CERT: u8 = 5;
+
+/// `known_hosts.key_type` for pinned RDP certificates (shown in Settings > Known Hosts).
+const CERT_KEY_TYPE: &str = "rdp-tls";
+
+/// Same `SHA256:<base64>` form as SSH host keys, over the certificate's public key.
+pub(crate) fn cert_fingerprint(public_key: &[u8]) -> String {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+    format!("SHA256:{}", base64::engine::general_purpose::STANDARD_NO_PAD.encode(sha2::Sha256::digest(public_key)))
+}
+
+type Db = Mutex<Option<rusqlite::Connection>>;
+
+/// Pinned certificate fingerprints for `host:port`. Errors fail closed: no prompt, no connect.
+fn saved_cert_fingerprints(db: &Db, host: &str, port: u16) -> Result<Vec<String>, String> {
+    let guard = db.lock().map_err(|_| "Known-hosts database is unavailable; restart SubTerm.".to_string())?;
+    let conn = guard.as_ref().ok_or("Known-hosts database is not open.")?;
+    let mut stmt = conn
+        .prepare("SELECT fingerprint FROM known_hosts WHERE host=?1 AND port=?2 AND key_type=?3")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(rusqlite::params![host, port, CERT_KEY_TYPE], |r| r.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Replace the pinned certificate for `host:port` with `fp`.
+fn pin_cert(db: &Db, host: &str, port: u16, fp: &str) -> Result<(), String> {
+    let guard = db.lock().map_err(|_| "Known-hosts database is unavailable; restart SubTerm.".to_string())?;
+    let conn = guard.as_ref().ok_or("Known-hosts database is not open.")?;
+    let result: rusqlite::Result<()> = (|| {
+        conn.execute("BEGIN", [])?;
+        conn.execute("DELETE FROM known_hosts WHERE host=?1 AND port=?2 AND key_type=?3", rusqlite::params![host, port, CERT_KEY_TYPE])?;
+        conn.execute(
+            "INSERT INTO known_hosts (host, port, fingerprint, key_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![host, port, fp, CERT_KEY_TYPE],
+        )?;
+        conn.execute("COMMIT", [])?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = conn.execute("ROLLBACK", []);
+    }
+    result.map_err(|e| e.to_string())
+}
+
+/// Tell the helper whether to continue past the certificate check.
+fn answer_cert(stdin: &Mutex<ChildStdin>, trusted: bool) {
+    if let Ok(mut w) = stdin.lock() {
+        let _ = w.write_all(&[u8::from(trusted)]);
+        let _ = w.flush();
+    }
+}
 
 fn send(ch: &EventChannel, kind: u8, payload: &[u8]) -> bool {
     let mut bytes = Vec::with_capacity(1 + payload.len());
@@ -95,7 +153,9 @@ fn send(ch: &EventChannel, kind: u8, payload: &[u8]) -> bool {
 
 /// Start a session for saved server `id`. `password` is used for this connection only.
 /// Events arrive on `on_event` as raw bytes: first byte = kind (1 connected, 2 update,
-/// 3 error, 4 closed), rest = payload (see rdp-helper/src/wire.rs).
+/// 3 error, 4 closed), rest = payload (see rdp-helper/src/wire.rs). Kind 5 is a
+/// certificate question, payload JSON `{sessionId, fingerprint, mismatch}`; answer it
+/// with `rdp_answer_certificate`.
 #[tauri::command]
 pub async fn rdp_connect(
     state: tauri::State<'_, DbState>,
@@ -151,10 +211,20 @@ pub async fn rdp_connect(
 
         let session_id = format!("rdp-{}-{}", id, NEXT_SESSION.fetch_add(1, Ordering::Relaxed));
         let child = Arc::new(Mutex::new(child));
+        let stdin = Arc::new(Mutex::new(stdin));
+        let pending_cert = Arc::new(Mutex::new(None));
         sessions.0.lock().map_err(|_| "[STATE] LOCK_FAILED")?.insert(
             session_id.clone(),
-            RdpSession { stdin: Arc::new(Mutex::new(stdin)), child: Arc::clone(&child) },
+            RdpSession {
+                stdin: Arc::clone(&stdin),
+                child: Arc::clone(&child),
+                host: host.clone(),
+                port,
+                pending_cert: Arc::clone(&pending_cert),
+            },
         );
+        let db = Arc::clone(&state.conn);
+        let sid = session_id.clone();
 
         // Keep the tail of stderr for the "helper died" message.
         let stderr_tail = Arc::new(Mutex::new(String::new()));
@@ -174,6 +244,26 @@ pub async fn rdp_connect(
             let mut saw_closed = false;
             loop {
                 match read_frame(&mut stdout) {
+                    Ok(Some((kind, payload))) if kind == KIND_CERT => {
+                        let fp = cert_fingerprint(&payload);
+                        match saved_cert_fingerprints(&db, &host, port) {
+                            Ok(saved) if saved.contains(&fp) => answer_cert(&stdin, true),
+                            Ok(saved) => {
+                                if let Ok(mut p) = pending_cert.lock() {
+                                    *p = Some(fp.clone());
+                                }
+                                let ask = serde_json::json!({ "sessionId": sid, "fingerprint": fp, "mismatch": !saved.is_empty() });
+                                if !send(&on_event, KIND_CERT, ask.to_string().as_bytes()) {
+                                    answer_cert(&stdin, false);
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                send(&on_event, KIND_ERROR, e.as_bytes());
+                                answer_cert(&stdin, false);
+                            }
+                        }
+                    }
                     Ok(Some((kind, payload))) => {
                         if kind == KIND_CLOSED {
                             saw_closed = true;
@@ -201,6 +291,31 @@ pub async fn rdp_connect(
 
         Ok(session_id)
     }
+}
+
+/// The user's answer to a kind-5 certificate question. Trusting pins the certificate
+/// for this host:port (replacing an older one) before the helper continues.
+#[tauri::command]
+pub async fn rdp_answer_certificate(
+    state: tauri::State<'_, DbState>,
+    sessions: tauri::State<'_, RdpSessions>,
+    session_id: String,
+    trust: bool,
+) -> Result<(), String> {
+    let (stdin, pending, host, port) = {
+        let map = sessions.0.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+        let s = map.get(&session_id).ok_or("RDP session not found")?;
+        (Arc::clone(&s.stdin), Arc::clone(&s.pending_cert), s.host.clone(), s.port)
+    };
+    let fp = pending.lock().map_err(|_| "[STATE] LOCK_FAILED")?.take().ok_or("No certificate is waiting for an answer")?;
+    if trust {
+        if let Err(e) = pin_cert(&state.conn, &host, port, &fp) {
+            answer_cert(&stdin, false);
+            return Err(format!("Could not save the certificate: {e}"));
+        }
+    }
+    answer_cert(&stdin, trust);
+    Ok(())
 }
 
 /// Forward already-encoded input events (see rdp-helper/src/wire.rs) to a session.
@@ -259,6 +374,21 @@ mod tests {
         let mut r = &bytes[..];
         read_frame(&mut r).unwrap();
         assert_eq!(read_frame(&mut r).unwrap(), None);
+    }
+
+    #[test]
+    fn certificates_are_pinned_per_host_and_port() {
+        let db: Db = Mutex::new(Some(rusqlite::Connection::open_in_memory().unwrap()));
+        db.lock().unwrap().as_ref().unwrap()
+            .execute_batch("CREATE TABLE known_hosts (id INTEGER PRIMARY KEY AUTOINCREMENT, host TEXT, port INTEGER, fingerprint TEXT, key_type TEXT);")
+            .unwrap();
+        let (a, b) = (cert_fingerprint(b"key-a"), cert_fingerprint(b"key-b"));
+        assert!(a.starts_with("SHA256:") && a != b);
+        assert!(saved_cert_fingerprints(&db, "h", 3389).unwrap().is_empty());
+        pin_cert(&db, "h", 3389, &a).unwrap();
+        pin_cert(&db, "h", 3389, &b).unwrap(); // replaces, does not add
+        assert_eq!(saved_cert_fingerprints(&db, "h", 3389).unwrap(), vec![b]);
+        assert!(saved_cert_fingerprints(&db, "h", 3390).unwrap().is_empty());
     }
 
     #[test]

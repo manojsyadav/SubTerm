@@ -7,7 +7,7 @@
 
 mod wire;
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -24,7 +24,7 @@ use ironrdp::session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
 use serde::Deserialize;
 use sspi::network_client::reqwest_network_client::ReqwestNetworkClient;
 use tokio_rustls::rustls;
-use wire::{crop_rgba, read_input, write_frame, Input, OUT_CLOSED, OUT_CONNECTED, OUT_ERROR, OUT_UPDATE};
+use wire::{crop_rgba, read_input, write_frame, Input, OUT_CERT, OUT_CLOSED, OUT_CONNECTED, OUT_ERROR, OUT_UPDATE};
 
 #[derive(Deserialize)]
 struct Request {
@@ -66,7 +66,7 @@ fn run() -> anyhow::Result<String> {
     let height = (req.height.clamp(480, 4096)) & !1;
 
     let config = build_config(&req, width, height);
-    let (conn, mut framed) = connect(config, &req.host, req.port).context("connect")?;
+    let (conn, mut framed) = connect(config, &req.host, req.port, &mut stdin).context("connect")?;
     let size = conn.desktop_size;
     let mut image = DecodedImage::new(PixelFormat::RgbA32, size.width, size.height);
 
@@ -233,7 +233,7 @@ fn build_config(req: &Request, width: u16, height: u16) -> connector::Config {
     }
 }
 
-fn connect(config: connector::Config, host: &str, port: u16) -> anyhow::Result<(ConnectionResult, Framed)> {
+fn connect(config: connector::Config, host: &str, port: u16, answers: &mut impl Read) -> anyhow::Result<(ConnectionResult, Framed)> {
     let addr = (host, port).to_socket_addrs()?.next().context("could not resolve the host name")?;
     let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(10)).context("TCP connect")?;
     tcp.set_nodelay(true).ok();
@@ -247,6 +247,12 @@ fn connect(config: connector::Config, host: &str, port: u16) -> anyhow::Result<(
 
     let initial = framed.into_inner_no_leftover();
     let (tls, server_public_key) = tls_upgrade(initial, host).context("TLS upgrade")?;
+    // The certificate itself is not CA-checked (see tls_upgrade): the app pins it per
+    // host, so ask before CredSSP sends anything derived from the password.
+    write_frame(&mut std::io::stdout().lock(), OUT_CERT, &server_public_key).context("send certificate")?;
+    let mut answer = [0u8; 1];
+    answers.read_exact(&mut answer).context("wait for the certificate answer")?;
+    anyhow::ensure!(answer[0] == 1, "the server's certificate was not trusted");
     let upgraded = ironrdp_blocking::mark_as_upgraded(should_upgrade, &mut connector);
 
     let mut framed = ironrdp_blocking::Framed::new(tls);
@@ -266,8 +272,8 @@ fn connect(config: connector::Config, host: &str, port: u16) -> anyhow::Result<(
 
 fn tls_upgrade(stream: TcpStream, host: &str) -> anyhow::Result<(Tls, Vec<u8>)> {
     // RDP servers almost always present a self-signed certificate, so it can't be
-    // validated against a CA (mstsc asks the user instead). NLA still binds the
-    // credential exchange to this certificate's key.
+    // validated against a CA. Like mstsc, the user approves it instead: the app pins
+    // the public key on first use (OUT_CERT), and NLA binds the credential exchange to it.
     let mut config = rustls::client::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(std::sync::Arc::new(danger::NoCertificateVerification))
