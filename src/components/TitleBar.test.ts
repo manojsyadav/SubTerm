@@ -19,9 +19,9 @@ beforeEach(() => {
   props = {
     confirm: vi.fn(async () => true) as unknown as Props["confirm"],
     activeView: "session-a", appWindow: { minimize: fn(), close: fn() } as unknown as Props["appWindow"],
-    availableShells: [], broadcast: { enabled: false, selected: new Set(), toggleEnabled: fn(), toggle: fn(), selectAll: fn(), clear: fn(), removeSession: fn() } as unknown as Props["broadcast"],
+    broadcast: { enabled: false, selected: new Set(), toggleEnabled: fn(), toggle: fn(), selectAll: fn(), clear: fn(), removeSession: fn() } as unknown as Props["broadcast"],
     broadcastMenuOpen: false, closeSession: fn(), isMaximized: false, isMobile: false, isUnlocked: true,
-    mergedSessionIds: [], mobileSessionPickerOpen: false, openDefaultLocal: fn(), openLocalTerminal: fn(), openServer: fn(), pinTerminalToWall: fn(),
+    mergedSessionIds: [], mobileSessionPickerOpen: false, openServer: fn(), pinTerminalToWall: fn(),
     quickAccessServersList: [], sessionActiveTerm: {},
     sessionStatuses: { "session-a": "connected", "session-b": "connected" },
     sessions: [
@@ -29,7 +29,7 @@ beforeEach(() => {
       { id: "session-b", serverId: 2, serverName: "db-1" },
     ],
     setActiveView: fn(), setBroadcastMenuOpen: fn(), setIsCommandPaletteOpen: fn(), setIsUnlockModalOpen: fn(),     setMergedSessionIds: fn(), setMobileSessionPickerOpen: fn(), setSessionStatuses: fn(), setSessions: fn(),
-    setShellMenuOpen: fn(), setTabMenu: fn(), setTabNames: fn(), shellMenuOpen: false, sshKeys: [], tabMenu: null, tabNames: {},
+    setTabMenu: fn(), setTabNames: fn(), sshKeys: [], tabMenu: null, tabNames: {},
     toggleMaximize: fn(), unpinSessionFromWall: fn(), unpinTerminalFromWall: fn(), wallEnabled: false, wallHasTerminal: () => false, wallItems: [],
   };
   host = document.createElement("div");

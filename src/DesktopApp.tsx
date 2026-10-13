@@ -346,7 +346,6 @@ function DesktopApp() {
   }, [activeView, sessions, addLog]);
 
   const [availableShells, setAvailableShells] = useState<{ id: string; name: string; command: string }[]>([]);
-  const [shellMenuOpen, setShellMenuOpen] = useState(false);
   const [isWorkspaceSwitcherOpen, setIsWorkspaceSwitcherOpen] = useState(false);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const { icon: profileIcon } = useProfileIcon(activeProfile);
@@ -923,7 +922,7 @@ function DesktopApp() {
 
   // TitleBar is a module-level component (stable identity), so React keeps the tab
   // strip mounted across renders; it only needs the state it shows.
-  const titleBarProps = { confirm, activeView, appWindow, availableShells, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openDefaultLocal, openLocalTerminal, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setShellMenuOpen, setTabMenu, setTabNames, shellMenuOpen, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
+  const titleBarProps = { confirm, activeView, appWindow, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setTabMenu, setTabNames, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
 
   // h-full (not h-screen) so the layout tracks --vv-h from main.tsx —
   // when the Android soft keyboard opens the visualViewport shrinks and the
@@ -976,7 +975,7 @@ function DesktopApp() {
           }}
           onCloseLocalTab={(id) => localSession && window.dispatchEvent(new CustomEvent(`subterm-close-terminal-${localSession.id}`, { detail: { id } }))}
           onNewLocalTab={() => openLocalTerminal(undefined, true)}
-          onOpenLocalShell={(id) => openLocalTerminal(id, true)}
+          onOpenLocalShell={(id) => openLocalTerminal(id ?? (localStorage.getItem('subterm-local-shell') || undefined), true)}
           isMobile={isMobile}
           isUnlocked={isUnlocked}
           onUnlock={() => setIsUnlockModalOpen(true)}

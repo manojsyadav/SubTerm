@@ -1,9 +1,9 @@
-// The window's title bar: local-shell and quick-access bookmarks, the
+// The window's title bar: quick-access bookmarks, the
 // session tab strip (with its context menu and the mobile session picker), the Wall
 // and broadcast controls, and the window buttons. Moved out of DesktopApp, which
 // owns all of the state it shows; this component only renders it.
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, X, Terminal, Key, Square, Copy, MoreVertical, Radio, ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command } from "lucide-react";
+import { X, Key, Square, Copy, MoreVertical, Radio, ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command } from "lucide-react";
 import logoUrl from "../assets/logo.png";
 import { useConfirm } from "../ui/confirm";
 import { RenameInput } from "../ui/renameInput";
@@ -21,7 +21,6 @@ export interface TitleBarProps {
   appWindow: AppWindow;
   /** The app's confirm dialog (useConfirm), not window.confirm. */
   confirm: ReturnType<typeof useConfirm>;
-  availableShells: { id: string; name: string; command: string }[];
   broadcast: BroadcastContextValue;
   broadcastMenuOpen: boolean;
   closeSession: (sessId: string) => void;
@@ -30,8 +29,6 @@ export interface TitleBarProps {
   isUnlocked: boolean;
   mergedSessionIds: string[];
   mobileSessionPickerOpen: boolean;
-  openDefaultLocal: () => void;
-  openLocalTerminal: (preferredShell?: string, forceNew?: boolean) => void;
   openServer: (server: Server, initialTool?: Session["initialTool"], opts?: { fullWidth?: boolean }) => void;
   pinTerminalToWall: (sid: string, terminalId: string) => void;
   quickAccessServersList: Server[];
@@ -46,10 +43,8 @@ export interface TitleBarProps {
   setMobileSessionPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSessionStatuses: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
-  setShellMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setTabMenu: React.Dispatch<React.SetStateAction<{ x: number; y: number; sessionId: string } | null>>;
   setTabNames: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  shellMenuOpen: boolean;
   sshKeys: SshKey[];
   tabMenu: { x: number; y: number; sessionId: string } | null;
   tabNames: Record<string, string>;
@@ -66,7 +61,6 @@ export function TitleBar(props: TitleBarProps) {
     confirm,
     activeView,
     appWindow,
-    availableShells,
     broadcast,
     broadcastMenuOpen,
     closeSession,
@@ -75,8 +69,6 @@ export function TitleBar(props: TitleBarProps) {
     isUnlocked,
     mergedSessionIds,
     mobileSessionPickerOpen,
-    openDefaultLocal,
-    openLocalTerminal,
     openServer,
     pinTerminalToWall,
     quickAccessServersList,
@@ -91,10 +83,8 @@ export function TitleBar(props: TitleBarProps) {
     setMobileSessionPickerOpen,
     setSessionStatuses,
     setSessions,
-    setShellMenuOpen,
     setTabMenu,
     setTabNames,
-    shellMenuOpen,
     sshKeys,
     tabMenu,
     tabNames,
@@ -130,89 +120,9 @@ export function TitleBar(props: TitleBarProps) {
           <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
         </div>
 
-        {/* Top Bar Bookmarks Strip: Local Shell + Quick Access Servers */}
+        {/* Quick-access server bookmarks (local shells are opened from the sidebar's Local item). */}
+        {quickAccessServersList.length > 0 && (
         <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.03] border border-white/5 rounded-lg no-drag shrink-0 mx-1">
-          {/* Pinned Bookmark: Local Shell with Shell Flavor Selector */}
-          <div className="relative flex items-center">
-            <button
-              type="button"
-              onClick={() => openDefaultLocal()}
-              title={`Open or Focus Local Terminal (${getActiveShortcut("openLocalTerminal")})`}
-              className={`h-7 pl-2.5 pr-1.5 rounded-l-md flex items-center gap-1.5 text-[11px] font-medium transition-all ${
-                activeView.startsWith("session-local-")
-                  ? "bg-emerald-500/20 text-emerald-300 border-y border-l border-emerald-500/40 shadow-sm font-semibold"
-                  : "text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-l border-transparent hover:border-emerald-500/20"
-              }`}
-            >
-              <Terminal size={12} className={activeView.startsWith("session-local-") ? "text-emerald-400" : "text-emerald-500/80"} />
-              <span className="whitespace-nowrap tracking-tight font-medium">Local Shell</span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShellMenuOpen((v) => !v);
-              }}
-              title="Select Shell (PowerShell, CMD, Git Bash, WSL)"
-              className={`h-7 px-1.5 rounded-r-md flex items-center justify-center transition-all ${
-                activeView.startsWith("session-local-")
-                  ? "bg-emerald-500/20 text-emerald-300 border-y border-r border-emerald-500/40 hover:bg-emerald-500/30"
-                  : "text-zinc-500 hover:text-emerald-300 hover:bg-emerald-500/10 border-y border-r border-transparent hover:border-emerald-500/20"
-              }`}
-            >
-              <ChevronDown size={11} className={`transition-transform duration-150 ${shellMenuOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {/* Dropdown Menu */}
-            {shellMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShellMenuOpen(false)} />
-                <div className="absolute left-0 top-full mt-1 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-lg shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11px]">
-                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border-b border-white/5 mb-1 flex items-center justify-between">
-                    <span>Installed Shells</span>
-                    <span className="text-[9px] text-zinc-500 font-normal">Choose flavor</span>
-                  </div>
-                  {availableShells.length > 0 ? (
-                    availableShells.map((sh) => (
-                      <button
-                        key={sh.id}
-                        type="button"
-                        onClick={() => {
-                          setShellMenuOpen(false);
-                          openLocalTerminal(sh.id, true);
-                        }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-300 flex items-center justify-between group transition-colors"
-                      >
-                        <span className="font-medium truncate">{sh.name}</span>
-                        <span className="text-[10px] text-zinc-500 font-mono group-hover:text-emerald-400/80 shrink-0 ml-2">{sh.id}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-1.5 text-zinc-500 italic text-[10.5px]">Default OS Shell</div>
-                  )}
-                  <div className="border-t border-white/5 mt-1 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShellMenuOpen(false);
-                        openLocalTerminal(undefined, true);
-                      }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/5 text-zinc-400 hover:text-white flex items-center gap-2 transition-colors font-medium"
-                    >
-                      <Plus size={12} className="text-zinc-500" />
-                      <span>+ New Tab (Default Shell)</span>
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Separator if quick access servers exist */}
-          {quickAccessServersList.length > 0 && (
-            <div className="w-[1px] h-4 bg-white/10 mx-0.5 shrink-0" />
-          )}
-
           {/* Server Bookmarks */}
           {quickAccessServersList.map((server) => {
             const sess = sessions.find((s) => s.serverId === server.id || s.serverName === server.name);
@@ -289,6 +199,7 @@ export function TitleBar(props: TitleBarProps) {
             );
           })}
         </div>
+        )}
 
         {/* Mobile session picker — replaces the horizontal tab strip on
             narrow viewports so a phone doesn't spend its whole title row

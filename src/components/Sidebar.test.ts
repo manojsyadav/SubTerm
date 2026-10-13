@@ -79,3 +79,17 @@ describe("Sidebar Local shell list", () => {
     expect(host.querySelector('[aria-label="Local shells"]')).toBeNull();
   });
 });
+
+describe("Sidebar Local click asks which shell", () => {
+  it("opens the shell picker on a plain click, with the default shell first", () => {
+    const onOpenLocalShell = vi.fn();
+    const setActiveTab = vi.fn();
+    render({ localShells: [{ id: "wsl", name: "WSL" }], onOpenLocalShell, setActiveTab });
+    act(() => localButton().click());
+    expect(setActiveTab).not.toHaveBeenCalled();
+    const items = [...host.querySelectorAll("[role=menuitem]")] as HTMLElement[];
+    expect(items.map((b) => b.textContent)).toEqual(["Default shellSettings", "WSLwsl"]);
+    act(() => items[0].click());
+    expect(onOpenLocalShell).toHaveBeenCalledWith(undefined);
+  });
+});

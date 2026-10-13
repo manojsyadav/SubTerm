@@ -35,7 +35,8 @@ interface SidebarProps {
   showNetworkTools?: boolean;
   /** Installed local shells, offered on right-click of Local (desktop rail). */
   localShells?: { id: string; name: string }[];
-  onOpenLocalShell?: (shellId: string) => void;
+  /** Open a local shell; `undefined` = the default shell. */
+  onOpenLocalShell?: (shellId?: string) => void;
   /** Active workspace, shown on the Switch workspace button (the title bar no longer has one). */
   workspaceName?: string;
   workspaceIcon?: string;
@@ -76,6 +77,12 @@ export const Sidebar = ({
   onNewLocalTab,
 }: SidebarProps) => {
   const [shellMenu, setShellMenu] = useState<{ x: number; y: number } | null>(null);
+  // Local and its + ask which shell to open (desktop rail); without a shell list they open the default.
+  const canPickShell = !!onOpenLocalShell && localShells.length > 0;
+  const openShellMenu = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setShellMenu({ x: r.right + 6, y: r.top });
+  };
   const switchTitle = workspaceName ? `Workspace: ${workspaceName} (click to switch)` : "Switch workspace";
   // The workspace's own icon (an emoji) when it has one, so the active workspace is visible at a glance.
   const workspaceBadge = workspaceIcon
@@ -286,19 +293,16 @@ export const Sidebar = ({
         {items.map((item) => (
           <Fragment key={item.id}>
           <button
-            onClick={() => setActiveTab(item.id)}
-            onContextMenu={item.id === 'local' && onOpenLocalShell && localShells.length > 0 ? (e) => {
-              e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
-              setShellMenu({ x: r.right + 6, y: r.top });
-            } : undefined}
+            onClick={(e) => { if (item.id === 'local' && canPickShell) openShellMenu(e.currentTarget); else setActiveTab(item.id); }}
+            onContextMenu={item.id === 'local' && canPickShell ? (e) => { e.preventDefault(); openShellMenu(e.currentTarget); } : undefined}
+            aria-haspopup={item.id === 'local' && canPickShell ? 'menu' : undefined}
             className={`p-2.5 rounded-xl transition-all duration-300 relative group flex items-center justify-center ${
               activeTab === item.id
                 ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
                 : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
             }`}
             title={(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && alertSummary ? `${item.label} · ${alertSummary}`
-              : item.id === 'local' && onOpenLocalShell && localShells.length > 0 ? 'Local (right-click to pick a shell)' : item.label}
+              : item.id === 'local' && canPickShell ? 'Local: open a shell' : item.label}
           >
             <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
             {/* Live Health Pulse Badge */}
@@ -355,9 +359,10 @@ export const Sidebar = ({
               ))}
               <button
                 type="button"
-                onClick={onNewLocalTab}
+                onClick={(e) => { if (canPickShell) openShellMenu(e.currentTarget); else onNewLocalTab?.(); }}
+                aria-haspopup={canPickShell ? 'menu' : undefined}
                 aria-label="New local shell"
-                title="Open another shell (right-click Local to pick which)"
+                title="Open another shell"
                 className="h-6 rounded-lg border border-dashed border-white/10 text-zinc-500 hover:text-white hover:bg-white/5 flex items-center justify-center"
               >
                 <Plus size={11} />
@@ -379,12 +384,21 @@ export const Sidebar = ({
             className="fixed z-50 w-56 py-1.5 bg-[#141418] border border-white/10 rounded-lg shadow-2xl text-[11px]"
           >
             <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border-b border-white/5 mb-1">Open local shell</div>
-            {localShells.map((sh, i) => (
+            <button
+              type="button"
+              role="menuitem"
+              autoFocus
+              onClick={() => { setShellMenu(null); onOpenLocalShell?.(undefined); }}
+              className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 focus:bg-emerald-500/10 outline-none text-zinc-300 hover:text-emerald-300 flex items-center justify-between"
+            >
+              <span className="font-medium truncate">Default shell</span>
+              <span className="text-[10px] text-zinc-500 font-mono shrink-0 ml-2">Settings</span>
+            </button>
+            {localShells.map((sh) => (
               <button
                 key={sh.id}
                 type="button"
                 role="menuitem"
-                autoFocus={i === 0}
                 onClick={() => { setShellMenu(null); onOpenLocalShell?.(sh.id); }}
                 className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 focus:bg-emerald-500/10 outline-none text-zinc-300 hover:text-emerald-300 flex items-center justify-between"
               >
