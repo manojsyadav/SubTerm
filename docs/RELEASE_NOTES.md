@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(ui)` — Sessions live in the sidebar**:
+  The tab strip across the top is gone. Open sessions are listed under their sidebar item: SSH sessions under **Servers**, file-browser sessions under **SFTP**, remote desktops under **RDP**, and local shells under **Local**. Click to switch, Ctrl+click to split beside the current one, hover to close, right-click for the session menu (Rename, Pin, Group, Wall, split view, close others). **Pin** keeps a session at the top and reopens it after unlock; **Group** puts sessions into your own collapsible groups; renames are remembered. All of this is per workspace. Settings > Appearance > **Open sessions list** switches to a wider panel with full names. The quick-command bar now shares the row with Snippets, Docker and System.
+
 - **`feat(terminal)` — Paste images into a terminal**:
   When the clipboard holds an image and no text (a Win+Shift+S screenshot, say), pasting it into a terminal (Ctrl+V, right-click paste or the menu's Paste) saves it as a PNG in the temp folder and inserts it like a dropped file: its path on a local shell, or an upload to `/tmp` on an SSH server. Handy for giving Claude Code a screenshot.
 

@@ -1643,7 +1643,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           </span>
         )}
         <div
-          className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-1 sm:mr-4 mask-fade-right"
+          className={`flex items-center gap-1 overflow-x-auto no-scrollbar mr-1 sm:mr-4 mask-fade-right ${localTabsInSidebar ? 'shrink-0' : 'flex-1'}`}
           onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY; }}
         >
         {!localTabsInSidebar && terminals.map(t => {
@@ -1797,74 +1797,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             narrow viewports (below md) so the terminal tab strip keeps its
             horizontal real estate when space is tight; the full description
             stays in the tooltip either way. */}
-        <div className="flex items-center gap-1 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
-          {session?.isLocal && (
-            <span className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold tracking-tight mr-1">
-              <TerminalSquare size={13} className="shrink-0" />
-              <span className="hidden sm:inline">{(() => {
-                const shell = terminals.find(t => t.id === activeTab)?.shell ?? session.localShell;
-                return shell ? `Local (${shell})` : "Local Shell";
-              })()}</span>
-            </span>
-          )}
-
-          {!session?.isLocal && (
-            <button
-              type="button"
-              onClick={() => setFilePickerOpen(true)}
-              title="Quick Open / Edit Remote File (Alt+E) — search files or enter path"
-              aria-label="Edit Remote File"
-              className="h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
-            >
-              <FileCode size={14} className="shrink-0 text-amber-400" />
-              <span className="hidden md:inline text-[11px] font-semibold tracking-tight">Edit File</span>
-            </button>
-          )}
-
-          {(session?.isLocal
-            ? [
-                { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
-                { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
-                { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
-                { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
-                { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
-              ]
-            : [
-                { id: 'sftp',      icon: Folder,   label: 'SFTP',      hint: 'SFTP — file browser' },
-                { id: 'tunnels',   icon: Network,  label: 'Ports',     hint: 'Ports — port forwarding' },
-                { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
-                { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
-                { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
-                { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
-                { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
-              ]
-          ).filter((t) => toolEnabled[t.id]).map(({ id, icon: Icon, label, hint }) => {
-            const on = activeTool === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setActiveTool(on ? null : id as ActiveTool)}
-                title={hint}
-                aria-label={hint}
-                aria-pressed={on}
-                className={`h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all ${
-                  on
-                    ? 'bg-primary/10 text-primary border border-primary/20 shadow-inner'
-                    : 'text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white'
-                }`}
-              >
-                <Icon size={14} className="shrink-0" />
-                <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      )}
-
-      {/* Quick Actions Bar — 1-click common sysadmin commands */}
-      {!chromeless && !activeTool && (
-        <div className="h-7 px-2 sm:px-4 bg-[#0d0d10] border-b border-white/[0.04] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 text-[10.5px] font-mono text-zinc-400">
+        {/* Quick actions (Git, Copilot, detected OS, quick commands), in the same row as the
+            tools. On a local tab the shells are in the sidebar, so these get the space. */}
+        {!activeTool && (
+        <div className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 mr-1 text-[10.5px] font-mono text-zinc-400 ${localTabsInSidebar ? 'flex-1' : 'max-w-[45%]'}`}>
           {/* Git Branch & Status Pill */}
           {gitEnabled && (
             <button
@@ -1941,6 +1877,70 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             </button>
           ))}
         </div>
+        )}
+        <div className="flex items-center gap-1 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
+          {session?.isLocal && (
+            <span className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold tracking-tight mr-1">
+              <TerminalSquare size={13} className="shrink-0" />
+              <span className="hidden sm:inline">{(() => {
+                const shell = terminals.find(t => t.id === activeTab)?.shell ?? session.localShell;
+                return shell ? `Local (${shell})` : "Local Shell";
+              })()}</span>
+            </span>
+          )}
+
+          {!session?.isLocal && (
+            <button
+              type="button"
+              onClick={() => setFilePickerOpen(true)}
+              title="Quick Open / Edit Remote File (Alt+E) — search files or enter path"
+              aria-label="Edit Remote File"
+              className="h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
+            >
+              <FileCode size={14} className="shrink-0 text-amber-400" />
+              <span className="hidden md:inline text-[11px] font-semibold tracking-tight">Edit File</span>
+            </button>
+          )}
+
+          {(session?.isLocal
+            ? [
+                { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
+                { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
+                { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
+                { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
+                { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
+              ]
+            : [
+                { id: 'sftp',      icon: Folder,   label: 'SFTP',      hint: 'SFTP — file browser' },
+                { id: 'tunnels',   icon: Network,  label: 'Ports',     hint: 'Ports — port forwarding' },
+                { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
+                { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
+                { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
+                { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
+                { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
+              ]
+          ).filter((t) => toolEnabled[t.id]).map(({ id, icon: Icon, label, hint }) => {
+            const on = activeTool === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTool(on ? null : id as ActiveTool)}
+                title={hint}
+                aria-label={hint}
+                aria-pressed={on}
+                className={`h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                  on
+                    ? 'bg-primary/10 text-primary border border-primary/20 shadow-inner'
+                    : 'text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white'
+                }`}
+              >
+                <Icon size={14} className="shrink-0" />
+                <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       )}
 
       {/* "+" secondary menu — right-click / long-press on the plus
