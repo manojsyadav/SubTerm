@@ -141,6 +141,7 @@ function DesktopApp() {
     confirmOnClose: localStorage.getItem('subterm-confirm-on-close') !== 'false',
     notifyLongCommandSec: Math.max(0, parseInt(localStorage.getItem('subterm-notify-long-sec') || '0', 10) || 0),
     notifyOnDisconnect: localStorage.getItem('subterm-notify-disconnect') === 'true',
+    checkUpdates: localStorage.getItem('subterm-update-check') !== 'false',
     reduceMotion: normalizeReduceMotion(localStorage.getItem('subterm-reduce-motion')) as string,
     highContrast: normalizeHighContrast(localStorage.getItem('subterm-high-contrast')) as string,
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
@@ -551,6 +552,18 @@ function DesktopApp() {
   const [isImportModalRequested, setIsImportModalRequested] = useState(false);
   const [isNetworkToolsOpen, setIsNetworkToolsOpen] = useState(false);
   const [localFilesOpen, setLocalFilesOpen] = useState(false);
+  // Newer GitHub release found at startup (Settings > General > Updates). Dismissing hides that version only.
+  const [updateBanner, setUpdateBanner] = useState<{ latest: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (localStorage.getItem('subterm-update-check') === 'false') return;
+    invoke<{ has_update: boolean; latest: string | null; release_url: string | null }>('check_for_updates')
+      .then((u) => {
+        if (u.has_update && u.latest && localStorage.getItem('subterm-update-dismissed') !== u.latest) {
+          setUpdateBanner({ latest: u.latest, url: u.release_url });
+        }
+      })
+      .catch(() => { /* offline or rate-limited: try again next start */ });
+  }, []);
   const [isRecordingPlayerOpen, setIsRecordingPlayerOpen] = useState(false);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
   const [quickConnectPrefill, setQuickConnectPrefill] = useState<{ host: string; port: number; username: string } | null>(null);
@@ -717,6 +730,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-confirm-on-close', appSettings.confirmOnClose === false ? 'false' : 'true');
     localStorage.setItem('subterm-notify-long-sec', String(appSettings.notifyLongCommandSec ?? 0));
     localStorage.setItem('subterm-notify-disconnect', appSettings.notifyOnDisconnect ? 'true' : 'false');
+    localStorage.setItem('subterm-update-check', appSettings.checkUpdates === false ? 'false' : 'true');
     localStorage.setItem('subterm-reduce-motion', appSettings.reduceMotion || 'system');
     localStorage.setItem('subterm-high-contrast', appSettings.highContrast || 'system');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
@@ -1983,6 +1997,27 @@ function DesktopApp() {
   return (
     <div className="h-full w-full bg-background flex flex-col overflow-hidden text-zinc-200 select-none">
       {TitleBar()}
+      {updateBanner && (
+        <div role="status" className="fixed bottom-4 right-4 z-[80] flex items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-amber-500/30 shadow-xl text-[11px] text-zinc-200">
+          <span>SubTerm <b className="text-amber-300">v{updateBanner.latest}</b> is available.</span>
+          {updateBanner.url && (
+            <button
+              type="button"
+              onClick={() => { invoke('open_external_url', { url: updateBanner.url }).catch(() => {}); }}
+              className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-200 font-bold hover:bg-amber-500/25"
+            >
+              View release
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => { localStorage.setItem('subterm-update-dismissed', updateBanner.latest); setUpdateBanner(null); }}
+            className="px-2 py-0.5 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Layout swap: on desktop the sidebar is a left rail (row).
           On mobile we flip to flex-col-reverse so the sidebar component
           renders at the bottom while staying first in DOM order — keyboard

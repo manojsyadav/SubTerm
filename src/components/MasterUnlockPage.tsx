@@ -107,6 +107,7 @@ export const MasterUnlockPage = ({
 
   // Check for updates
   useEffect(() => {
+    if (localStorage.getItem("subterm-update-check") === "false") return;
     invoke<UpdateInfo>("check_for_updates")
       .then((u) => { if (u?.has_update && u.latest) setUpdate(u); })
       .catch(() => {});

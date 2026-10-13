@@ -40,6 +40,8 @@ export interface AppSettings {
   notifyLongCommandSec: number;
   /** Notify when an SSH session drops while the window is in the background. */
   notifyOnDisconnect: boolean;
+  /** Look for a newer GitHub release when SubTerm starts. */
+  checkUpdates: boolean;
   /** Most command-history entries kept (older ones are dropped). */
   historyMaxEntries: number;
   /** Drop history older than this many days; 0 = keep by age. */

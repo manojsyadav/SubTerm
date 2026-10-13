@@ -305,6 +305,23 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
     }
   };
   const [backupMsg, setBackupMsg] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateResult, setUpdateResult] = useState<{ text: string; tone: "ok" | "err"; url?: string } | null>(null);
+  const checkUpdatesNow = async () => {
+    setUpdateChecking(true);
+    try {
+      const u = await invoke<{ current: string; latest: string | null; has_update: boolean; release_url: string | null }>("check_for_updates");
+      setUpdateResult(u.has_update && u.latest
+        ? { text: `v${u.latest} is available (you have v${u.current}).`, tone: "ok", url: u.release_url ?? undefined }
+        : u.latest
+          ? { text: `You have the latest version (v${u.current}).`, tone: "ok" }
+          : { text: "No published release found on GitHub (the repository must be public and have a release).", tone: "err" });
+    } catch (e) {
+      setUpdateResult({ text: `Could not check: ${e}`, tone: "err" });
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
   const exportPrefs = async () => {
     try {
       const day = new Date().toISOString().slice(0, 10);
@@ -684,6 +701,22 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
                 </select>
               </Row>
             )}
+          </SectionCard>
+          <SectionCard id="updates" title="Updates" subtitle="SubTerm compares its version with the releases on github.com/manojsyadav/SubTerm. Nothing is downloaded or installed; a newer release opens in your browser.">
+            <Row id="update-check" label="Check when SubTerm starts" desc="Shows a notice when a newer release exists. Dismissing it hides that version.">
+              <Toggle checked={settings.checkUpdates !== false} onChange={() => setSettings({ ...settings, checkUpdates: settings.checkUpdates === false })} />
+            </Row>
+            <Row id="update-now" label="Check now">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {updateResult && <span role="status" className={`text-[11px] ${updateResult.tone === "err" ? "text-rose-400" : updateResult.url ? "text-amber-300" : "text-emerald-400"}`}>{updateResult.text}</span>}
+                {updateResult?.url && (
+                  <button type="button" onClick={() => { invoke("open_external_url", { url: updateResult.url }).catch(() => {}); }} className="px-3 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs font-bold hover:bg-amber-500/25">View release</button>
+                )}
+                <button type="button" disabled={updateChecking} onClick={() => { void checkUpdatesNow(); }} className="px-3 h-8 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold hover:bg-primary/20 disabled:opacity-50">
+                  {updateChecking ? "Checking…" : "Check for updates"}
+                </button>
+              </div>
+            </Row>
           </SectionCard>
           <SectionCard id="backup" title="Backup & Restore" subtitle="Preferences live only on this computer. Export them to move to another install or keep a copy. Servers, credentials and keys are not included; use Maintenance and Profiles for those.">
             <Row id="backup-actions" label="Preferences file" desc="A small JSON file. Machine-bound items such as biometric unlock and pinned server ids are left out.">
@@ -1262,6 +1295,9 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "clear-clipboard", page: "general", label: "Clear clipboard on lock", keywords: "clipboard clear lock security password" },
   { id: "monitoring", page: "general", label: "Resource Monitoring", keywords: "monitor cpu ram disk outage polling" },
   { id: "enable-monitoring", page: "general", label: "Enable monitoring", keywords: "monitor cpu ram disk outage polling" },
+  { id: "updates", page: "general", label: "Updates", keywords: "update version release new github check upgrade" },
+  { id: "update-check", page: "general", label: "Check for updates when SubTerm starts", keywords: "update version release github automatic" },
+  { id: "update-now", page: "general", label: "Check for updates now", keywords: "update version release github check" },
   { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
   { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },

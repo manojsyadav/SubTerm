@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(updates)` — Update check inside the app**:
+  SubTerm now checks GitHub releases at startup inside the app too, not only on the unlock screen (which auto-unlocked workspaces skip), and shows a dismissible notice for a newer version. Settings > General > Updates turns the startup check off and has a **Check for updates** button. Nothing is downloaded automatically.
+
 - **`feat(a11y)` — High contrast**:
   Settings > Appearance > Accessibility > High contrast brightens secondary text, strengthens borders and shows a visible keyboard focus ring. It follows the operating system's contrast setting by default. Terminal colours still come from the terminal theme.
 
