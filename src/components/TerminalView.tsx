@@ -1589,7 +1589,9 @@ const TerminalView = ({
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
         if (probeOutputRef.current !== null) probeOutputRef.current += txt;
         if (sshForegroundRef.current && SSH_ENDED_RE.test(txt)) sshForegroundRef.current = false;
-        if (!isLocal && !sudoOfferRef.current && looksLikeSudoPrompt(recentOutputRef.current)) {
+        // Output that no longer ends in the prompt (sudo timed out, the command ended) retires the offer.
+        if (sudoOfferRef.current && !looksLikeSudoPrompt(recentOutputRef.current)) showSudoOffer(false);
+        else if (!isLocal && !sudoOfferRef.current && isFeatureEnabled('sudoFill') && looksLikeSudoPrompt(recentOutputRef.current)) {
           invoke<boolean>('has_saved_password', { sessionId })
             .then((has) => { if (has && looksLikeSudoPrompt(recentOutputRef.current)) showSudoOffer(true); })
             .catch(() => {});

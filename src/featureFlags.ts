@@ -41,6 +41,12 @@ export const FEATURES = [
     desc: "When you type ssh or sftp in a local terminal, offer to save the host to your server list and open it as a native session. Only the typed host, user, port and key path are read; passwords are never captured. When off, typed commands are not inspected.",
   },
   {
+    key: "sudoFill",
+    group: "Terminal",
+    label: "Offer saved password at sudo prompts",
+    desc: "When a server asks \"[sudo] password for …\", offer to fill the password saved for that server. It is only sent after a check that the prompt hides what you type. When off, no prompt is watched for.",
+  },
+  {
     key: "terminalCommandBlocks",
     group: "Terminal",
     label: "Command blocks and quick actions",
