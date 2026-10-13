@@ -5,6 +5,7 @@
 //! arriving on stdin. See `wire.rs` for the framing. Stdout carries ONLY frames;
 //! diagnostics go to stderr.
 
+mod channels;
 mod wire;
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -36,10 +37,13 @@ struct Request {
     domain: Option<String>,
     width: u16,
     height: u16,
+    /// Ask the server to play its sound here (sent to the app as AUDIO frames).
+    #[serde(default)]
+    audio: bool,
 }
 
 type Tls = rustls::StreamOwned<rustls::ClientConnection, TcpStream>;
-type Framed = ironrdp_blocking::Framed<Tls>;
+pub(crate) type Framed = ironrdp_blocking::Framed<Tls>;
 
 fn main() {
     // Several crates in the graph enable a rustls backend; pick one explicitly.
@@ -66,17 +70,11 @@ fn run() -> anyhow::Result<String> {
     let height = (req.height.clamp(480, 4096)) & !1;
 
     let config = build_config(&req, width, height);
-    let (conn, mut framed) = connect(config, &req.host, req.port, &mut stdin).context("connect")?;
+    let (conn, mut framed) = connect(config, &req.host, req.port, req.audio, &mut stdin).context("connect")?;
     let size = conn.desktop_size;
     let mut image = DecodedImage::new(PixelFormat::RgbA32, size.width, size.height);
-
-    {
-        let mut out = std::io::stdout().lock();
-        let mut p = Vec::with_capacity(4);
-        p.extend_from_slice(&size.width.to_le_bytes());
-        p.extend_from_slice(&size.height.to_le_bytes());
-        write_frame(&mut out, OUT_CONNECTED, &p)?;
-    }
+    send_connected(size)?;
+    let activation_factory = conn.activation_factory.clone();
 
     // Short read timeout from here on, so the loop can service input between server PDUs.
     framed.get_inner_mut().0.sock.set_read_timeout(Some(Duration::from_millis(15)))?;
@@ -109,31 +107,71 @@ fn run() -> anyhow::Result<String> {
     // server goes quiet, instead of one frame per update rectangle.
     let mut dirty = Dirty::default();
     let mut last_flush = std::time::Instant::now();
+    let mut clipboard = channels::LocalClipboard::default();
+    // Window resizes arrive in bursts while the user drags; each request costs the
+    // server a full reactivation, so only the size it settles on is sent.
+    let mut pending_resize: Option<(u16, u16, std::time::Instant)> = None;
 
     loop {
         while let Ok(ev) = rx.try_recv() {
-            if ev == Input::Disconnect {
-                if let Ok(outs) = stage.graceful_shutdown() {
-                    let _ = handle_outputs(&mut framed, &mut dirty, outs);
+            match ev {
+                Input::Disconnect => {
+                    if let Ok(outs) = stage.graceful_shutdown() {
+                        let _ = handle_outputs(&mut framed, &mut dirty, outs);
+                    }
+                    return Ok("disconnected".into());
                 }
-                return Ok("disconnected".into());
+                Input::Resize { width, height } => {
+                    let current = (u32::from(image.width()), u32::from(image.height()));
+                    pending_resize = (channels::resize_target(width, height) != current).then(|| (width, height, std::time::Instant::now()));
+                    continue;
+                }
+                Input::Clipboard(text) => {
+                    clipboard.text = (!text.is_empty()).then_some(text);
+                    clipboard.changed = true;
+                    if let Err(e) = channels::pump_clipboard(&mut stage, &mut framed, &mut clipboard) {
+                        eprintln!("clipboard: {e:#}");
+                    }
+                    continue;
+                }
+                _ => {}
             }
             let events = input_db.apply(to_operations(ev));
             if events.is_empty() {
                 continue;
             }
             let outs = stage.process_fastpath_input(&mut image, &events).context("send input")?;
-            if let Some(reason) = handle_outputs(&mut framed, &mut dirty, outs)? {
-                return Ok(reason);
+            match handle_outputs(&mut framed, &mut dirty, outs)? {
+                Flow::Continue => {}
+                Flow::End(reason) => return Ok(reason),
+                Flow::Reactivate => {
+                    image = reactivate(&mut framed, &mut stage, &activation_factory, &mut dirty)?;
+                }
+            }
+        }
+
+        if let Some((w, h, at)) = pending_resize {
+            if at.elapsed() >= RESIZE_SETTLE && channels::request_resize(&mut stage, &mut framed, w, h)? {
+                pending_resize = None;
             }
         }
 
         let idle = match framed.read_pdu() {
             Ok((action, payload)) => {
                 let outs = stage.process(&mut image, action, &payload).context("process frame")?;
-                if let Some(reason) = handle_outputs(&mut framed, &mut dirty, outs)? {
-                    flush_dirty(&mut dirty, &image)?;
-                    return Ok(reason);
+                match handle_outputs(&mut framed, &mut dirty, outs)? {
+                    Flow::Continue => {}
+                    Flow::End(reason) => {
+                        flush_dirty(&mut dirty, &image)?;
+                        return Ok(reason);
+                    }
+                    Flow::Reactivate => {
+                        image = reactivate(&mut framed, &mut stage, &activation_factory, &mut dirty)?;
+                    }
+                }
+                // Clipboard trouble (an unexpected server state, say) must not end the session.
+                if let Err(e) = channels::pump_clipboard(&mut stage, &mut framed, &mut clipboard) {
+                    eprintln!("clipboard: {e:#}");
                 }
                 false
             }
@@ -150,6 +188,28 @@ fn run() -> anyhow::Result<String> {
 
 /// Longest a screen change waits while the server keeps streaming (~30 fps).
 const FLUSH_EVERY: Duration = Duration::from_millis(33);
+/// How long the window size must stay put before the remote desktop follows it.
+const RESIZE_SETTLE: Duration = Duration::from_millis(400);
+
+fn send_connected(size: connector::DesktopSize) -> anyhow::Result<()> {
+    let mut p = Vec::with_capacity(4);
+    p.extend_from_slice(&size.width.to_le_bytes());
+    p.extend_from_slice(&size.height.to_le_bytes());
+    write_frame(&mut std::io::stdout().lock(), OUT_CONNECTED, &p).context("send size")
+}
+
+/// After the server's Deactivate-All: rejoin at the new size, and tell the app.
+fn reactivate(
+    framed: &mut Framed,
+    stage: &mut ActiveStage,
+    factory: &ironrdp::connector::connection_activation::ConnectionActivationFactory,
+    dirty: &mut Dirty,
+) -> anyhow::Result<DecodedImage> {
+    let size = channels::reactivate(framed, stage, factory).context("apply the new display size")?;
+    *dirty = Dirty::default();
+    send_connected(size)?;
+    Ok(DecodedImage::new(PixelFormat::RgbA32, size.width, size.height))
+}
 
 /// Send the merged dirty rectangle, if any, as one UPDATE frame.
 fn flush_dirty(dirty: &mut Dirty, image: &DecodedImage) -> anyhow::Result<()> {
@@ -188,27 +248,31 @@ fn to_operations(ev: Input) -> Vec<Operation> {
             let sc = Scancode::from_u8(extended, scancode);
             vec![if pressed { Operation::KeyPressed(sc) } else { Operation::KeyReleased(sc) }]
         }
-        Input::Disconnect => Vec::new(),
+        Input::Disconnect | Input::Resize { .. } | Input::Clipboard(_) => Vec::new(),
     }
 }
 
-/// Write replies to the server and forward screen changes to the app.
-/// Returns `Some(reason)` when the session should end.
-fn handle_outputs(framed: &mut Framed, dirty: &mut Dirty, outs: Vec<ActiveStageOutput>) -> anyhow::Result<Option<String>> {
+enum Flow {
+    Continue,
+    End(String),
+    /// The server is changing the display (after a resize): run the reactivation sequence.
+    Reactivate,
+}
+
+/// Write replies to the server and collect screen changes for the app.
+fn handle_outputs(framed: &mut Framed, dirty: &mut Dirty, outs: Vec<ActiveStageOutput>) -> anyhow::Result<Flow> {
     for out in outs {
         match out {
             ActiveStageOutput::ResponseFrame(frame) => framed.write_all(&frame).context("write to server")?,
             ActiveStageOutput::GraphicsUpdate(rect) => {
                 dirty.add(usize::from(rect.left), usize::from(rect.top), usize::from(rect.right), usize::from(rect.bottom));
             }
-            ActiveStageOutput::Terminate(reason) => return Ok(Some(reason.description())),
-            ActiveStageOutput::DeactivateAll => {
-                return Ok(Some("the server changed the display settings; reconnect to continue".into()))
-            }
+            ActiveStageOutput::Terminate(reason) => return Ok(Flow::End(reason.description())),
+            ActiveStageOutput::DeactivateAll => return Ok(Flow::Reactivate),
             _ => {}
         }
     }
-    Ok(None)
+    Ok(Flow::Continue)
 }
 
 fn build_config(req: &Request, width: u16, height: u16) -> connector::Config {
@@ -237,7 +301,7 @@ fn build_config(req: &Request, width: u16, height: u16) -> connector::Config {
         enable_server_pointer: false,
         request_data: None,
         autologon: false,
-        enable_audio_playback: false,
+        enable_audio_playback: req.audio,
         compression_type: None,
         pointer_software_rendering: true,
         multitransport_flags: None,
@@ -251,7 +315,7 @@ fn build_config(req: &Request, width: u16, height: u16) -> connector::Config {
     }
 }
 
-fn connect(config: connector::Config, host: &str, port: u16, answers: &mut impl Read) -> anyhow::Result<(ConnectionResult, Framed)> {
+fn connect(config: connector::Config, host: &str, port: u16, audio: bool, answers: &mut impl Read) -> anyhow::Result<(ConnectionResult, Framed)> {
     let addr = (host, port).to_socket_addrs()?.next().context("could not resolve the host name")?;
     let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(10)).context("TCP connect")?;
     tcp.set_nodelay(true).ok();
@@ -261,6 +325,7 @@ fn connect(config: connector::Config, host: &str, port: u16, answers: &mut impl 
 
     let mut framed = ironrdp_blocking::Framed::new(tcp);
     let mut connector = connector::ClientConnector::new(config, client_addr);
+    channels::attach(&mut connector, audio);
     let should_upgrade = ironrdp_blocking::connect_begin(&mut framed, &mut connector).context("begin connection")?;
 
     let initial = framed.into_inner_no_leftover();

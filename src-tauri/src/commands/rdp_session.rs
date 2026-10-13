@@ -169,11 +169,12 @@ pub async fn rdp_connect(
     password: String,
     width: u32,
     height: u32,
+    audio: Option<bool>,
     on_event: EventChannel,
 ) -> Result<String, String> {
     #[cfg(mobile)]
     {
-        let _ = (app, state, sessions, id, password, width, height, on_event);
+        let _ = (app, state, sessions, id, password, width, height, audio, on_event);
         return Err("Embedded RDP is not available on phones and tablets.".into());
     }
     #[cfg(desktop)]
@@ -213,7 +214,7 @@ pub async fn rdp_connect(
 
         let request = serde_json::json!({
             "host": host, "port": port, "username": user, "password": password,
-            "domain": domain, "width": width, "height": height,
+            "domain": domain, "width": width, "height": height, "audio": audio.unwrap_or(false),
         });
         writeln!(stdin, "{request}").and_then(|_| stdin.flush()).map_err(|e| format!("RDP component did not accept the request: {e}"))?;
 

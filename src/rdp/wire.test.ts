@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseEvent, encodeMouseMove, encodeMouseButton, encodeWheel, encodeKey, clampPoint, wheelUnits,
+  parseEvent, encodeResize, encodeClipboard, encodeMouseMove, encodeMouseButton, encodeWheel, encodeKey, clampPoint, wheelUnits,
   scancodeFor, ctrlAltDelete,
 } from "./wire";
 
@@ -9,6 +9,17 @@ describe("parseEvent", () => {
     expect(parseEvent(Uint8Array.from([1, 0x00, 0x05, 0xd0, 0x02]))).toEqual({ kind: "connected", width: 1280, height: 720 });
     expect(parseEvent(Uint8Array.from([3, ...new TextEncoder().encode("bad login")]))).toEqual({ kind: "error", message: "bad login" });
     expect(parseEvent(Uint8Array.from([4]))).toEqual({ kind: "closed", reason: "" });
+  });
+
+  it("reads audio and clipboard messages", () => {
+    const audio = parseEvent(Uint8Array.from([6, 1, 0, 255, 127]));
+    expect(audio).toEqual({ kind: "audio", pcm: Uint8Array.from([1, 0, 255, 127]) });
+    expect(parseEvent(Uint8Array.from([7, ...new TextEncoder().encode("héllo")]))).toEqual({ kind: "clipboard", text: "héllo" });
+  });
+
+  it("encodes resize and clipboard input", () => {
+    expect(encodeResize(1280, 720)).toEqual([6, 0x00, 0x05, 0xd0, 0x02]);
+    expect(encodeClipboard("hé")).toEqual([7, 3, 0, 0, 0, 0x68, 0xc3, 0xa9]);
   });
 
   it("reads a certificate question and ignores a malformed one", () => {

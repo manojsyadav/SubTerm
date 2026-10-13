@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { Monitor, KeyRound, X, AlertTriangle } from "lucide-react";
+import { Monitor, KeyRound, X, AlertTriangle, Volume2, VolumeX } from "lucide-react";
+import { PcmPlayer } from "../rdp/audio";
 import {
-  parseEvent, encodeMouseMove, encodeMouseButton, encodeWheel, encodeKey, clampPoint, wheelUnits,
+  parseEvent, encodeResize, encodeClipboard, encodeMouseMove, encodeMouseButton, encodeWheel, encodeKey, clampPoint, wheelUnits,
   scancodeFor, ctrlAltDelete,
 } from "../rdp/wire";
 
@@ -36,6 +37,11 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
   const moveRef = useRef<{ x: number; y: number } | null>(null);
   const moveTimerRef = useRef<number | null>(null);
   const errorRef = useRef<string | null>(null);
+  // Remote sound, off by switching the speaker button; remembered for every RDP session.
+  const [muted, setMuted] = useState(() => localStorage.getItem("subterm-rdp-audio") === "off");
+  const playerRef = useRef<PcmPlayer | null>(null);
+  // Last text exchanged with the remote clipboard, so the same text is not sent back and forth.
+  const lastClipRef = useRef<string | null>(null);
 
   const send = useCallback((bytes: number[]) => {
     const id = sessionRef.current;
@@ -66,6 +72,13 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
         if (ctx) ctx.putImageData(new ImageData(ev.pixels, ev.width, ev.height), ev.x, ev.y);
         break;
       }
+      case "audio":
+        playerRef.current?.push(ev.pcm);
+        break;
+      case "clipboard":
+        lastClipRef.current = ev.text;
+        navigator.clipboard?.writeText(ev.text).catch(() => { /* window not focused */ });
+        break;
       case "cert":
         setCert({ sessionId: ev.sessionId, fingerprint: ev.fingerprint, mismatch: ev.mismatch });
         break;
@@ -93,8 +106,11 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
     const height = Math.max(600, even(body?.clientHeight ?? 800));
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = handleEvent;
+    playerRef.current?.close();
+    playerRef.current = new PcmPlayer(muted);
     try {
-      sessionRef.current = await invoke<string>("rdp_connect", { id: serverId, password, width, height, onEvent: channel });
+      // Muted at connect: the server is not asked for sound at all.
+      sessionRef.current = await invoke<string>("rdp_connect", { id: serverId, password, width, height, audio: !muted, onEvent: channel });
       setPassword(""); // not needed again; don't keep it in component state
     } catch (e) {
       setMessage(String(e));
@@ -110,8 +126,36 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
 
   useEffect(() => () => {
     disconnect();
+    playerRef.current?.close();
     if (moveTimerRef.current !== null) window.clearTimeout(moveTimerRef.current);
   }, [disconnect]);
+
+  const toggleMuted = () => {
+    const next = !muted;
+    setMuted(next);
+    playerRef.current?.setMuted(next);
+    localStorage.setItem("subterm-rdp-audio", next ? "off" : "on");
+  };
+
+  // The remote desktop follows the window size (the helper waits until it settles).
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (phase !== "live" || !body || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => send(encodeResize(even(body.clientWidth), even(body.clientHeight))));
+    ro.observe(body);
+    return () => ro.disconnect();
+  }, [phase, send]);
+
+  // Text copied on this computer becomes pasteable remotely: offer it whenever the
+  // remote screen gets focus (reading the clipboard needs the window focused).
+  const offerLocalClipboard = useCallback(() => {
+    navigator.clipboard?.readText().then((text) => {
+      if (text && text !== lastClipRef.current) {
+        lastClipRef.current = text;
+        send(encodeClipboard(text));
+      }
+    }).catch(() => { /* no permission or nothing to read */ });
+  }, [send]);
 
   // ---- mouse -------------------------------------------------------------
 
@@ -196,6 +240,15 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
         <span className={`w-1.5 h-1.5 rounded-full ${phase === "live" ? "bg-emerald-400" : phase === "connecting" ? "bg-amber-400 animate-pulse" : "bg-zinc-500"}`} />
         <span className="text-zinc-500">{phase === "live" ? "Connected" : phase === "connecting" ? "Connecting…" : phase === "ended" ? "Disconnected" : "Sign in"}</span>
         <div className="flex-1" />
+        <button
+          type="button"
+          onClick={toggleMuted}
+          aria-pressed={!muted}
+          title={muted ? "Remote sound is off (applies from the next connection if it was off when connecting)" : "Mute remote sound"}
+          className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 flex items-center gap-1.5"
+        >
+          {muted ? <VolumeX size={12} /> : <Volume2 size={12} />} {muted ? "Sound off" : "Sound on"}
+        </button>
         {phase === "live" && (
           <button
             type="button"
@@ -276,6 +329,7 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
           onKeyDown={(e) => onKey(e, true)}
           onKeyUp={(e) => onKey(e, false)}
           onBlur={releaseAll}
+          onFocus={offerLocalClipboard}
           className={`outline-none ${phase === "live" ? "" : "hidden"}`}
           style={{ maxWidth: "100%", maxHeight: "100%" }}
         >

@@ -9,7 +9,7 @@ description = "RDP client helper for SubTerm. Kept as its own executable (and it
 [workspace]
 
 [dependencies]
-ironrdp = { version = "0.17", default-features = false, features = ["core", "pdu", "connector", "session", "graphics", "input"] }
+ironrdp = { version = "0.17", default-features = false, features = ["core", "pdu", "connector", "session", "graphics", "input", "svc", "dvc", "displaycontrol", "cliprdr", "rdpsnd"] }
 ironrdp-blocking = "0.10"
 sspi = { version = "0.21", features = ["network_client"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }

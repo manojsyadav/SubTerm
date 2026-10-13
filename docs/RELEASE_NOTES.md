@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(rdp)` — Embedded RDP: clipboard, sound and resize**:
+  Text copied on the remote desktop can be pasted here, and text copied here is offered to the remote side when you click into its screen. Remote sound plays through SubTerm (a **Sound on/off** button in the RDP bar, remembered). The remote desktop follows the window size shortly after you stop resizing. Screen updates are merged and sent at most about 30 times a second, which helps on slow links. The RDP helper now ships in Windows installers and is built and bundled for macOS and Linux too.
+
 - **`feat(appearance)` — Window opacity and background effect**:
   Settings > Appearance > Accessibility has **Window opacity** (30–100%), which lets the desktop show through the window and terminal background while text stays solid, and **Background effect** (Acrylic blur or Mica) on Windows 11. Defaults keep the window opaque.
 

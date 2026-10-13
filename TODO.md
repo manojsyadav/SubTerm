@@ -39,9 +39,9 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🌐 Network, Protocols & Multi-Platform
 
-- [ ] 🟢 **P3 · L** — **RDP embedded view: finish and harden**
-  - First slice is in (beta, opt-in in Settings): login, screen, keyboard, mouse, wheel, Ctrl+Alt+Del. The handshake was exercised against a local Windows RDP server (it reaches the credential check and returns the expected logon failure), but a full signed-in session — screen updates, input, disconnect — has not been verified; test it against a real host first.
-  - Still open: clipboard (`ironrdp-cliprdr`), resize on window change (display control), audio, dirty-rectangle batching for slow links, a real tab instead of a full-window view, the first macOS/Linux release build with the helper (configured in `tauri.macos.conf.json` / `tauri.linux.conf.json`, never run yet).
+- [ ] 🟡 **P2 · M** — **RDP embedded view: verify against a real signed-in session, then a real tab**
+  - Built but never seen working, because no test account was available (the handshake now reaches the credential check with every channel registered): screen and input, **clipboard** text both ways (copy on the remote side, paste here; copy here, then click into the remote screen and paste), **sound** (Sound on/off button; off at connect means the server is not asked for audio), **resize** (the remote desktop follows the window about 0.4 s after you stop resizing; the server re-activates the session), merged screen updates. Risks to look for: a sound or reactivation error ends the session instead of only that feature.
+  - Still open: a real tab instead of the full-window view (needs the session model in `DesktopApp.tsx` to hold non-SSH sessions), and the first macOS/Linux release build with the helper (configured in `tauri.macos.conf.json` / `tauri.linux.conf.json`, never run yet).
   - Why a helper program: IronRDP pins `picky`/`curve25519-dalek` pre-release versions that cannot resolve in the same lockfile as `russh`. Revisit if either side moves.
 
 - [ ] 🟢 **P3 · L** — **iOS / iPadOS: first Mac build**
