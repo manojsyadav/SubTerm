@@ -35,9 +35,10 @@ static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 
 const HELPER_NAME: &str = if cfg!(windows) { "subterm-rdp-helper.exe" } else { "subterm-rdp-helper" };
 
-/// Where to look for the helper: next to the app first (installed/portable builds),
-/// then the helper crate's own build output (development).
-fn helper_candidates() -> Vec<PathBuf> {
+/// Where to look for the helper: next to the app first (Windows installs and the
+/// portable zip), then the bundle's resource folder (macOS `Contents/Resources`,
+/// Linux `/usr/lib/SubTerm`), then the helper crate's own build output (development).
+fn helper_candidates(resource_dir: Option<PathBuf>) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -45,14 +46,17 @@ fn helper_candidates() -> Vec<PathBuf> {
             out.push(dir.join("resources").join(HELPER_NAME));
         }
     }
+    if let Some(dir) = resource_dir {
+        out.push(dir.join(HELPER_NAME));
+    }
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rdp-helper").join("target");
     out.push(dev.join("release").join(HELPER_NAME));
     out.push(dev.join("debug").join(HELPER_NAME));
     out
 }
 
-fn find_helper() -> Result<PathBuf, String> {
-    helper_candidates()
+fn find_helper(resource_dir: Option<PathBuf>) -> Result<PathBuf, String> {
+    helper_candidates(resource_dir)
         .into_iter()
         .find(|p| p.is_file())
         .ok_or_else(|| format!("The RDP component ({HELPER_NAME}) was not found next to SubTerm. Reinstall or rebuild SubTerm."))
@@ -158,6 +162,7 @@ fn send(ch: &EventChannel, kind: u8, payload: &[u8]) -> bool {
 /// with `rdp_answer_certificate`.
 #[tauri::command]
 pub async fn rdp_connect(
+    app: tauri::AppHandle,
     state: tauri::State<'_, DbState>,
     sessions: tauri::State<'_, RdpSessions>,
     id: i32,
@@ -168,7 +173,7 @@ pub async fn rdp_connect(
 ) -> Result<String, String> {
     #[cfg(mobile)]
     {
-        let _ = (state, sessions, id, password, width, height, on_event);
+        let _ = (app, state, sessions, id, password, width, height, on_event);
         return Err("Embedded RDP is not available on phones and tablets.".into());
     }
     #[cfg(desktop)]
@@ -190,7 +195,10 @@ pub async fn rdp_connect(
             return Err("Enter a user name for this server first (Edit server > Username).".into());
         }
 
-        let helper = find_helper()?;
+        let helper = {
+            use tauri::Manager as _;
+            find_helper(app.path().resource_dir().ok())?
+        };
         let mut cmd = Command::new(helper);
         cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(windows)]
@@ -399,8 +407,9 @@ mod tests {
 
     #[test]
     fn helper_lookup_checks_next_to_the_app_first() {
-        let c = helper_candidates();
-        assert!(c.len() >= 3);
+        let c = helper_candidates(Some(PathBuf::from("res")));
+        assert!(c.len() >= 4);
+        assert!(c.contains(&PathBuf::from("res").join(HELPER_NAME)));
         assert!(c.iter().all(|p| p.file_name().map(|n| n == HELPER_NAME).unwrap_or(false)));
     }
 }
