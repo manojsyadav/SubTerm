@@ -275,7 +275,8 @@ jobs:
         shell: pwsh
         run: |
           $zipName = "SubTerm-v${{ env.VERSION }}-windows-portable.zip"
-          Compress-Archive -Path "src-tauri/target/${{ matrix.rust_target }}/release/subterm.exe" -DestinationPath $zipName
+          # The RDP helper sits next to subterm.exe (built by beforeBuildCommand, see tauri.windows.conf.json).
+          Compress-Archive -Path "src-tauri/target/${{ matrix.rust_target }}/release/subterm.exe", "src-tauri/rdp-helper/target/release/subterm-rdp-helper.exe" -DestinationPath $zipName
           echo "PORTABLE_ZIP=$zipName" >> $env:GITHUB_ENV
 
       # Collect every artifact this job produced into one folder for upload.

@@ -44,7 +44,7 @@ This document tracks active development tasks, pending architectural optimizatio
 
 - [ ] 🟢 **P3 · L** — **RDP embedded view: finish and harden**
   - First slice is in (beta, opt-in in Settings): login, screen, keyboard, mouse, wheel, Ctrl+Alt+Del. The handshake was exercised against a local Windows RDP server (it reaches the credential check and returns the expected logon failure), but a full signed-in session — screen updates, input, disconnect — has not been verified; test it against a real host first.
-  - Still open: clipboard (`ironrdp-cliprdr`), resize on window change (display control), audio, dirty-rectangle batching for slow links, a real tab instead of a full-window view, shipping the helper in installer bundles (`tauri.conf.json` resources), Linux/macOS helper builds in CI.
+  - Still open: clipboard (`ironrdp-cliprdr`), resize on window change (display control), audio, dirty-rectangle batching for slow links, a real tab instead of a full-window view, shipping the helper in macOS/Linux bundles (Windows installers include it via `tauri.windows.conf.json`), Linux/macOS helper builds in CI.
   - Why a helper program: IronRDP pins `picky`/`curve25519-dalek` pre-release versions that cannot resolve in the same lockfile as `russh`. Revisit if either side moves.
 
 - [ ] 🟢 **P3 · L** — **iOS / iPadOS: first Mac build**

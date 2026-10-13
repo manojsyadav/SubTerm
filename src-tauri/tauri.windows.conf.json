@@ -1,0 +1,10 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build && npm run build:rdp-helper"
+  },
+  "bundle": {
+    "resources": {
+      "rdp-helper/target/release/subterm-rdp-helper.exe": "subterm-rdp-helper.exe"
+    }
+  }
+}
