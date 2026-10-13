@@ -8,6 +8,7 @@ const CATEGORIES: { id: string; label: string; desc: string }[] = [
   { id: "credentials", label: "Credentials and SSH keys", desc: "Saved logins and private keys" },
   { id: "commands", label: "Saved commands", desc: "Snippets and quick commands" },
   { id: "notes", label: "Notes", desc: "Library notes and runbooks" },
+  { id: "shortcuts", label: "Keyboard shortcuts", desc: "Customised shortcuts; Mac and Windows/Linux keep separate sets" },
 ];
 
 /** Per-device choice of which kinds of data take part in cloud sync. */

@@ -26,7 +26,7 @@ use zeroize::Zeroizing;
 /// (tombstone) columns. `known_hosts`, `cmd_history`, `monitor_settings`, and
 /// `schema_meta` are intentionally device-local and NOT synced.
 const SYNCED_TABLES: &[&str] = &[
-    "folders", "ssh_keys", "credentials", "servers", "commands", "notes", "monitor_configs",
+    "folders", "ssh_keys", "credentials", "servers", "commands", "notes", "monitor_configs", "shortcuts",
 ];
 
 /// User-facing groups of synced tables that can be switched off per device
@@ -40,6 +40,7 @@ pub(crate) const SYNC_CATEGORIES: &[(&str, &[&str])] = &[
     ("credentials", &["ssh_keys", "credentials"]),
     ("commands", &["commands"]),
     ("notes", &["notes"]),
+    ("shortcuts", &["shortcuts"]),
 ];
 
 const SYNC_EXCLUDED_KEY: &str = "sync_excluded";
@@ -141,6 +142,7 @@ pub(crate) fn backfill_identity_cols(table: &str) -> &'static [&'static str] {
         "servers" => &["name", "host", "port", "username"],
         "commands" => &["title", "content"],
         "notes" => &["title"],
+        "shortcuts" => &["platform", "action"],
         // monitor_configs hangs off a server; its identity is that server's.
         "monitor_configs" => &[],
         _ => &[],
@@ -328,8 +330,12 @@ pub(crate) fn create_sync_triggers(conn: &Connection) -> Result<(), String> {
         };
         // A monitor config's identity is its server's, derived — see
         // `sync_derived_uuid`. Everything else mints a fresh random id.
+        // A shortcut's identity is (platform, action), so the same binding changed on
+        // two devices merges into one row instead of becoming two.
         let new_uuid_expr = if *t == "monitor_configs" {
             "sync_derived_uuid('monitor_configs', (SELECT uuid FROM servers WHERE id = NEW.node_id))"
+        } else if *t == "shortcuts" {
+            "sync_derived_uuid('shortcuts', NEW.platform || ':' || NEW.action)"
         } else {
             "sync_new_uuid()"
         };
@@ -461,6 +467,7 @@ mod sync_trigger_tests {
              CREATE TABLE servers(id INTEGER PRIMARY KEY, name TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE commands(id INTEGER PRIMARY KEY, title TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE notes(id INTEGER PRIMARY KEY, title TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
+             CREATE TABLE shortcuts(id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT NOT NULL, action TEXT NOT NULL, combo TEXT NOT NULL, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, UNIQUE(platform, action));
              CREATE TABLE monitor_configs(node_id INTEGER PRIMARY KEY, enabled_metrics TEXT, custom_metrics TEXT, paused INTEGER NOT NULL DEFAULT 1, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);",
         ).unwrap();
         let hlc = std::sync::Arc::new(hlc::Hlc::new("testnode".into(), 0));
@@ -587,6 +594,7 @@ const ENTITIES: &[EntitySpec] = &[
     },
     EntitySpec { table: "commands", cols: &["title", "content", "edited_by"], fks: &[] },
     EntitySpec { table: "notes", cols: &["title", "body", "edited_by"], fks: &[] },
+    EntitySpec { table: "shortcuts", cols: &["platform", "action", "combo", "edited_by"], fks: &[] },
     // Must come after `servers`: its node_id is resolved from the server's uuid,
     // so the server has to already be in place when this is applied.
     //
@@ -2236,6 +2244,7 @@ mod sync_engine_tests {
              CREATE TABLE servers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, host TEXT, port INTEGER, username TEXT, password TEXT, credential_id INTEGER, folder_id INTEGER, proxy_type TEXT, proxy_host TEXT, proxy_port INTEGER, tunnels TEXT, auth_type TEXT, key_id INTEGER, autostart INTEGER, mirrors TEXT, color TEXT, notes TEXT, run_on_connect TEXT, jump_host_id INTEGER, position INTEGER NOT NULL DEFAULT 0, is_production INTEGER NOT NULL DEFAULT 0, icon TEXT DEFAULT 'server', os_info TEXT DEFAULT '', uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, protocol TEXT DEFAULT 'ssh');
              CREATE TABLE commands(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
              CREATE TABLE notes(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, body TEXT, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);
+             CREATE TABLE shortcuts(id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT NOT NULL, action TEXT NOT NULL, combo TEXT NOT NULL, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, UNIQUE(platform, action));
              CREATE TABLE monitor_configs(node_id INTEGER PRIMARY KEY, enabled_metrics TEXT, custom_metrics TEXT, paused INTEGER, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT);",
         ).unwrap();
         let hlc = std::sync::Arc::new(hlc::Hlc::new(node.into(), 0));
@@ -2681,6 +2690,32 @@ mod sync_engine_tests {
         assert!(recs.iter().any(|r| r.deleted), "delete must produce a tombstone record");
         apply_remote_records(&b, &KEY, &recs, &hb).unwrap();
         assert_eq!(b.query_row("SELECT COUNT(*) FROM servers WHERE name='s'", [], |r| r.get::<_, i64>(0)).unwrap(), 0, "delete must propagate to B");
+    }
+
+    // The same shortcut customised on two devices is ONE entity (derived uuid), so
+    // it merges last-writer-wins instead of becoming two rows; a reset propagates.
+    #[test]
+    fn shortcuts_merge_by_platform_and_action() {
+        let (a, ha) = device("A");
+        let (b, hb) = device("B");
+        a.execute("INSERT INTO shortcuts(platform, action, combo) VALUES('pc','find','Ctrl+F')", []).unwrap();
+        b.execute("INSERT INTO shortcuts(platform, action, combo) VALUES('pc','find','Ctrl+Shift+F')", []).unwrap();
+        let ua: String = a.query_row("SELECT uuid FROM shortcuts", [], |r| r.get(0)).unwrap();
+        let ub: String = b.query_row("SELECT uuid FROM shortcuts", [], |r| r.get(0)).unwrap();
+        assert_eq!(ua, ub, "same platform+action must share an identity");
+
+        // B edited last, so after a full exchange both sides hold B's combo.
+        apply_remote_records(&a, &KEY, &collect_local_records(&b, &KEY, "").unwrap(), &ha).unwrap();
+        apply_remote_records(&b, &KEY, &collect_local_records(&a, &KEY, "").unwrap(), &hb).unwrap();
+        for conn in [&a, &b] {
+            assert_eq!(conn.query_row("SELECT COUNT(*) FROM shortcuts", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+            assert_eq!(conn.query_row("SELECT combo FROM shortcuts", [], |r| r.get::<_, String>(0)).unwrap(), "Ctrl+Shift+F");
+        }
+
+        // Resetting on A removes it on B.
+        a.execute("DELETE FROM shortcuts WHERE action='find'", []).unwrap();
+        apply_remote_records(&b, &KEY, &collect_local_records(&a, &KEY, "").unwrap(), &hb).unwrap();
+        assert_eq!(b.query_row("SELECT COUNT(*) FROM shortcuts", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
     }
 
     // One corrupt / hostile record from a broken (or compromised) server must be

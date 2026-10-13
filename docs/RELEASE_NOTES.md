@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(sync)` — Keyboard shortcuts sync**:
+  Customised shortcuts are now stored in the profile vault and take part in Cloud Sync (a new **Keyboard shortcuts** category that can be switched off per device). Mac and Windows/Linux keep separate sets because Cmd and Ctrl differ. The first unlock on a device uploads shortcuts customised there before; after that the profile's synced set is used, so shortcuts now follow the profile.
+
 - **`feat(recording)` — Animated SVG export and always-record servers**:
   The recording player has **Export SVG**: an animated SVG with colours that plays in browsers and on GitHub, for runbooks (it follows the Skip idle setting). A terminal's right-click menu has **Always record this server**: every session to that server records its output (never keystrokes) and is saved without a dialog to the `recordings` folder in the app data directory when the tab closes.
 

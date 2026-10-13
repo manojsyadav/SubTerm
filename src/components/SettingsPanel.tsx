@@ -4,6 +4,7 @@ import { SettingsFileLinkTypes } from "./SettingsFileLinkTypes";
 import { SettingsRdpMode } from "./SettingsRdpMode";
 import { FEATURES, FEATURE_FLAGS_CHANGED_EVENT, isFeatureEnabled, setFeatureEnabled, type FeatureKey } from "../featureFlags";
 import { buildBackup, parseBackup, applyBackup } from "../settingsBackup";
+import { pushSyncedShortcuts } from "../shortcuts/useShortcutsStore";
 import { saveTextFile } from "../terminal/saveFile";
 import { isSettingChanged, resetSetting, pageHasChanges, resetPage, resetAllSettings, type ResettablePage } from "../settingsDefaults";
 import { useState, useEffect, createContext, useContext, type ComponentProps } from "react";
@@ -338,6 +339,7 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
     const n = Object.keys(parsed.backup.prefs).length;
     if (!window.confirm(`Replace your current preferences with the ${n} saved in this file? SubTerm will reload.`)) return;
     const { applied, skipped } = applyBackup(parsed.backup);
+    await pushSyncedShortcuts(); // otherwise the next vault pull would undo imported shortcuts
     setBackupMsg({ text: `Imported ${applied} preference${applied === 1 ? "" : "s"}${skipped ? `, skipped ${skipped}` : ""}. Reloading...`, tone: "ok" });
     window.setTimeout(() => window.location.reload(), 600);
   };

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { Server, Credential, SshKey, Folder, SavedCommand, Note } from "../types";
 import type { ConfirmOptions } from "../ui/confirm";
+import { pullSyncedShortcuts } from "../shortcuts/useShortcutsStore";
 
 const appWindow = getCurrentWindow();
 
@@ -95,8 +96,10 @@ export function useProfileVault(options: UseProfileVaultOptions) {
       refreshFolders(),
       refreshCommands(),
       refreshNotes(),
+      pullSyncedShortcuts(localStorage.getItem("subterm_last_workspace") || "default")
+        .catch((e) => addLog(`SYNC_SHORTCUTS: ${e}`, "error")),
     ]);
-  }, [refreshServers, refreshCredentials, refreshSshKeys, refreshFolders, refreshCommands, refreshNotes]);
+  }, [addLog, refreshServers, refreshCredentials, refreshSshKeys, refreshFolders, refreshCommands, refreshNotes]);
 
   // Window size restoration on init
   useEffect(() => {

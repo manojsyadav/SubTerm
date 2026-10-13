@@ -1105,6 +1105,14 @@ pub(crate) async fn setup_master_db_inner(
 
     conn.execute("PRAGMA foreign_keys = ON", []).map_err(|e| format!("[DATABASE] PRAGMA_FAILED: {}", e))?;
 
+    // Customised keyboard shortcuts, synced (see commands::servers::set_synced_shortcuts).
+    // Created for new and existing vaults alike, before the sync triggers below.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT NOT NULL, action TEXT NOT NULL, combo TEXT NOT NULL, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, UNIQUE(platform, action))",
+        [],
+    )
+    .map_err(|e| format!("[DATABASE] SHORTCUTS_MIGRATION_FAILED: {}", e))?;
+
     // ---- Per-entity sync instrumentation (schema v6) ----
     // A per-profile Hybrid Logical Clock backs the `hlc_now()` SQL function so
     // every row mutation auto-stamps `updated_at`. Seed the clock past the
@@ -1117,7 +1125,7 @@ pub(crate) async fn setup_master_db_inner(
                SELECT updated_at FROM servers UNION ALL SELECT updated_at FROM credentials
                UNION ALL SELECT updated_at FROM ssh_keys UNION ALL SELECT updated_at FROM folders
                UNION ALL SELECT updated_at FROM commands UNION ALL SELECT updated_at FROM notes
-               UNION ALL SELECT updated_at FROM monitor_configs)",
+               UNION ALL SELECT updated_at FROM monitor_configs UNION ALL SELECT updated_at FROM shortcuts)",
             [],
             |r| r.get::<_, String>(0),
         )

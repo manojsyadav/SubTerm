@@ -10,7 +10,7 @@ export const BACKUP_APP = "subterm-preferences";
 export const BACKUP_VERSION = 1;
 
 const INCLUDE = /^(subterm|submarine)[-_]/;
-const EXCLUDE = /bio|always-record|quick-history|last-session|last_workspace|quick-access-servers|token|secret|password|passphrase|auth|credential|private/i;
+const EXCLUDE = /bio|always-record|shortcuts-imported|quick-history|last-session|last_workspace|quick-access-servers|token|secret|password|passphrase|auth|credential|private/i;
 const MAX_VALUE_CHARS = 200_000;
 
 export interface PreferencesBackup {

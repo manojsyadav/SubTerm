@@ -1219,6 +1219,55 @@ pub async fn cmd_history_clear(state: tauri::State<'_, DbState>) -> Result<(), S
 // is done client-side over the returned list so the user can match against
 // title and body in one go without us pushing a LIKE query through SQLite.
 
+/// Customised shortcuts for one platform family ("mac" or "pc": Cmd and Ctrl differ).
+#[tauri::command]
+pub async fn get_synced_shortcuts(state: tauri::State<'_, DbState>, platform: String) -> Result<std::collections::HashMap<String, String>, String> {
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    read_shortcuts(conn, &platform).map_err(|e| format!("[DATABASE] SHORTCUTS_READ_FAILED: {}", e))
+}
+
+fn read_shortcuts(conn: &rusqlite::Connection, platform: &str) -> rusqlite::Result<std::collections::HashMap<String, String>> {
+    let mut stmt = conn.prepare("SELECT action, combo FROM shortcuts WHERE platform=?1 AND deleted=0")?;
+    let rows = stmt.query_map([platform], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    rows.collect()
+}
+
+/// Make the platform's customised shortcuts exactly `map`. Unchanged rows are left
+/// alone so their sync stamp does not move; removed ones become sync tombstones.
+fn write_shortcuts(conn: &rusqlite::Connection, platform: &str, map: &std::collections::HashMap<String, String>) -> rusqlite::Result<bool> {
+    let current = read_shortcuts(conn, platform)?;
+    let mut changed = false;
+    for action in current.keys().filter(|a| !map.contains_key(*a)) {
+        conn.execute("DELETE FROM shortcuts WHERE platform=?1 AND action=?2", rusqlite::params![platform, action])?;
+        changed = true;
+    }
+    for (action, combo) in map {
+        if current.get(action) == Some(combo) {
+            continue;
+        }
+        conn.execute(
+            "INSERT INTO shortcuts (platform, action, combo) VALUES (?1, ?2, ?3)
+             ON CONFLICT(platform, action) DO UPDATE SET combo=excluded.combo, deleted=0",
+            rusqlite::params![platform, action, combo],
+        )?;
+        changed = true;
+    }
+    Ok(changed)
+}
+
+#[tauri::command]
+pub async fn set_synced_shortcuts(state: tauri::State<'_, DbState>, platform: String, map: std::collections::HashMap<String, String>) -> Result<(), String> {
+    let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
+    let conn = conn_guard.as_ref().ok_or("[STATE] DATABASE_NOT_INITIALIZED")?;
+    let changed = write_shortcuts(conn, &platform, &map).map_err(|e| format!("[DATABASE] SHORTCUTS_WRITE_FAILED: {}", e))?;
+    drop(conn_guard);
+    if changed {
+        save_vault_internal(&state)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn add_note(state: tauri::State<'_, DbState>, title: String, body: String) -> Result<(), String> {
     let conn_guard = state.conn.lock().map_err(|_| "[STATE] LOCK_FAILED")?;
@@ -1509,5 +1558,25 @@ mod history_prune_tests {
         let c = db(&[10, 20, 30, 40]);
         prune_history(&c, 1000, Some(30)).unwrap();
         assert_eq!(count(&c), 2);
+    }
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::{read_shortcuts, write_shortcuts};
+    use std::collections::HashMap;
+
+    #[test]
+    fn writes_only_changes_and_keeps_platforms_apart() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT NOT NULL, action TEXT NOT NULL, combo TEXT NOT NULL, uuid TEXT, updated_at TEXT, deleted INTEGER NOT NULL DEFAULT 0, edited_by TEXT, UNIQUE(platform, action));").unwrap();
+        let m = |pairs: &[(&str, &str)]| pairs.iter().map(|(a, c)| (a.to_string(), c.to_string())).collect::<HashMap<_, _>>();
+
+        assert!(write_shortcuts(&conn, "pc", &m(&[("find", "Ctrl+F"), ("copy", "Ctrl+C")])).unwrap());
+        assert!(write_shortcuts(&conn, "mac", &m(&[("find", "Cmd+F")])).unwrap());
+        assert!(!write_shortcuts(&conn, "pc", &m(&[("find", "Ctrl+F"), ("copy", "Ctrl+C")])).unwrap(), "no-op write reports no change");
+        assert!(write_shortcuts(&conn, "pc", &m(&[("find", "Ctrl+Shift+F")])).unwrap());
+        assert_eq!(read_shortcuts(&conn, "pc").unwrap(), m(&[("find", "Ctrl+Shift+F")]));
+        assert_eq!(read_shortcuts(&conn, "mac").unwrap(), m(&[("find", "Cmd+F")]));
     }
 }
