@@ -9,6 +9,9 @@
 - **`feat(terminal)` — Fill the saved password at a sudo prompt**:
   When a server asks `[sudo] password for …` in a session that logged in with a saved password, a bar offers **Fill password**. Before sending, SubTerm types `x` + Backspace and refuses if anything echoes back, so the password only goes to a prompt that hides input (the right-click **Paste saved password** uses the same check). The bar closes when you type or the prompt goes away. Off switch: Settings > Features > Terminal > Offer saved password at sudo prompts.
 
+- **`feat(nav)` — Pick a shell from the sidebar**:
+  Right-click **Local** in the sidebar to open PowerShell, CMD, Git Bash, WSL or any other installed shell; a plain click still opens the default one.
+
 - **`feat(sftp)` — Side-by-side SFTP page**:
   The full-width SFTP page opens Local and Remote side by side, WinSCP style, with drag-and-drop between them. Split/Tabs still toggles, and the full-width page remembers its own choice. The side panel and phones keep the stacked layout.
 

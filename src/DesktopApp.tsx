@@ -1981,6 +1981,8 @@ function DesktopApp() {
           setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else if (tab === 'network') setIsNetworkToolsOpen(true); else setActiveView(tab); }}
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
+          localShells={availableShells}
+          onOpenLocalShell={(id) => openLocalTerminal(id, false)}
           isMobile={isMobile}
           isUnlocked={isUnlocked}
           onUnlock={() => setIsUnlockModalOpen(true)}

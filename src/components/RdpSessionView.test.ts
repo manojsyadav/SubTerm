@@ -69,6 +69,19 @@ describe("RdpSessionView", () => {
     expect(text()).toContain("Connecting");
   });
 
+  it("asks before trusting a new certificate and sends the answer", async () => {
+    const ch = await connect();
+    invokeMock.mockResolvedValue(undefined);
+    const ask = new TextEncoder().encode(JSON.stringify({ sessionId: "rdp-7-1", fingerprint: "SHA256:xyz", mismatch: false }));
+    act(() => ch.onmessage!(Uint8Array.from([5, ...ask]).buffer));
+    expect(text()).toContain("First connection to win-1");
+    expect(text()).toContain("SHA256:xyz");
+    const trust = [...host.querySelectorAll("button")].find((b) => b.textContent === "Trust and connect")!;
+    act(() => trust.click());
+    expect(invokeMock).toHaveBeenCalledWith("rdp_answer_certificate", { sessionId: "rdp-7-1", trust: true });
+    expect(text()).not.toContain("SHA256:xyz");
+  });
+
   it("goes live on the connected event and paints screen updates", async () => {
     const ch = await connect();
     act(() => ch.onmessage!(bytes(1, 0x00, 0x05, 0xd0, 0x02))); // 1280x720

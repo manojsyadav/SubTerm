@@ -33,6 +33,9 @@ interface SidebarProps {
   showRdp?: boolean;
   /** Network Tools opens a dialog rather than a page, and is hidden when its feature is off. */
   showNetworkTools?: boolean;
+  /** Installed local shells, offered on right-click of Local (desktop rail). */
+  localShells?: { id: string; name: string }[];
+  onOpenLocalShell?: (shellId: string) => void;
 }
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -53,7 +56,10 @@ export const Sidebar = ({
   enableMonitoring = true,
   showRdp = true,
   showNetworkTools = true,
+  localShells = [],
+  onOpenLocalShell,
 }: SidebarProps) => {
+  const [shellMenu, setShellMenu] = useState<{ x: number; y: number } | null>(null);
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
   const [alertSummary, setAlertSummary] = useState<string | null>(null);
@@ -259,12 +265,18 @@ export const Sidebar = ({
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
+            onContextMenu={item.id === 'local' && onOpenLocalShell && localShells.length > 0 ? (e) => {
+              e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              setShellMenu({ x: r.right + 6, y: r.top });
+            } : undefined}
             className={`p-2.5 rounded-xl transition-all duration-300 relative group flex items-center justify-center ${
               activeTab === item.id
                 ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
                 : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
             }`}
-            title={(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && alertSummary ? `${item.label} · ${alertSummary}` : item.label}
+            title={(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && alertSummary ? `${item.label} · ${alertSummary}`
+              : item.id === 'local' && onOpenLocalShell && localShells.length > 0 ? 'Local (right-click to pick a shell)' : item.label}
           >
             <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
             {/* Live Health Pulse Badge */}
@@ -290,6 +302,34 @@ export const Sidebar = ({
           </button>
         ))}
       </nav>
+
+      {shellMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShellMenu(null)} onContextMenu={(e) => { e.preventDefault(); setShellMenu(null); }} />
+          <div
+            role="menu"
+            aria-label="Open a local shell"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShellMenu(null); }}
+            style={{ left: shellMenu.x, top: shellMenu.y }}
+            className="fixed z-50 w-56 py-1.5 bg-[#141418] border border-white/10 rounded-lg shadow-2xl text-[11px]"
+          >
+            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 border-b border-white/5 mb-1">Open local shell</div>
+            {localShells.map((sh, i) => (
+              <button
+                key={sh.id}
+                type="button"
+                role="menuitem"
+                autoFocus={i === 0}
+                onClick={() => { setShellMenu(null); onOpenLocalShell?.(sh.id); }}
+                className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 focus:bg-emerald-500/10 outline-none text-zinc-300 hover:text-emerald-300 flex items-center justify-between"
+              >
+                <span className="font-medium truncate">{sh.name}</span>
+                <span className="text-[10px] text-zinc-500 font-mono shrink-0 ml-2">{sh.id}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Bottom cluster: lock, switch workspace, and settings */}
       <div className="mt-auto w-full px-2 flex flex-col gap-2">
