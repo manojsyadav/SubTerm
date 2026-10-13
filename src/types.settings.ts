@@ -40,6 +40,8 @@ export interface AppSettings {
   windowOpacity: number;
   /** Windows backdrop behind a translucent window: "none", "acrylic" or "mica". */
   windowBlur: string;
+  /** Where open sessions are listed: "rail" (under the sidebar icons) or "panel" (a wider list with names). */
+  sessionListLayout: string;
   /** Notify when a command that took at least this many seconds finishes in the background; 0 = off. */
   notifyLongCommandSec: number;
   /** Notify when an SSH session drops while the window is in the background. */

@@ -140,6 +140,7 @@ function DesktopApp() {
     highContrast: normalizeHighContrast(localStorage.getItem('subterm-high-contrast')) as string,
     windowOpacity: clampOpacity(localStorage.getItem(OPACITY_KEY) ?? 100),
     windowBlur: normalizeBlur(localStorage.getItem(BLUR_KEY)) as string,
+    sessionListLayout: localStorage.getItem('subterm-session-list') === 'panel' ? 'panel' : 'rail',
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -743,6 +744,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-high-contrast', appSettings.highContrast || 'system');
     localStorage.setItem(OPACITY_KEY, String(clampOpacity(appSettings.windowOpacity)));
     localStorage.setItem(BLUR_KEY, normalizeBlur(appSettings.windowBlur));
+    localStorage.setItem('subterm-session-list', appSettings.sessionListLayout === 'panel' ? 'panel' : 'rail');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));
@@ -982,6 +984,7 @@ function DesktopApp() {
       />
     );
   };
+  const sessionPanel = appSettings.sessionListLayout === 'panel' && !isMobile;
   // Which sidebar item lights up for the session on screen.
   const activeSessionKind = (() => {
     const sess = sessions.find((x) => x.id === activeView);
@@ -1061,12 +1064,12 @@ function DesktopApp() {
       <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
         <Sidebar
           activeTab={activeSessionKind ?? activeView}
-          renderUnder={railList}
+          renderUnder={sessionPanel ? undefined : railList}
           setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else if (tab === 'network') setIsNetworkToolsOpen(true); else setActiveView(tab); }}
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
           localShells={availableShells}
-          localTabs={localTabs}
+          localTabs={sessionPanel ? [] : localTabs}
           activeLocalTab={localSession && activeView === localSession.id ? sessionActiveTerm[localSession.id] ?? null : null}
           onSelectLocalTab={(id) => {
             if (!localSession) return;
@@ -1086,6 +1089,67 @@ function DesktopApp() {
           workspaceIcon={profileIcon}
           enableMonitoring={appSettings.enableMonitoring}
         />
+
+        {sessionPanel && (
+          <aside aria-label="Open sessions" className="w-56 shrink-0 h-full overflow-y-auto custom-scrollbar border-r border-white/5 bg-[#0d0d10] p-2 flex flex-col gap-3">
+            {sessions.length === 0 && <p className="text-[11px] text-zinc-600 px-1 pt-1">No open sessions.</p>}
+            {localSession && localTabs.length > 0 && (
+              <section>
+                <h3 className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Local</h3>
+                <div className="flex flex-col gap-0.5">
+                  {localTabs.map((t) => {
+                    const active = activeView === localSession.id && sessionActiveTerm[localSession.id] === t.id;
+                    return (
+                      <div key={t.id} className="relative group/sess">
+                        <button
+                          type="button"
+                          aria-current={active ? 'page' : undefined}
+                          onClick={() => {
+                            setActiveView(localSession.id);
+                            window.dispatchEvent(new CustomEvent(`submarine-focus-pane-${localSession.id}`, { detail: { id: t.id } }));
+                          }}
+                          className={`w-full h-7 px-2 rounded-lg border text-left text-[12px] truncate ${active ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border-transparent'}`}
+                        >{t.title}</button>
+                        {localTabs.length > 1 && (
+                          <button
+                            type="button"
+                            aria-label={`Close ${t.title}`}
+                            onClick={() => window.dispatchEvent(new CustomEvent(`subterm-close-terminal-${localSession.id}`, { detail: { id: t.id } }))}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/sess:flex focus:flex w-4 h-4 items-center justify-center rounded-full bg-zinc-800 border border-white/10 text-zinc-400 hover:text-red-400"
+                          ><X size={10} /></button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+            {(['nodes', 'sftp', 'rdp'] as const).map((itemId) => {
+              const kind = itemId === 'nodes' ? 'ssh' : itemId;
+              const list = sessions.filter((x) => sessionKind(x) === kind);
+              if (list.length === 0) return null;
+              return (
+                <section key={itemId}>
+                  <h3 className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{itemId === 'nodes' ? 'Servers' : itemId === 'sftp' ? 'SFTP' : 'Remote Desktop'}</h3>
+                  <SessionList
+                    variant="panel"
+                    label={`Open ${itemId === 'nodes' ? 'servers' : itemId === 'sftp' ? 'SFTP sessions' : 'remote desktops'}`}
+                    sessions={list}
+                    meta={sessionMeta.meta}
+                    activeView={activeView}
+                    mergedSessionIds={mergedSessionIds}
+                    statuses={sessionStatuses}
+                    nameOf={nameOf}
+                    onSelect={selectSession}
+                    onMenu={(sid, x, y) => setTabMenu({ x, y, sessionId: sid })}
+                    onClose={(sid) => { void closeSessionAsked(sid); }}
+                    onToggleGroup={sessionMeta.toggleCollapsed}
+                  />
+                </section>
+              );
+            })}
+          </aside>
+        )}
 
         <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent relative">
           {!isUnlocked && (activeView === "nodes" || activeView === "vault" || activeView === "library" || activeView === "monitor" || activeView === "sftp" || activeView === "rdp") ? (

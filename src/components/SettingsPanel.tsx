@@ -239,6 +239,18 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
           </select>
         </Row>
       )}
+      {!IS_MOBILE_OS && (
+        <Row id="session-list" label="Open sessions list" desc="Where open sessions (servers, SFTP, remote desktops and local shells) are listed. Under the icons keeps the sidebar narrow; the panel shows full names, groups and pins.">
+          <select
+            value={settings.sessionListLayout || "rail"}
+            onChange={(e) => setSettings({ ...settings, sessionListLayout: e.target.value })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            <option value="rail">Under the sidebar icons (default)</option>
+            <option value="panel">Panel beside the sidebar</option>
+          </select>
+        </Row>
+      )}
       <Row id="high-contrast" label="High contrast" desc="Brighter secondary text, stronger borders and a visible keyboard focus ring. Terminal colours come from the terminal theme. System follows your operating system's contrast setting.">
         <select
           value={settings.highContrast || "system"}
@@ -1337,6 +1349,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "ui-zoom-row", page: "appearance", label: "Zoom level", keywords: "zoom scale size dpi" },
   { id: "accessibility", page: "appearance", label: "Accessibility", keywords: "accessibility motion animation reduce" },
   { id: "reduce-motion", page: "appearance", label: "Reduce motion", keywords: "reduce motion animation transition accessibility vestibular" },
+  { id: "session-list", page: "appearance", label: "Open sessions list", keywords: "sessions tabs list sidebar panel rail servers pinned groups" },
   { id: "window-opacity", page: "appearance", label: "Window opacity", keywords: "opacity transparency transparent see through window background" },
   { id: "window-blur", page: "appearance", label: "Background effect", keywords: "blur acrylic mica backdrop transparency window" },
   { id: "high-contrast", page: "appearance", label: "High contrast", keywords: "high contrast accessibility low vision readability borders focus" },
