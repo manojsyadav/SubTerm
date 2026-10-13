@@ -2361,6 +2361,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                   terminalId={activeTab}
                   onRevealTerminal={() => setActiveTool(null)}
                   profile={profile}
+                  wide={toolFull && !isCompact}
                 />
               </div>
             </div>

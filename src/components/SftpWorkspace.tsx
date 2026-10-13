@@ -3,7 +3,7 @@ import { useEffect, useCallback, useMemo, useRef, useState, forwardRef, useImper
 import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { File as FileIcon, Folder, FolderUp, Rows, LayoutPanelTop, ArrowLeftRight } from "lucide-react";
+import { File as FileIcon, Folder, FolderUp, Rows, Columns, LayoutPanelTop, ArrowLeftRight } from "lucide-react";
 import FilePanel, { ActiveDrag, FilePanelHandle } from "./FilePanel";
 import type { DiffFileRef } from "./FileDiffModal";
 import { useFeatureFlag } from "../featureFlags";
@@ -46,6 +46,8 @@ interface SftpWorkspaceProps {
   onRevealTerminal?: () => void;
   /** Unlocked profile. Server ids restart in every profile's DB, so per-server storage keys need it. */
   profile?: string;
+  /** Full-width page: split puts Local and Remote side by side (WinSCP style) and is the default. */
+  wide?: boolean;
 }
 
 // Profile names hold only [A-Za-z0-9_-], so ":" keeps the parts apart.
@@ -96,7 +98,7 @@ DragGhost.displayName = "DragGhost";
 
 const RemoteDualView = lazy(() => import("./RemoteDualView"));
 
-const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [], terminalId, onRevealTerminal, profile }: SftpWorkspaceProps) => {
+const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [], terminalId, onRevealTerminal, profile, wide = false }: SftpWorkspaceProps) => {
   // Active sub-tab. Files is the default (the common workflow); Mirror is
   // for the per-server one-way replication setup.
   const [view, setView] = useState<SftpView>("files");
@@ -113,15 +115,20 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
   // FilePanel into 5-6 rows. "split" stays available for users who want
   // simultaneous Local+Remote visibility (drag-drop still works there).
   // Persisted globally (not per-session) — pure layout preference.
-  const [layout, setLayout] = useState<FilesLayout>(() => {
+  // The full-width page keeps its own preference, defaulting to side-by-side split.
+  const layoutKey = wide ? "submarine-sftp-layout-wide" : "submarine-sftp-layout";
+  const readLayout = (): FilesLayout => {
     try {
-      const v = localStorage.getItem("submarine-sftp-layout");
-      return v === "split" ? "split" : "tabs";
-    } catch { return "tabs"; }
-  });
+      const v = localStorage.getItem(layoutKey);
+      return v === "split" || v === "tabs" ? v : wide ? "split" : "tabs";
+    } catch { return wide ? "split" : "tabs"; }
+  };
+  const [layout, setLayout] = useState<FilesLayout>(readLayout);
+  useEffect(() => { setLayout(readLayout()); }, [layoutKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sideBySide = wide && layout === "split";
   const setLayoutPersisted = (l: FilesLayout) => {
     setLayout(l);
-    try { localStorage.setItem("submarine-sftp-layout", l); } catch { /* quota — ignore */ }
+    try { localStorage.setItem(layoutKey, l); } catch { /* quota — ignore */ }
   };
   // Active side in tabs mode. We persist it per (session) so the user
   // returns to the side they were last using, not always Local.
@@ -473,6 +480,11 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
                 <Folder size={11} /> Remote
               </button>
             </div>
+          ) : sideBySide ? (
+            <div className="flex-1 grid grid-cols-2 text-[10px] font-bold uppercase tracking-wider">
+              <div className="flex items-center justify-center gap-1.5 text-emerald-300 border-r border-white/10"><Folder size={11} /> Local</div>
+              <div className="flex items-center justify-center gap-1.5 text-sky-300"><Folder size={11} /> Remote</div>
+            </div>
           ) : (
             <div className="flex-1 flex items-center px-3 text-[9.5px] font-bold uppercase tracking-widest text-zinc-500">
               Local + Remote
@@ -480,11 +492,11 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
           )}
           <button
             onClick={() => setLayoutPersisted(layout === "tabs" ? "split" : "tabs")}
-            title={layout === "tabs" ? "Show both panels stacked (drag-drop between them)" : "Switch to tabbed view (one panel at full height)"}
+            title={layout === "tabs" ? `Show both panels ${wide ? "side by side" : "stacked"} (drag-drop between them)` : "Switch to tabbed view (one panel at a time)"}
             className="px-3 border-l border-white/5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:bg-white/5 hover:text-white flex items-center gap-1.5 transition-all shrink-0"
           >
             {layout === "tabs"
-              ? <><Rows size={11} /> Split</>
+              ? <>{wide ? <Columns size={11} /> : <Rows size={11} />} Split</>
               : <><LayoutPanelTop size={11} /> Tabs</>
             }
           </button>
@@ -494,9 +506,10 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             Local is the active side. Hidden via CSS (not unmounted) when
             on the inactive tab so its directory and provider state
             survive a side-swap. */}
+        <div className={`flex-1 min-h-0 flex ${sideBySide ? "flex-row" : "flex-col"}`}>
         <div className={
           layout === "split"
-            ? "flex-1 min-h-0 border-b border-white/10"
+            ? `flex-1 min-h-0 min-w-0 ${sideBySide ? "border-r" : "border-b"} border-white/10`
             : activeSide === "local" ? "flex-1 min-h-0" : "hidden"
         }>
           <FilePanel
@@ -519,7 +532,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
         </div>
         <div className={
           layout === "split"
-            ? "flex-1 min-h-0"
+            ? "flex-1 min-h-0 min-w-0"
             : activeSide === "remote" ? "flex-1 min-h-0" : "hidden"
         }>
           <FilePanel
@@ -537,6 +550,7 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
             onRevealTerminal={onRevealTerminal}
             onCompareWithOpposite={compareEnabled ? compareFromRemote : undefined}
           />
+        </div>
         </div>
       </div>
 
