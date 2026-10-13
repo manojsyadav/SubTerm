@@ -226,6 +226,8 @@ const TerminalView = ({
   // Small tail of recent remote OUTPUT, kept only to detect no-echo password
   // prompts (see looksLikePasswordPrompt) — never persisted or displayed.
   const recentOutputRef = useRef<string>("");
+  // One streaming decoder per terminal, so a UTF-8 character split across two chunks still decodes.
+  const outputDecoderRef = useRef(new TextDecoder());
   // Track terminal's current working directory (via OSC 7 or shell prompt parsing)
   const currentCwdRef = useRef<string>("");
   useEffect(() => () => forgetTerminalCwd(terminalId), [terminalId]);
@@ -1584,7 +1586,7 @@ const TerminalView = ({
       // Keep a short tail of decoded output so command-history capture can
       // recognize a no-echo password prompt and skip the typed secret.
       try {
-        const txt = new TextDecoder().decode(data);
+        const txt = outputDecoderRef.current.decode(data, { stream: true });
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
         if (probeOutputRef.current !== null) probeOutputRef.current += txt;

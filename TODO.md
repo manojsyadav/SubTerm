@@ -83,7 +83,6 @@ This document tracks active development tasks, pending architectural optimizatio
     - Sudo-elevated SFTP file save to a root-owned path, with and without a saved session password.
 
 - [ ] 🟡 **P2 · M** — **Embedded RDP accepts any TLS certificate** (`rdp-helper/src/main.rs:267-317`). On a hostile network the NTLM response can be captured. Pin `server_public_key` on first use and reuse the fingerprint prompt.
-- [ ] 🟢 **P3 · S** — **Trigger/prompt detection decodes each chunk without `{stream:true}`** (`TerminalView.tsx:1571`), so a split multibyte character becomes U+FFFD. One decoder per terminal, as `recorder.ts` does.
 
 ---
 
