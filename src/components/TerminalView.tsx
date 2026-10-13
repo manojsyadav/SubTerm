@@ -25,24 +25,10 @@ import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
 import { notifyDesktop, shouldNotifyLongCommand } from '../util/desktopNotify';
 import { playTerminalBellChime } from '../terminal/bell';
+import { looksLikePasswordPrompt, looksLikeSudoPrompt } from '../terminal/passwordPrompt';
 import { compileTriggers, getTerminalTriggers, matchTriggers, TRIGGERS_CHANGED_EVENT } from '../terminal/triggers';
 
 const DESTRUCTIVE_REGEX = /\b(rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|-[a-zA-Z]*f[a-zA-Z]*r)|mkfs|dd\s+if=.*of=|drop\s+(database|table)|shutdown|reboot|systemctl\s+(stop|disable|restart)|docker\s+rm\s+-f|docker\s+system\s+prune|kubeadm\s+reset|kubectl\s+delete\s+(ns|node|pod\s+--all)|:\(\)\s*\{\s*:\|:&\s*\};:)\b/i;
-
-// Does the recent remote OUTPUT look like a no-echo password / passphrase
-// prompt? Used to skip command-history capture so typed secrets (sudo, su,
-// mysql -p, ssh/gpg passphrase) aren't persisted into searchable history. At a
-// no-echo prompt the output still ENDS with the prompt text because the user's
-// keystrokes were never echoed back. We strip ANSI colour/OSC sequences first
-// and only match when the prompt is the trailing content.
-const looksLikePasswordPrompt = (out: string): boolean => {
-  const clean = out
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC …BEL/ST
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")          // CSI …final
-    .replace(/[\r\n]+/g, "\n");
-  const tail = clean.slice(-160);
-  return /(?:password|passphrase)\b[^:\n]*:\s*$/i.test(tail);
-};
 
 // Shared search options — highlight all matches in yellow, the active
 // match in orange. `decorations` uses the marker overlay so the highlight
@@ -612,6 +598,20 @@ const TerminalView = ({
     xtermRef.current?.selectAll();
   };
 
+  // Sudo prompt seen on a session with a saved password: offer to fill it.
+  const [sudoOffer, setSudoOffer] = useState(false);
+  const sudoOfferRef = useRef(false);
+  const showSudoOffer = (on: boolean) => {
+    if (sudoOfferRef.current === on) return;
+    sudoOfferRef.current = on;
+    setSudoOffer(on);
+  };
+  const fillSudoPassword = () => {
+    showSudoOffer(false);
+    void handlePasteSavedPassword();
+    xtermRef.current?.focus();
+  };
+
   const handlePasteSavedPassword = async () => {
     try {
       const injected = await invoke<boolean>('write_saved_password', { sessionId, terminalId });
@@ -1100,6 +1100,8 @@ const TerminalView = ({
     // forwarded verbatim because we can't sensibly "Ctrl" a phrase.
     const onDataDisposable = term.onData((data) => {
       if (disabledRef.current) return;
+      // Typing at the prompt means the user answers it themselves.
+      showSudoOffer(false);
       const mods = modifiersRef.current;
       const hasMod = mods.ctrl !== "off" || mods.alt !== "off";
       let bytes: number[];
@@ -1572,6 +1574,11 @@ const TerminalView = ({
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
         if (sshForegroundRef.current && SSH_ENDED_RE.test(txt)) sshForegroundRef.current = false;
+        if (!isLocal && !sudoOfferRef.current && looksLikeSudoPrompt(recentOutputRef.current)) {
+          invoke<boolean>('has_saved_password', { sessionId })
+            .then((has) => { if (has && looksLikeSudoPrompt(recentOutputRef.current)) showSudoOffer(true); })
+            .catch(() => {});
+        }
 
         // Best-effort prompt CWD detection (e.g. user@hostname:path$ or user@hostname:path#)
         // ANSI colours are stripped first: stock Debian/Ubuntu prompts are coloured, which hid the path.
@@ -2040,6 +2047,25 @@ const TerminalView = ({
           onToggleModifier={toggleModifier}
           onSpecialKey={sendSpecialKey}
         />
+      )}
+      {sudoOffer && (
+        <div className="absolute bottom-3 left-3 right-3 sm:right-auto z-20 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-white/10 shadow-xl text-[11px] font-sans text-zinc-200">
+          <span>sudo is asking for a password. Fill in the saved password for this server?</span>
+          <button
+            type="button"
+            onClick={fillSudoPassword}
+            className="px-2 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary font-bold hover:bg-primary/30"
+          >
+            Fill password
+          </button>
+          <button
+            type="button"
+            onClick={() => { showSudoOffer(false); xtermRef.current?.focus(); }}
+            className="px-2 py-0.5 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
       {sshOffer && (
         <div className="absolute bottom-3 left-3 right-3 sm:right-auto z-20 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-white/10 shadow-xl text-[11px] font-sans text-zinc-200">

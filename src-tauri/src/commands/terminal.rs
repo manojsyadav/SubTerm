@@ -150,6 +150,16 @@ pub async fn write_terminal_data(
     Ok(())
 }
 
+/// Whether `write_saved_password` has anything to write, so the sudo-prompt
+/// offer only shows for sessions that logged in with a saved password.
+#[tauri::command]
+pub async fn has_saved_password(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+) -> Result<bool, String> {
+    Ok(state.session_passwords.lock().await.contains_key(&session_id))
+}
+
 /// Writes the session's saved SSH password followed by Enter straight into
 /// the PTY — used by the "Paste saved password" terminal action for
 /// `[sudo] password for user:` prompts. The plaintext password never crosses

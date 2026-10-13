@@ -343,7 +343,7 @@ pub fn run() {
             commands::connection::submit_kbi_response,
             commands::connection::disconnect_session,
             commands::tunnels::start_tunnel, commands::tunnels::stop_tunnel, commands::tunnels::list_tunnels, commands::tunnels::restart_session_tunnels, commands::tunnels::persist_session_tunnels,
-            commands::terminal::open_terminal, commands::terminal::open_local_terminal, commands::terminal::subscribe_terminal_output, commands::terminal::get_available_local_shells, commands::terminal::write_terminal_data, commands::terminal::write_saved_password, commands::terminal::resize_terminal, commands::terminal::close_terminal,
+            commands::terminal::open_terminal, commands::terminal::open_local_terminal, commands::terminal::subscribe_terminal_output, commands::terminal::get_available_local_shells, commands::terminal::write_terminal_data, commands::terminal::write_saved_password, commands::terminal::has_saved_password, commands::terminal::resize_terminal, commands::terminal::close_terminal,
             commands::diagnostics::ssh_info_probe_section,
             commands::diagnostics::ssh_systemctl_action,
             commands::diagnostics::ssh_kill_process,
