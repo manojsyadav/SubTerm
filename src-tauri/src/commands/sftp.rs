@@ -728,33 +728,34 @@ pub async fn sftp_download_file(
     let mut transferred: u64 = 0;
     let mut last_report = std::time::Instant::now();
     use tokio::io::AsyncWriteExt;
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            // Drop the partial local file so we don't leave a half-baked
-            // download behind; ignore errors (e.g. on Windows file-locking).
-            drop(local_file);
-            let _ = tokio::fs::remove_file(&local_path).await;
-            emit_progress(transferred, "cancelled", None);
-            return Err("cancelled".into());
+    // Err(None) = cancelled, Err(Some(msg)) = read/write failure.
+    let copied: Result<(), Option<String>> = async {
+        loop {
+            if cancel.load(Ordering::Relaxed) { return Err(None); }
+            let n = remote_file.read(&mut buf).await.map_err(|e| Some(format!("read: {}", e)))?;
+            if n == 0 { break; }
+            local_file.write_all(&buf[..n]).await.map_err(|e| Some(format!("write: {}", e)))?;
+            transferred += n as u64;
+            // Throttle progress events: each one crosses the IPC boundary, and
+            // 10 Hz is more than enough for a smooth progress bar.
+            if last_report.elapsed() >= std::time::Duration::from_millis(100) {
+                emit_progress(transferred, "progress", None);
+                last_report = std::time::Instant::now();
+            }
         }
-        let n = remote_file
-            .read(&mut buf)
-            .await
-            .map_err(|e| { emit_progress(transferred, "error", Some(e.to_string())); format!("read: {}", e) })?;
-        if n == 0 { break; }
-        local_file
-            .write_all(&buf[..n])
-            .await
-            .map_err(|e| { emit_progress(transferred, "error", Some(e.to_string())); format!("write: {}", e) })?;
-        transferred += n as u64;
-        // Throttle progress events: each one crosses the IPC boundary, and
-        // 10 Hz is more than enough for a smooth progress bar.
-        if last_report.elapsed() >= std::time::Duration::from_millis(100) {
-            emit_progress(transferred, "progress", None);
-            last_report = std::time::Instant::now();
-        }
+        local_file.flush().await.map_err(|e| Some(format!("flush: {}", e)))
     }
-    local_file.flush().await.map_err(|e| format!("flush: {}", e))?;
+    .await;
+    if let Err(err) = copied {
+        // Drop the partial local file so we don't leave a half-baked
+        // download behind; ignore errors (e.g. on Windows file-locking).
+        drop(local_file);
+        let _ = tokio::fs::remove_file(&local_path).await;
+        return Err(match err {
+            None => { emit_progress(transferred, "cancelled", None); "cancelled".into() }
+            Some(msg) => { emit_progress(transferred, "error", Some(msg.clone())); msg }
+        });
+    }
     emit_progress(transferred, "done", None);
     Ok(())
 }
@@ -979,33 +980,33 @@ pub async fn sftp_download_dir(
             }
         };
 
-        loop {
-            if cancel.load(Ordering::Relaxed) {
-                drop(local_file);
-                let _ = tokio::fs::remove_file(&dest).await;
-                emit_progress(transferred, total_bytes, "cancelled", None);
-                return Err("cancelled".into());
+        // Err(None) = cancelled, Err(Some(msg)) = read/write failure.
+        let copied: Result<(), Option<String>> = async {
+            loop {
+                if cancel.load(Ordering::Relaxed) { return Err(None); }
+                let n = remote_file.read(&mut buf).await
+                    .map_err(|e| Some(format!("read {}: {}", remote_file_path, e)))?;
+                if n == 0 { break; }
+                local_file.write_all(&buf[..n]).await
+                    .map_err(|e| Some(format!("write {}: {}", dest.display(), e)))?;
+                transferred = transferred.saturating_add(n as u64);
+                if last_report.elapsed() >= std::time::Duration::from_millis(100) {
+                    emit_progress(transferred, total_bytes, "progress", None);
+                    last_report = std::time::Instant::now();
+                }
             }
-            let n = remote_file.read(&mut buf).await
-                .map_err(|e| {
-                    emit_progress(transferred, total_bytes, "error",
-                        Some(format!("read {}: {}", remote_file_path, e)));
-                    format!("read {}: {}", remote_file_path, e)
-                })?;
-            if n == 0 { break; }
-            local_file.write_all(&buf[..n]).await
-                .map_err(|e| {
-                    emit_progress(transferred, total_bytes, "error",
-                        Some(format!("write {}: {}", dest.display(), e)));
-                    format!("write {}: {}", dest.display(), e)
-                })?;
-            transferred = transferred.saturating_add(n as u64);
-            if last_report.elapsed() >= std::time::Duration::from_millis(100) {
-                emit_progress(transferred, total_bytes, "progress", None);
-                last_report = std::time::Instant::now();
-            }
+            local_file.flush().await.map_err(|e| Some(format!("flush {}: {}", dest.display(), e)))
         }
-        local_file.flush().await.map_err(|e| format!("flush {}: {}", dest.display(), e))?;
+        .await;
+        if let Err(err) = copied {
+            // Never leave a truncated file that looks like a finished one.
+            drop(local_file);
+            let _ = tokio::fs::remove_file(&dest).await;
+            return Err(match err {
+                None => { emit_progress(transferred, total_bytes, "cancelled", None); "cancelled".into() }
+                Some(msg) => { emit_progress(transferred, total_bytes, "error", Some(msg.clone())); msg }
+            });
+        }
     }
 
     emit_progress(transferred, total_bytes, "done", None);
