@@ -208,6 +208,29 @@ pub(crate) fn ssh_connect_timeout() -> std::time::Duration {
     std::time::Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS.load(std::sync::atomic::Ordering::Relaxed).clamp(3, 120))
 }
 
+/// Awaits an SSH handshake with a `limit` that does not run while the host-key
+/// prompt is open (`fp_outcome == 3`); the prompt has its own 90 s limit.
+async fn handshake_timeout<F: std::future::Future>(
+    limit: std::time::Duration,
+    fp_outcome: &std::sync::atomic::AtomicI8,
+    fut: F,
+) -> Result<F::Output, ()> {
+    let tick = std::time::Duration::from_millis(250);
+    let mut spent = std::time::Duration::ZERO;
+    tokio::pin!(fut);
+    loop {
+        tokio::select! {
+            out = &mut fut => return Ok(out),
+            _ = tokio::time::sleep(tick) => {
+                if fp_outcome.load(std::sync::atomic::Ordering::SeqCst) != 3 {
+                    spent += tick;
+                    if spent >= limit { return Err(()); }
+                }
+            }
+        }
+    }
+}
+
 /// How much a wall-clock tick can overshoot its expected interval before we
 /// treat it as "the OS was asleep", not scheduler jitter. Laptops routinely
 /// stall a tokio timer by tens of ms under load; a multi-second gap only
@@ -526,15 +549,16 @@ pub(crate) async fn connect_jump_host(
         db: std::sync::Arc::clone(db),
         fp_rx: Some(fp_rx),
         forwarded_targets: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
-        fp_outcome,
+        fp_outcome: std::sync::Arc::clone(&fp_outcome),
         agent_forward_socket: None,
     };
 
     // 4. Handshake.
     let config = std::sync::Arc::new(build_ssh_client_config());
     log("Jump host: SSH handshake...", "info");
-    let connect_res = tokio::time::timeout(
+    let connect_res = handshake_timeout(
         Duration::from_secs(15),
+        &fp_outcome,
         russh::client::connect_stream(config, tcp, handler),
     )
     .await;
@@ -1218,7 +1242,7 @@ pub(crate) async fn initiate_connection(
 
         let connect_future = client::connect_stream(config, StreamWrapper(stream), handler);
 
-        match tokio::time::timeout(Duration::from_secs(15), connect_future).await {
+        match handshake_timeout(Duration::from_secs(15), &fp_outcome_for_driver, connect_future).await {
             Ok(Ok(mut session)) => {
                 emit_log("SSH Handshake complete. Authenticating user...", "info");
                 
@@ -2077,4 +2101,25 @@ pub(crate) fn humanize_network_err(raw: &str, host: &str, port: i32, label: &str
     }
     // Fallback — keep the raw detail so power users can still see it.
     format!("{}: {}", label, raw)
+}
+
+#[cfg(test)]
+mod handshake_timeout_tests {
+    use super::*;
+    use std::sync::atomic::AtomicI8;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn open_prompt_pauses_the_clock() {
+        let slow = tokio::time::sleep(Duration::from_millis(900));
+        let prompting = AtomicI8::new(3);
+        assert!(handshake_timeout(Duration::from_millis(300), &prompting, slow).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn no_prompt_times_out() {
+        let slow = tokio::time::sleep(Duration::from_millis(900));
+        let idle = AtomicI8::new(-1);
+        assert!(handshake_timeout(Duration::from_millis(300), &idle, slow).await.is_err());
+    }
 }

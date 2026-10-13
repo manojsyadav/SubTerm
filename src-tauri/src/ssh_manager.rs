@@ -272,6 +272,7 @@ pub struct ClientHandler {
     ///    0 = prompt fired and the user rejected
     ///    1 = prompt fired and the user accepted (or fingerprint was trusted)
     ///    2 = prompt fired but timed out with no answer
+    ///    3 = prompt is open, waiting for the user (pauses the handshake timeout)
     /// Without this the driver only sees russh's downstream error and can't
     /// tell "user dismissed the prompt" from "network drop", which used to
     /// surface as "Auth failed" in the UI.
@@ -431,6 +432,7 @@ impl client::Handler for ClientHandler {
         }));
 
         if let Some(rx) = self.fp_rx.take() {
+            self.fp_outcome.store(3, std::sync::atomic::Ordering::SeqCst);
             // 90s is enough for a human to read the prompt, switch windows
             // to verify the fingerprint out-of-band, and click. The old 10s
             // window routinely tripped on attentive users and then surfaced
