@@ -957,7 +957,7 @@ function DesktopApp() {
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
           localShells={availableShells}
-          onOpenLocalShell={(id) => openLocalTerminal(id, false)}
+          onOpenLocalShell={(id) => openLocalTerminal(id, true)}
           isMobile={isMobile}
           isUnlocked={isUnlocked}
           onUnlock={() => setIsUnlockModalOpen(true)}

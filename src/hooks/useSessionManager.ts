@@ -31,6 +31,9 @@ export type Session = {
   };
 };
 
+/** Event asking the Local session's view to open another shell sub-tab; detail `{ shell?: string }`. */
+export const localShellEvent = (sessionId: string) => `subterm-local-new-shell-${sessionId}`;
+
 interface UseSessionManagerOptions {
   onSessionClosed?: (sessionId: string) => void;
   onAddLog?: (msg: string, type?: string) => void;
@@ -227,32 +230,28 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     [options]
   );
 
-  const openLocalTerminal = useCallback((preferredShell?: string, forceNew = false) => {
-    setSessions((prev) => {
-      if (!forceNew) {
-        // If an existing local session is open (matching preferred shell if specified), switch to it!
-        const existing = prev.find((s) => s.isLocal && (!preferredShell || s.localShell === preferredShell));
-        if (existing) {
-          setActiveView(existing.id);
-          return prev;
-        }
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+
+  // All local shells live in ONE "Local" session tab, each as a terminal sub-tab.
+  // `newShell` adds a sub-tab (with `preferredShell`, or the session's default) to
+  // that tab; without it an open Local tab is just focused.
+  const openLocalTerminal = useCallback((preferredShell?: string, newShell = false) => {
+    const existing = sessionsRef.current.find((s) => s.isLocal);
+    if (existing) {
+      setActiveView(existing.id);
+      if (newShell) {
+        window.dispatchEvent(new CustomEvent(localShellEvent(existing.id), { detail: { shell: preferredShell } }));
       }
-      const sessionId = `session-local-${Date.now()}`;
-      setActiveView(sessionId);
-      const shellLabel = preferredShell ? `Local (${preferredShell})` : "Local Shell";
-      options?.onAddLog?.(`Opened local terminal${preferredShell ? ` (${preferredShell})` : ""}`, "info");
-      return [
-        ...prev,
-        {
-          id: sessionId,
-          serverId: -1,
-          serverName: shellLabel,
-          isLocal: true,
-          localShell: preferredShell,
-          icon: "shell",
-        },
-      ];
-    });
+      return;
+    }
+    const sessionId = `session-local-${Date.now()}`;
+    options?.onAddLog?.(`Opened local terminal${preferredShell ? ` (${preferredShell})` : ""}`, "info");
+    setSessions((prev) => [
+      ...prev,
+      { id: sessionId, serverId: -1, serverName: "Local", isLocal: true, localShell: preferredShell, icon: "shell" },
+    ]);
+    setActiveView(sessionId);
   }, [options]);
 
   return {

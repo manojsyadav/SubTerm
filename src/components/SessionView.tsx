@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio } from "lucide-react";
 import { useBroadcast } from "../ui/broadcast";
-import type { Session } from "../hooks/useSessionManager";
+import { localShellEvent, type Session } from "../hooks/useSessionManager";
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
@@ -484,7 +484,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // docker-exec session into a specific container (spawned from the Info
   // panel). Container slots stay otherwise identical — same xterm, same
   // events — they just point the backend at `open_container_terminal`.
-  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }}[]>(() => {
+  // `shell` (local sessions only): the shell this sub-tab runs, when it differs from the session's.
+  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string}[]>(() => {
     return [{ id: `${session.id}-term-0`, title: '1' }];
   });
   // Bumped on every successful reconnect. TerminalView watches this prop
@@ -506,6 +507,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
   activeTabRef.current = activeTab;
+
+  // Local tab: another shell opened from the sidebar, the top-bar shell menu or "New tab"
+  // becomes a sub-tab here instead of a separate session tab.
+  useEffect(() => {
+    if (!session.isLocal) return;
+    const onNewShell = (e: Event) => {
+      const shell = (e as CustomEvent<{ shell?: string }>).detail?.shell;
+      const newId = `${session.id}-term-${Date.now()}`;
+      setTerminals(prev => [...prev, { id: newId, title: shell || `${prev.length + 1}`, ...(shell ? { shell } : {}) }]);
+      setActiveTab(newId);
+      setActiveTool(null);
+    };
+    window.addEventListener(localShellEvent(session.id), onNewShell);
+    return () => window.removeEventListener(localShellEvent(session.id), onNewShell);
+  }, [session.id, session.isLocal]);
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; termId: string } | null>(null);
   const [termRename, setTermRename] = useState<{ termId: string; value: string } | null>(null);
   const terminalsRef = useRef(terminals);
@@ -1759,7 +1775,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           {session?.isLocal && (
             <span className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold tracking-tight mr-1">
               <TerminalSquare size={13} className="shrink-0" />
-              <span className="hidden sm:inline">{session.localShell ? `Local (${session.localShell})` : "Local Shell"}</span>
+              <span className="hidden sm:inline">{(() => {
+                const shell = terminals.find(t => t.id === activeTab)?.shell ?? session.localShell;
+                return shell ? `Local (${shell})` : "Local Shell";
+              })()}</span>
             </span>
           )}
 
@@ -2217,7 +2236,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                         serverName={session.serverName}
                         isProd={isProd}
                         isLocal={session.isLocal}
-                        localShell={session?.localShell}
+                        localShell={t.shell ?? session?.localShell}
                         profile={profile}
                         onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                       />

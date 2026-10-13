@@ -177,7 +177,7 @@ export function TitleBar(props: TitleBarProps) {
                       type="button"
                       onClick={() => {
                         setShellMenuOpen(false);
-                        openLocalTerminal(sh.id, false);
+                        openLocalTerminal(sh.id, true);
                       }}
                       className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-300 flex items-center justify-between group transition-colors"
                     >
