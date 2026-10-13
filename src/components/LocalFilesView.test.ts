@@ -7,9 +7,9 @@ import { act } from "react-dom/test-utils";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
-const invokeMock = vi.fn(async (cmd: string) => {
-  if (cmd === "local_desktop_dir") return "C:\Users\me";
-  if (cmd === "local_list_dir") return [{ name: "notes.txt", path: "C:\Users\me\notes.txt", is_dir: false, is_symlink: false, size: 12, modified: 0 }];
+const invokeMock = vi.fn(async (cmd: string, _args?: unknown) => {
+  if (cmd === "local_desktop_dir") return "/home/me";
+  if (cmd === "local_list_dir") return [{ name: "notes.txt", path: "/home/me/notes.txt", is_dir: false, is_symlink: false, size: 12, modified: 0 }];
   return [];
 });
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (cmd: string, args?: unknown) => invokeMock(cmd, args) }));
@@ -30,7 +30,7 @@ describe("LocalFilesView", () => {
     root = createRoot(host);
     await act(async () => { root.render(createElement(LocalFilesView, { onBack })); });
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-    expect(invokeMock).toHaveBeenCalledWith("local_list_dir", { path: "C:\Users\me" });
+    expect(invokeMock).toHaveBeenCalledWith("local_list_dir", { path: "/home/me" });
     expect(host.textContent).toContain("notes.txt");
     expect([...host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Upload")).toBe(false);
     act(() => [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Servers"))!.click());

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
+import "./index.css";
 
 // Last-resort global handlers so a failure that escapes React (an async reject,
 // a listener throw) is at least recorded instead of vanishing silently. The
