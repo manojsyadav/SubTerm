@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(terminal)` — Local shells share one Local tab**:
+  Opening another local shell (picking PowerShell, CMD, Git Bash or WSL from the sidebar or the top bar, or New tab) adds a sub-tab inside the **Local** tab instead of a new top-level tab, so SSH sessions stay easy to find. Each sub-tab runs its own shell and is named after it; clicking Local just brings the tab forward.
+
 - **`feat(ui)` — One workspace control**:
   The workspace menu at the top left is gone; it repeated the sidebar's Switch workspace and Lock buttons. The sidebar's Switch workspace button now shows the active workspace's icon, with its name on hover.
 
