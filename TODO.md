@@ -35,9 +35,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- [ ] 🟢 **P3 · S** — **Session Recording: GIF export and saving on app exit**
-  - Animated SVG export (player > Export SVG) and "Always record this server" (terminal right-click) are done. Still open: GIF (no encoder in the project), and saving automatic recordings when the whole app quits — today they are saved when the tab closes, so quitting with the tab open loses that recording.
-
 ---
 
 ## 🌐 Network, Protocols & Multi-Platform

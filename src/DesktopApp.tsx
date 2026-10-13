@@ -46,6 +46,7 @@ import { LoginsView } from "./components/LoginsView";
 import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
 import LocalFilesView from "./components/LocalFilesView";
+import { saveAllAutoRecordings } from "./terminal/autoRecord";
 import { normalizeReduceMotion, shouldReduceMotion, normalizeHighContrast, shouldUseHighContrast } from "./ui/reduceMotion";
 import { clampOpacity, normalizeBlur, OPACITY_KEY, BLUR_KEY } from "./ui/windowOpacity";
 import { Effect } from "@tauri-apps/api/window";
@@ -809,8 +810,12 @@ function DesktopApp() {
     let unlisten: (() => void) | null = null;
     appWindow.onCloseRequested(async (event) => {
       const n = sessionsRef.current.length;
-      if (n === 0) return; // nothing to lose — let the close proceed
-      if (localStorage.getItem('subterm-confirm-on-close') === 'false') return; // Settings > General > Security
+      // The window is destroyed once this handler resolves, so automatic recordings
+      // are written first (after the user confirms, when there is a prompt).
+      if (n === 0 || localStorage.getItem('subterm-confirm-on-close') === 'false') { // Settings > General > Security
+        await saveAllAutoRecordings();
+        return;
+      }
       event.preventDefault();
       const ok = await confirm({
         title: "Close SubTerm?",
@@ -820,6 +825,7 @@ function DesktopApp() {
         destructive: true,
       });
       if (ok) {
+        await saveAllAutoRecordings();
         await appWindow.destroy();
       }
     }).then((fn) => { unlisten = fn; });

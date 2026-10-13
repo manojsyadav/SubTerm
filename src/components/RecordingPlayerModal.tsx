@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
-import { X, Play, Pause, RotateCcw, FolderOpen, FastForward, Film } from "lucide-react";
+import { X, Play, Pause, RotateCcw, FolderOpen, FastForward, Film, Image as ImageIcon } from "lucide-react";
 import { parseCast, type ParsedCast } from "../terminal/recorder";
 import { compressIdle, countPlayed, parseResize, formatClock } from "../terminal/playback";
 import { captureFrames, framesToSvg } from "../terminal/svgExport";
-import { saveTextFile } from "../terminal/saveFile";
+import { saveTextFile, saveBinaryFile } from "../terminal/saveFile";
+import { framesToGif, GIF_MAX_FRAMES } from "../terminal/gifExport";
 
 const SPEEDS = [0.5, 1, 2, 4, 8];
 const IDLE_CAP_SECONDS = 1.5;
@@ -18,7 +19,7 @@ export function RecordingPlayerModal({ onClose }: Props) {
   const [cast, setCast] = useState<ParsedCast | null>(null);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"svg" | "gif" | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [skipIdle, setSkipIdle] = useState(true);
@@ -142,17 +143,22 @@ export function RecordingPlayerModal({ onClose }: Props) {
     }
   };
 
-  const exportSvg = async () => {
+  const exportAnimation = async (kind: "svg" | "gif") => {
     if (!cast) return;
-    setExporting(true);
+    setExporting(kind);
     try {
-      const frames = await captureFrames(cast.header, events);
-      const svg = framesToSvg(frames, cast.header.width, cast.header.height);
-      await saveTextFile(svg, `${(fileName || "recording").replace(/\.[^.]+$/, "")}.svg`, "svg");
+      const base = (fileName || "recording").replace(/\.[^.]+$/, "");
+      if (kind === "svg") {
+        const frames = await captureFrames(cast.header, events);
+        await saveTextFile(framesToSvg(frames, cast.header.width, cast.header.height), `${base}.svg`, "svg");
+      } else {
+        const frames = await captureFrames(cast.header, events, GIF_MAX_FRAMES);
+        await saveBinaryFile(framesToGif(frames, cast.header.width, cast.header.height), `${base}.gif`, "gif");
+      }
     } catch (e) {
-      setError(`SVG export failed: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`${kind.toUpperCase()} export failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   };
 
@@ -177,15 +183,26 @@ export function RecordingPlayerModal({ onClose }: Props) {
           </div>
           <div className="flex items-center gap-2">
             {cast && (
-              <button
-                type="button"
-                disabled={exporting}
-                onClick={() => { void exportSvg(); }}
-                title="Save as an animated SVG (plays in browsers and on GitHub). Uses the Skip idle setting."
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-zinc-200 bg-white/5 hover:bg-white/10 disabled:opacity-50"
-              >
-                <Film size={13} /> {exporting ? "Exporting…" : "Export SVG"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={exporting !== null}
+                  onClick={() => { void exportAnimation("svg"); }}
+                  title="Save as an animated SVG (plays in browsers and on GitHub). Uses the Skip idle setting."
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-zinc-200 bg-white/5 hover:bg-white/10 disabled:opacity-50"
+                >
+                  <Film size={13} /> {exporting === "svg" ? "Exporting…" : "Export SVG"}
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting !== null}
+                  onClick={() => { void exportAnimation("gif"); }}
+                  title="Save as an animated GIF (for chat, tickets and slides). Larger than SVG; uses the Skip idle setting."
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-zinc-200 bg-white/5 hover:bg-white/10 disabled:opacity-50"
+                >
+                  <ImageIcon size={13} /> {exporting === "gif" ? "Exporting…" : "Export GIF"}
+                </button>
+              </>
             )}
             <button
               type="button"

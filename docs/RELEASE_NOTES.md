@@ -21,8 +21,8 @@
 - **`feat(sync)` — Keyboard shortcuts sync**:
   Customised shortcuts are now stored in the profile vault and take part in Cloud Sync (a new **Keyboard shortcuts** category that can be switched off per device). Mac and Windows/Linux keep separate sets because Cmd and Ctrl differ. The first unlock on a device uploads shortcuts customised there before; after that the profile's synced set is used, so shortcuts now follow the profile.
 
-- **`feat(recording)` — Animated SVG export and always-record servers**:
-  The recording player has **Export SVG**: an animated SVG with colours that plays in browsers and on GitHub, for runbooks (it follows the Skip idle setting). A terminal's right-click menu has **Always record this server**: every session to that server records its output (never keystrokes) and is saved without a dialog to the `recordings` folder in the app data directory when the tab closes.
+- **`feat(recording)` — Animated SVG and GIF export, always-record servers**:
+  The recording player has **Export SVG** (an animated SVG with colours that plays in browsers and on GitHub, for runbooks) and **Export GIF** (for chat, tickets and slides); both follow the Skip idle setting. A terminal's right-click menu has **Always record this server**: every session to that server records its output (never keystrokes) and is saved without a dialog to the `recordings` folder in the app data directory when the tab closes or the app quits.
 
 - **`feat(updates)` — Update check inside the app**:
   SubTerm now checks GitHub releases at startup inside the app too, not only on the unlock screen (which auto-unlocked workspaces skip), and shows a dismissible notice for a newer version. Settings > General > Updates turns the startup check off and has a **Check for updates** button. Nothing is downloaded automatically.

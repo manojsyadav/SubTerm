@@ -3,7 +3,7 @@ import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
 import { getFileLinkRegex } from "../terminal/fileLinkTypes";
 import { saveTextFile } from "../terminal/saveFile";
 import { startRecording, stopRecording, getRecorder, isRecording, onRecordingChange, castToPlainText } from "../terminal/recorder";
-import { isAlwaysRecorded, setAlwaysRecorded, autoRecordingName } from "../terminal/autoRecord";
+import { isAlwaysRecorded, setAlwaysRecorded, markAutoRecording, unmarkAutoRecording, isAutoRecording, saveAutoRecording } from "../terminal/autoRecord";
 import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Terminal, ILink } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -187,7 +187,6 @@ const TerminalView = ({
   // is saved without a dialog when the tab closes.
   const canAlwaysRecord = recordingEnabled && !isLocal && !attachOnly && serverId > 0;
   const [alwaysRecord, setAlwaysRecord] = useState(() => isAlwaysRecorded(profile, serverId));
-  const autoRecordingRef = useRef(false);
   const serverNameRef = useRef(serverName);
   serverNameRef.current = serverName;
   useEffect(() => {
@@ -196,17 +195,15 @@ const TerminalView = ({
     // A manual recording lives only as long as its terminal; closing the tab discards it.
     return () => {
       off();
-      const rec = stopRecording(terminalId);
-      if (rec && autoRecordingRef.current && rec.events.length > 0) {
-        invoke('save_recording', { content: rec.toCast(), filename: autoRecordingName(serverNameRef.current) }).catch(console.error);
-      }
+      if (isAutoRecording(terminalId)) saveAutoRecording(terminalId).catch(console.error);
+      else stopRecording(terminalId);
     };
   }, [terminalId]);
   const startAutoRecording = useCallback(() => {
     const term = xtermRef.current;
     if (!term || isRecording(terminalId)) return;
     startRecording(terminalId, { cols: term.cols, rows: term.rows, title: serverNameRef.current || undefined, captureInput: false });
-    autoRecordingRef.current = true;
+    markAutoRecording(terminalId, serverNameRef.current);
   }, [terminalId]);
   const toggleAlwaysRecord = () => {
     const on = !alwaysRecord;
@@ -585,7 +582,7 @@ const TerminalView = ({
     const term = xtermRef.current;
     if (!term) return;
     startRecording(terminalId, { cols: term.cols, rows: term.rows, title: serverName || undefined, captureInput: withInput });
-    autoRecordingRef.current = false;
+    unmarkAutoRecording(terminalId);
     notify(withInput ? 'Recording output and keystrokes' : 'Recording output');
   };
 
@@ -602,7 +599,7 @@ const TerminalView = ({
           return;
         }
         stopRecording(terminalId);
-        autoRecordingRef.current = false;
+        unmarkAutoRecording(terminalId);
         notify(rec.truncated ? 'Recording saved (size limit reached, end cut off)' : `Recording saved (${rec.durationSeconds.toFixed(0)}s)`);
       })
       .catch((e) => notify(`Could not save recording: ${e}`, 'err'));

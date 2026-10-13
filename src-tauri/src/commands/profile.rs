@@ -684,17 +684,39 @@ pub(crate) async fn save_text_file(
     }
     #[cfg(desktop)]
     {
-        let ext = extension.trim_start_matches('.').to_string();
-        let mut dialog = rfd::FileDialog::new().set_title("Save").set_file_name(&filename);
-        if !ext.is_empty() {
-            dialog = dialog.add_filter(format!("*.{ext}"), &[ext.as_str()]);
-        }
-        let dst = match dialog.save_file() {
-            Some(p) => p,
-            None => return Ok(None),
-        };
-        std::fs::write(&dst, content).map_err(|e| format!("Failed to write {:?}: {}", dst, e))?;
-        Ok(Some(dst.to_string_lossy().to_string()))
+        save_with_dialog(content.as_bytes(), &filename, &extension)
+    }
+}
+
+/// Native Save dialog, then write `content`. `Ok(None)` when the user cancels.
+#[cfg(desktop)]
+fn save_with_dialog(content: &[u8], filename: &str, extension: &str) -> Result<Option<String>, String> {
+    let ext = extension.trim_start_matches('.').to_string();
+    let mut dialog = rfd::FileDialog::new().set_title("Save").set_file_name(filename);
+    if !ext.is_empty() {
+        dialog = dialog.add_filter(format!("*.{ext}"), &[ext.as_str()]);
+    }
+    let Some(dst) = dialog.save_file() else { return Ok(None) };
+    std::fs::write(&dst, content).map_err(|e| format!("Failed to write {:?}: {}", dst, e))?;
+    Ok(Some(dst.to_string_lossy().to_string()))
+}
+
+/// Binary sibling of `save_text_file` (e.g. a GIF export). The bytes arrive as the raw
+/// request body; `x-filename` and `x-extension` headers carry the suggested name.
+#[tauri::command]
+pub(crate) async fn save_binary_file(request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Expected the file contents as raw bytes".into());
+    };
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    #[cfg(mobile)]
+    {
+        let _ = (bytes, header);
+        return Err("Saving files from here is not available on Android.".into());
+    }
+    #[cfg(desktop)]
+    {
+        save_with_dialog(bytes, &safe_file_name(&header("x-filename")), &header("x-extension"))
     }
 }
 

@@ -11,12 +11,12 @@ import { parseResize } from "./playback";
 export interface Run { text: string; fg: string; bg?: string; bold?: boolean }
 export interface Frame { t: number; lines: Run[][] }
 
-const FG = "#e4e4e7";
-const BG = "#0b0b0f";
-const FONT_SIZE = 14;
+export const FG = "#e4e4e7";
+export const BG = "#0b0b0f";
+export const FONT_SIZE = 14;
 const CHAR_W = FONT_SIZE * 0.6;
-const LINE_H = FONT_SIZE * 1.25;
-const PAD = 12;
+export const LINE_H = FONT_SIZE * 1.25;
+export const PAD = 12;
 /** More frames than this makes the file too large to be useful; the sampling gap grows instead. */
 const MAX_FRAMES = 600;
 
@@ -76,9 +76,9 @@ function captureScreen(term: Terminal): Run[][] {
 const write = (term: Terminal, data: string) => new Promise<void>((r) => term.write(data, r));
 
 /** Replay `events` and capture the screen as frames, at most one per `minGap` seconds. */
-export async function captureFrames(header: CastHeader, events: readonly CastEvent[]): Promise<Frame[]> {
+export async function captureFrames(header: CastHeader, events: readonly CastEvent[], maxFrames = MAX_FRAMES): Promise<Frame[]> {
   const duration = events.length ? events[events.length - 1][0] : 0;
-  const minGap = Math.max(0.1, duration / MAX_FRAMES);
+  const minGap = Math.max(0.1, duration / maxFrames);
   const term = new Terminal({ cols: header.width, rows: header.height, scrollback: 0, allowProposedApi: true });
   const frames: Frame[] = [];
   let lastKey = "";
