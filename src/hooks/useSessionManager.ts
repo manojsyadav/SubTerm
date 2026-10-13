@@ -135,7 +135,8 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
         launchRdp(server);
         return;
       }
-      const sessionId = `session-${server.id}`;
+      // The SFTP page's file browser is its own session (and connection), separate from SSH.
+      const sessionId = initialTool === "sftp" && opts?.fullWidth ? `session-sftp-${server.id}` : `session-${server.id}`;
       setSessions((prev) => {
         const existing = prev.find((s) => s.id === sessionId);
         if (!existing) {

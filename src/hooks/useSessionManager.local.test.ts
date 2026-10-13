@@ -35,3 +35,19 @@ describe("local shells", () => {
     act(() => root.unmount());
   });
 });
+
+describe("SFTP and SSH sessions to one server", () => {
+  it("stay two separate sessions", () => {
+    let api!: ReturnType<typeof useSessionManager>;
+    const Probe = () => { api = useSessionManager(); return null; };
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Probe)));
+    const indra = { id: 5, name: "Indra", host: "h", port: 22 } as Parameters<typeof api.openServer>[0];
+    act(() => api.openServer(indra));
+    act(() => api.openServer(indra, "sftp", { fullWidth: true }));
+    act(() => api.openServer(indra, "sftp", { fullWidth: true })); // again: focuses, no third session
+    expect(api.sessions.map((s) => s.id)).toEqual(["session-5", "session-sftp-5"]);
+    expect(api.activeView).toBe("session-sftp-5");
+    act(() => root.unmount());
+  });
+});

@@ -335,6 +335,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     if (fwdRetryTimerRef.current) { clearTimeout(fwdRetryTimerRef.current); fwdRetryTimerRef.current = null; }
   };
 
+  // The SFTP page's file-browser session runs beside the server's SSH session, which owns
+  // its saved port forwards; starting them twice would collide on the same local ports.
+  const ownsTunnels = !(session.initialTool === 'sftp' && session.toolFull);
+
   const openSftpConn = () => {
     setSftpConnStatus('connecting');
     invoke("initiate_connection", {
@@ -362,6 +366,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // dedicated connection is up). Called when the dedicated path is abandoned —
   // toggle-off, or retries exhausted — so tunnels always land somewhere.
   const restoreTunnelsOnPrimary = () => {
+    if (!ownsTunnels) return;
     invoke("restart_session_tunnels", { sessionId: session.id, serverId: session.serverId }).catch(console.error);
   };
 
@@ -404,7 +409,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // the fresh transport.
   const openSecondaryConnections = () => {
     if (separateSftpRef.current) openSftpConn();
-    if (separateFwdRef.current) openFwdConn();
+    if (separateFwdRef.current && ownsTunnels) openFwdConn();
   };
 
   // Reset secondary tracking when the primary drops / reconnects. The backend
@@ -984,7 +989,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     // into the auth-retry input is picked up by later attempts inside this
     // same effect closure (the effect itself only runs once).
     primarySeparateRef.current = separateFwdRef.current;
-    invoke("initiate_connection", { sessionId: session.id, serverId: session.serverId, customPassword: customPasswordRef.current || null, quickAuth: session.quickAuth || null, sessionRole: "primary", separateSessions: separateFwdRef.current })
+    invoke("initiate_connection", { sessionId: session.id, serverId: session.serverId, customPassword: customPasswordRef.current || null, quickAuth: session.quickAuth || null, sessionRole: "primary", separateSessions: separateFwdRef.current || !ownsTunnels })
       .catch(e => {
         pushLog({ msg: `Failed to initiate: ${e}`, type: 'error' });
         setStatus('failed');
@@ -1246,7 +1251,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         customPassword: customPasswordRef.current || null,
         quickAuth: session.quickAuth || null,
         sessionRole: "primary",
-        separateSessions: separateFwdRef.current,
+        separateSessions: separateFwdRef.current || !ownsTunnels,
       }).catch(console.error);
     }, delay);
   };
@@ -1265,7 +1270,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       customPassword: customPassword || null,
       quickAuth: session.quickAuth || null,
       sessionRole: "primary",
-      separateSessions: separateFwdRef.current,
+      separateSessions: separateFwdRef.current || !ownsTunnels,
     }).catch(console.error);
   };
 
