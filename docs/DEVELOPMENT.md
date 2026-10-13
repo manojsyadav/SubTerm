@@ -182,6 +182,9 @@ npm run build:portable
 # Build Android release APK
 npm run android:build
 ```
+Desktop builds also compile the embedded-RDP helper (`src-tauri/rdp-helper`, its own crate and lockfile, outside the main Cargo workspace): the platform `beforeBuildCommand` in `tauri.windows.conf.json` / `tauri.macos.conf.json` / `tauri.linux.conf.json` runs `npm run build:rdp-helper` (Windows; copies the exe next to `subterm.exe`) or `npm run build:rdp-helper:unix`, and bundles it as a resource. `npm run tauri dev` does not build it; run `npm run build:rdp-helper` (or `:unix`) once before testing embedded RDP in dev, and the app finds it in `src-tauri/rdp-helper/target/`.
+
+The desktop bundle identifier is `com.subterm.desktop` (Android stays `com.subterm.app`); on first start `identifier_migration.rs` copies data from an old `com.subterm.app` folder.
 The output artifacts will be located in:
 - Desktop Installers (MSI/NSIS): `src-tauri/target/release/bundle/`
 - Portable Standalone Binary: `src-tauri/target/release/subterm.exe` (or `release-portable/*.zip` via `npm run build:portable`)

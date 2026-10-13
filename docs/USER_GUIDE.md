@@ -10,11 +10,11 @@ SubTerm is a fast, native, and customizable client for managing remote servers, 
 When you launch SubTerm, you are presented with the **Unlock** screen:
 - **First Launch**: Enter a master password to create your primary encrypted workspace profile (`default.subterm`).
 - **Subsequent Launches**: Enter your master password to unlock your stored servers, SSH keys, and credentials.
-- **Locking Your Vault**: Click the Lock icon in the sidebar or top bar at any time to immediately flush unencrypted data from memory.
+- **Locking Your Vault**: Click the Lock icon in the sidebar at any time to immediately flush unencrypted data from memory.
 
 ### 1.2 The Sidebar Pages
 The left sidebar (bottom bar on narrow windows) has one entry per activity:
-- **Local**: opens a local terminal with your default shell, or switches to the one already open. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL). The tab strip's shell menu still opens any other shell.
+- **Local**: asks which shell to open (**Default shell** first, then every installed shell); each one opens as a sub-tab of the single **Local** tab, and on desktop the open shells are listed under **Local** in the sidebar (click to switch, hover **x** to close, **+** for another). Without a shell list it opens the default shell. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL).
 - **Servers**: your saved servers and folders (the home page). The search box doubles as quick connect: type `10.0.0.5`, `root@10.0.0.5` or `host.example.com:2222` and press **Enter**. If a saved server matches (and it is the only match) it opens; if nothing matches, the Quick Connect dialog opens with the host, user and port filled in and the cursor in the password field. A bare word such as `web` is only ever a search. The lightning button inside the search box opens the empty Quick Connect dialog. **Add server** (with **Import SSH config** under its arrow) sits at the right end of the same row; **Connect All** appears below it when there are two or more servers.
 - **SFTP**: a searchable list of your SSH servers. Click one to open its file browser across the whole window, with this computer's files on one side and the server's on the other (drag to transfer). Close the file browser (the **x** in its header) to return to the terminal; the terminal keeps running behind it.
 - **RDP**: a searchable list of your Remote Desktop servers with a **New RDP server** button. Connect opens it inside SubTerm or in the system client, as set under **Settings > General > Remote Desktop**. Hidden when the RDP feature is turned off.
@@ -22,6 +22,8 @@ The left sidebar (bottom bar on narrow windows) has one entry per activity:
 - **Snippets** (formerly *Library*): saved commands and notes.
 - **Network Tools**: opens the network diagnostics dialog (TCP port probe, latency ping, service audit). Hidden when the Network Tools feature is off.
 - **Monitor**: resource dashboard, when monitoring is on.
+
+There is no tab strip: open sessions are listed in the sidebar under **Servers**, **SFTP** and **RDP** (local shells under **Local**), each with a status dot. Click one to switch to it, **Ctrl+click** to split it beside the session on screen, hover **x** to close it, and right-click for the session menu (see 9 below). **Settings > Appearance > Accessibility > Open sessions list** chooses short labels under the icons (default) or a wide panel beside the sidebar with full names (desktop). Phones use the session picker in the top bar.
 
 ### 1.3 Finding a Server
 The home dashboard's search bar filters by server name or host as you type. It also accepts shell-style glob wildcards: `*` matches any run of characters and `?` matches exactly one — e.g. `web-*`, `prod-db?`, `*-staging`.
@@ -50,12 +52,12 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Verify the host key fingerprint on the first connection prompt.
    - An interactive `xterm.js` terminal tab opens immediately.
 5. **Split Panes & Multiplexing**:
-   - **Split Right (Columns)**: Click the Columns icon in the tab strip or press `Ctrl+\` to spawn a side-by-side terminal pane.
+   - **Split Right (Columns)**: Click the Columns icon in the session toolbar or press `Ctrl+\` to spawn a side-by-side terminal pane.
    - **Split Down (Rows)**: Click the Rows icon or press `Ctrl+Shift+D` to split the terminal into stacked rows.
    - **Move Between Panes**: Press `Alt+Shift+→` / `Alt+Shift+←` to focus the next / previous pane (or terminal tab when not split); it wraps around. All shortcuts can be rebound in **Settings > Keyboard Shortcuts**.
    - **Resize Panes**: Drag the divider line between adjacent panes to adjust flex ratios. SubTerm remembers your orientation (columns/rows) and the pane sizes you last used for each pane count, so the next split starts the same way; double-click a divider to reset to equal sizes.
    - **Unsplit**: Click the `Unsplit` button in the active split pill or click the `X` button on any pane's top-right corner to detach it.
-   - **Multi-Session Splits**: Select multiple sessions from the top bar or session menu to tile multiple servers side-by-side or stacked in a unified canvas.
+   - **Multi-Session Splits**: Ctrl+click sessions in the sidebar list, or use the session menu, to tile multiple servers side-by-side or stacked in a unified canvas.
 6. **Hardware Acceleration (WebGL)**:
    - GPU-accelerated rendering is enabled by default. To toggle or check status, navigate to **Settings (`Ctrl+,`) > Appearance > Display & Theme > WebGL Hardware Acceleration**.
 
@@ -69,7 +71,8 @@ The home dashboard's search bar filters by server name or host as you type. It a
 8. **Terminal Context Menu & Buffer Export**:
    - **Right-Click Context Menu**: Right-click anywhere in the active terminal to open a modern glassmorphic context menu with actions for **Copy** (`Ctrl+C`), **Paste** (`Ctrl+V`), **Select All** (`Ctrl+A`), **Find in Terminal** (`Ctrl+F`), **Clear Scrollback**, **Reset Terminal**, and **Export Buffer**.
    - **Paste Saved Password**: For sessions that connected with a saved password, this entry writes it straight into an interactive `[sudo] password for user:` prompt — the password is injected on the backend and never passes through the frontend.
-   - **Record and replay a session**: Right-click > **Start recording** captures everything the terminal shows (plus window resizes) with timing; **Start recording with keystrokes** also captures what you type, so use it only when you are not typing secrets. Stop from the same menu (or click the red **REC** badge) and choose where to save in the Save dialog: a `.cast` file (asciinema v2) or a plain-text `.log`. Cancelling the dialog keeps the recording running. Open the command palette (`Ctrl+Shift+P`) and choose **Play Session Recording** to replay a `.cast` file with play/pause, a seek slider, speed (0.5x-8x) and Skip idle. Switch the feature off under Settings > Feature Toggles.
+   - **Record and replay a session**: Right-click > **Start recording** captures everything the terminal shows (plus window resizes) with timing; **Start recording with keystrokes** also captures what you type, so use it only when you are not typing secrets. Stop from the same menu (or click the red **REC** badge) and choose where to save in the Save dialog: a `.cast` file (asciinema v2) or a plain-text `.log`. Cancelling the dialog keeps the recording running. Open the command palette (`Ctrl+Shift+P`) and choose **Play Session Recording** to replay a `.cast` file with play/pause, a seek slider, speed (0.5x-8x) and Skip idle; **Export SVG** and **Export GIF** save it as an animation. **Always record this server** (same menu) records every session to that server (output only, never keystrokes) and saves it without a dialog to the `recordings` folder in the app data directory when the tab closes or the app quits. Switch the feature off under Settings > Feature Toggles.
+   - **Drop or paste files**: Drop files onto a terminal to type their quoted paths at the prompt (nothing is run). Pasting a clipboard image with no text (e.g. a Win+Shift+S screenshot) saves it as a PNG in the temp folder and types that path. On an SSH session the file is first uploaded to `/tmp/subterm-drop-…` on the server and the remote path is typed.
    - **Export Buffer to .log**: Click **Export Buffer** in the context menu and pick a location in the Save dialog to write the complete scrollback history to a `.log` file (e.g., `terminal-serverName-YYYY-MM-DDTHH-mm-ss.log`) for offline analysis or audit trails.
     - **Right-Click**: Under **Settings (`Ctrl+,`) > Terminal > Mouse & Clipboard**, choose **Smart** (default: right-click copies the selection if there is one, otherwise pastes; **Shift+Right-Click** always opens the menu; so does the small **⋮** button at the top-right of every terminal pane), **Open Context Menu**, or **Paste Immediately (PuTTY style)**. The terminal keeps keyboard focus after a right-click and after the menu closes, so split panes stay where you clicked.
     - **Copy on Select**: Under **Settings > Terminal > Mouse & Clipboard**, toggle **Copy on select** to copy highlighted text without pressing any key.
@@ -84,8 +87,11 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - If you type `ssh` again inside that ssh session, no bar appears; the guard lifts when the client reports it ended (closed, refused, unreachable, auth failure) or you accept the offer.
    - Ignored on purpose: commands with a remote command (`ssh host ls`), `-J`/`ProxyJump`, `ProxyCommand`, port forwarding, pipes and `scp`. Turn the whole feature off under **Settings > Features > Offer to save ssh/sftp targets**.
 
-9. **Tab Strip Context Menu & Session Management**:
-   - Right-click any open session tab in the top tab strip to access the session menu:
+9. **Session Menu & Session Management**:
+   - Right-click an open session in the sidebar list to access the session menu:
+     - **Rename tab**: Saved servers keep the new name across restarts (per workspace); Quick Connect sessions only for this run.
+     - **Pin session**: Keeps it at the top of its list and reopens it after each unlock.
+     - **Group**: Put it in an existing group or **+ New group**; groups are collapsible headings in the list. Names, pins and groups are stored per workspace and are not part of preferences export.
      - **Reconnect / Disconnect**: Cleanly drop or re-establish connection without closing the tab.
      - **Split View With...**: Tick other open sessions to instantly tile them side-by-side or stacked.
      - **Pin to Wall**: Pin the session's active terminal directly into your persistent multi-pane terminal Wall.
@@ -134,7 +140,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Drag and drop files from your local file explorer into the SubTerm SFTP panel to start transfers.
    - Monitor real-time transfer progress and transfer speed in the progress widget.
    - **Remote Desktop (RDP) servers**: In the server form choose **Connection type > Remote Desktop (RDP)**, enter the host (port 3389 by default) and an optional username, and save. Clicking the server then opens your system's Remote Desktop client (Windows `mstsc`, Microsoft Remote Desktop on macOS, `xfreerdp` on Linux), which asks for the password; SubTerm does not store it. Switch the feature off under Settings > Feature Toggles.
-   - **Open RDP inside SubTerm (beta)**: Under **Settings > Remote Desktop (RDP)** choose **Inside SubTerm** to show the remote screen in a SubTerm window instead of the system client. You type the password each time; it is not saved. Click the screen to focus it, use **Ctrl+Alt+Del** for the secure attention sequence, and **Disconnect** to log off. Clipboard, audio and file sharing are not available yet; use the system client for those.
+   - **Open RDP inside SubTerm (beta)**: Under **Settings > Remote Desktop (RDP)** choose **Inside SubTerm** to show the remote screen in a SubTerm session tab instead of the system client. You type the password each time; it is not saved. Click the screen to focus it, use **Ctrl+Alt+Del** for the secure attention sequence, and **Disconnect** to log off. Text clipboard works both ways (text copied here is offered to the remote side when you click into its screen), remote sound plays through SubTerm (**Sound on/off** in the RDP bar, remembered), and the remote desktop follows the window size. File sharing is not available; use the system client for that.
    - **Copy between two servers**: Open the **Server to server** tab in the SFTP panel, choose a connected server for the left and right side, select items and click **Copy to <server>** (or right-click > Copy, or drag across). Files go directly from one server to the other without being saved on your computer. You need two connected sessions; switch the feature off under Settings > Feature Toggles.
 5. **Directory Bookmarks & Quick Navigation (Starred Folders)**:
    - **Quick Access Jumps**: Click the **Bookmark / Star** icon in the SFTP toolbar to access standard paths including `/` (Root), `~` (Home), `/var/log` (Logs), `/etc` (Configuration), `/var/www` (Web Root), `/opt`, and `/tmp`.

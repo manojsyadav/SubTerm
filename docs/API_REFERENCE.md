@@ -1,6 +1,6 @@
 # SubTerm Tauri IPC & Command API Reference
 
-This document provides a technical reference for all Tauri IPC commands registered in `subterm_lib::run()` via `tauri::generate_handler![]` and invoked by the frontend via `@tauri-apps/api/core::invoke`.
+This document provides a technical reference for the main Tauri IPC commands registered in `subterm_lib::run()` via `tauri::generate_handler![]` and invoked by the frontend via `@tauri-apps/api/core::invoke`. It is not exhaustive (about 230 commands are registered); the `generate_handler![]` list in `src-tauri/src/lib.rs` is the authoritative catalog, with each command in its `src-tauri/src/commands/` module.
 
 ---
 
@@ -478,3 +478,20 @@ Events emitted from Rust to the Webview via `app.emit(...)`:
 | `kbi-request` | `{ sessionId: string, prompts: string[] }` | Keyboard-interactive 2FA prompt |
 | `system-resume` | *(none)* | App-wide, not session-scoped. Fired when the resume detector notices a sleep/resume cycle (see `docs/ARCHITECTURE.md` §4.9). Every open session reacts independently based on its own reconnect state. |
 | `network-changed` | *(none)* | App-wide, not session-scoped. Fired on a detected network interface change (Wi-Fi roam, VPN toggle), debounced to 1/sec. Same consumption pattern as `system-resume`. |
+
+---
+
+## 12. Remote Desktop & File Export Commands
+
+| Command | Arguments | Return Type | Description |
+|---|---|---|---|
+| `launch_rdp` | `{ id }` | `Result<(), String>` | Opens saved server `id` in the OS Remote Desktop client (desktop only) |
+| `rdp_connect` | `{ id, password, width, height, audio?, onEvent }` | `Result<String, String>` (session id) | Starts an embedded session in a `subterm-rdp-helper` process. `onEvent` is a binary `Channel`: first byte = kind (1 connected, 2 update, 3 error, 4 closed, 5 certificate question with JSON `{sessionId, fingerprint, mismatch}`), rest = payload (see `src-tauri/rdp-helper/src/wire.rs`). Desktop only |
+| `rdp_answer_certificate` | `{ sessionId, trust }` | `Result<(), String>` | Answers a kind-5 question; `trust` pins the certificate for that host:port |
+| `rdp_send_input` | `{ sessionId, data: number[] }` | `Result<(), String>` | Forwards already-encoded input events to the helper |
+| `rdp_disconnect` | `{ sessionId }` | `Result<(), String>` | Logs off and ends the helper process |
+| `save_text_file` / `save_binary_file` | `{ content, filename, extension }` / raw body with `x-filename`, `x-extension` headers | `Result<Option<String>, String>` | Save dialog for exports (buffer `.log`, `.cast`, SVG, GIF); `None` when cancelled |
+| `recordings_dir` | none | `Result<String, String>` | `<app data>/recordings`, created on demand |
+| `save_recording` | `{ content, filename }` | `Result<String, String>` | Writes an automatic recording into `recordings_dir` without a dialog |
+| `save_temp_file` | raw body, `x-filename` header | `Result<String, String>` | Writes a pasted image to `<temp>/subterm-paste/` and returns the path |
+| `get_synced_shortcuts` / `set_synced_shortcuts` | `{ platform: "mac" \| "pc" }` / `{ platform, map }` | `Result<Record<string,string>, String>` / `Result<(), String>` | Customised keyboard shortcuts stored in the profile vault (synced) |

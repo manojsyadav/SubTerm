@@ -32,7 +32,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **SFTP Directory Bookmarks & Hidden Files Toggle**: 1-click folder starring, instant standard system quick jumps (`/`, `~`, `/var/log`, `/etc`, `/var/www`, `/opt`, `/tmp`), persistent bookmarks, and `Ctrl+H` toggle for Unix dotfiles with suppressed item counter badge.
 - **SFTP Duplication & File Category Filters**: Clone any file or directory with 1 click or `Ctrl+D` with intelligent collision-free naming, and instantly filter files by category (*Folders*, *Code*, *Logs*, *Archives*, *Media*).
 - **1-Click OpenSSH `~/.ssh/config` & Client Importer**: Direct toolbar launcher to import existing SSH hosts from `~/.ssh/config`, PuTTY sessions, or Termius vaults.
-- **Upload Public Keys (`ssh-copy-id`)**: Right-click a connected session tab to append any saved public key to the server's `~/.ssh/authorized_keys` in one click, with correct directory/file permissions.
+- **Upload Public Keys (`ssh-copy-id`)**: Right-click a connected session in the sidebar to append any saved public key to the server's `~/.ssh/authorized_keys` in one click, with correct directory/file permissions.
 - **Inline SSH Key Generation**: Generate a new key directly from the Add/Edit Server panel's `[+]` button without leaving the form.
 - **Blank Username Resolution**: Save a server profile with no username and it resolves to the matching `Host` entry's `User` in your local `~/.ssh/config` at connect time.
 - **Directory Symlinks as Folders**: SFTP and local file panes resolve directory symlinks as navigable folders with a link badge, instead of treating them as plain files.
@@ -46,11 +46,12 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Configurable SSH Keep-Alive Settings**: Dynamic 15s–120s keep-alive packet intervals to prevent dropped sessions across NAT firewalls and cloud proxies.
 - **Auto-Reconnect with Sleep/Resume & Network-Change Detection**: Detects laptop sleep/resume cycles and network interface changes (Wi-Fi roam, VPN toggle) and retries immediately instead of waiting on the passive health check, with capped exponential backoff (2s–30s) and a live "Reconnecting · attempt N" status banner.
 - **SSH Agent Forwarding (`-A`)**: Per-server toggle to forward your local SSH agent (OpenSSH agent, Pageant, 1Password, KeePassXC, Vaultwarden) for onward authentication from the remote session, without SubTerm ever touching your keys.
+- **Remote Desktop (RDP)**: Open saved RDP servers in the system client or embedded as a session tab (beta: text clipboard, remote sound, resize to window), via a bundled `subterm-rdp-helper` process.
 - **Port Forwarding**: Easily configure local (`-L`), remote (`-R`), and dynamic SOCKS5 (`-D`) tunnels.
 - **Folder Sync**: Keep your local and remote directories mirrored with real-time two-way sync tools.
 - **Cross-Platform**: Compiles natively for Windows, macOS, Linux, and Android.
 - **Custom Cloud API**: Bring your own backend! SubTerm allows you to easily configure your own sync endpoints without recompiling.
-- **Native Local Terminal**: Integrated cross-platform local PTY shell (PowerShell/CMD on Windows, Bash/Zsh on macOS/Linux) with full xterm features (themes, shortcuts, OSC 133, copilot, split views). Launchable instantly from the Top Bar, Node Grid, Command Palette, or global shortcut (`Ctrl+Alt+T`).
+- **Native Local Terminal**: Integrated cross-platform local PTY shell (PowerShell/CMD on Windows, Bash/Zsh on macOS/Linux) with full xterm features (themes, shortcuts, OSC 133, copilot, split views). Launchable from the sidebar's Local item (pick a shell), Node Grid, Command Palette, or global shortcut (`Ctrl+Alt+T`); further shells open as sub-tabs of the one Local tab. Drop files or paste a screenshot onto a terminal to type their paths (uploaded to `/tmp` first on SSH sessions).
 - **Production Node Safeguards**: First-class Production Server flag with persistent database tracking, high-visibility `PROD` badges, active Safe Mode with destructive command interception, multi-line paste confirmation.
 - **Parallel Tool Tabs**: Dedicated first-class tabs for **Docker** (containers, images, compose stacks), **Processes** (real-time task manager), and **Services** (systemd control).
 - **Top Bar Quick Access Servers**: Pin up to 5 quick-access servers next to the logo with active green dot status indicators.
@@ -67,7 +68,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Multi-Tab Fleet Broadcast**: Concurrently fan out keystrokes and commands across multiple server sessions with live session targeting and armed safety banners.
 - **Parameterized Snippets Engine**: Runbook automation with `{{variable:defaultValue}}` placeholders and interactive variable prompting.
 - **Horizontal & Vertical Split Multiplexing**: Tile multiple shells within a session or across different servers with draggable dividers, orientation flipping, and 1-click unsplit restore.
-- **Activity Sidebar**: Local (opens your default shell: PowerShell, CMD, Git Bash, WSL, or `$SHELL`), Servers, SFTP (full-width file browser for any server), RDP, Credentials, Snippets and Monitor, each one click away.
+- **Activity Sidebar**: Local (asks which shell: default, PowerShell, CMD, Git Bash, WSL, or `$SHELL`), Servers, SFTP (full-width file browser for any server), RDP, Credentials, Snippets and Monitor, each one click away. Open sessions are listed under their sidebar item instead of a tab strip, with per-workspace names, pins (reopened on unlock) and collapsible groups.
 - **VS Code-Style Settings Panel**: 7 focused pages (General, Appearance, Terminal, Features and more) with a vertical left-sidebar navigator, a settings search box and vault-gated security screens.
 
 ---
