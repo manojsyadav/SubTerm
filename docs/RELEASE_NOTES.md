@@ -179,6 +179,9 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(build)` — Desktop bundle identifier no longer ends in `.app`**:
+  The desktop identifier is now `com.subterm.desktop` (macOS treats folders ending in `.app` as app bundles, and Tauri warned about it). On first start SubTerm copies profiles, sync and cloud settings, recordings and saved preferences from the old `com.subterm.app` folders; nothing in the new folder is overwritten. Android keeps `com.subterm.app`, so phone updates are unaffected. On Windows the new installer installs alongside the old one once: uninstall the old "SubTerm" entry after checking your data came across. On macOS and Linux saved preferences (not profiles) may not carry over, because the webview keeps them elsewhere; export them with Settings > General > Backup & Restore before upgrading.
+
 - **`fix(ui)` — Reduce motion had no effect**:
   Its stylesheet (`src/index.css`, which also holds the terminal scrollbar styling) was never imported, so the setting changed nothing. It is loaded now.
 
