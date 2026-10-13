@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, Fragment, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Server, KeyRound, Braces, Activity, Settings, Lock, ArrowLeftRight, Terminal, FolderOpen, Monitor, Network, Plus, X } from "lucide-react";
@@ -46,6 +46,8 @@ interface SidebarProps {
   onSelectLocalTab?: (id: string) => void;
   onCloseLocalTab?: (id: string) => void;
   onNewLocalTab?: () => void;
+  /** Extra content under a rail item (the open-session lists for Servers, SFTP, RDP). */
+  renderUnder?: (itemId: string) => ReactNode;
 }
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -75,6 +77,7 @@ export const Sidebar = ({
   onSelectLocalTab,
   onCloseLocalTab,
   onNewLocalTab,
+  renderUnder,
 }: SidebarProps) => {
   const [shellMenu, setShellMenu] = useState<{ x: number; y: number } | null>(null);
   // Local and its + ask which shell to open (desktop rail); without a shell list they open the default.
@@ -326,6 +329,7 @@ export const Sidebar = ({
             )}
             {activeTab === item.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-primary rounded-r-full shadow-[0_0_10px_rgba(var(--primary),1)]" />}
           </button>
+          {item.id !== 'local' && renderUnder?.(item.id)}
           {item.id === 'local' && localTabs.length > 0 && (
             <div role="tablist" aria-label="Local shells" aria-orientation="vertical" className="-mt-1.5 flex flex-col gap-1">
               {localTabs.map((t) => (

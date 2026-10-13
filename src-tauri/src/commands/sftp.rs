@@ -2037,11 +2037,11 @@ pub async fn sftp_write_file_text(
     // `mktemp`-generated path first (unprivileged, and not a guessable name
     // another local user could pre-plant as a symlink — same rationale as
     // `app_temp_root` above), resolve ~-relative paths the same way the old
-    // single-shot command did, then `mv` the staged file into place.
+    // single-shot command did, then copy the staged file into place.
     //
     // Splitting staging from the move (instead of one `echo b64 | base64 -d
     // > "$FILE"` pipeline) is what makes sudo elevation possible below: sudo
-    // can only cleanly re-exec a flat `mv src dst` argv, not a multi-stage
+    // can only cleanly re-exec a flat `cp src dst` argv, not a multi-stage
     // shell pipeline with its own `$FILE` resolution logic.
     use base64::Engine;
     use crate::docker::{run_capture, run_capture_with_stdin, shq};
@@ -2054,7 +2054,7 @@ pub async fn sftp_write_file_text(
     }
 
     // Resolve the same $HOME-relative fallback the old inline command used,
-    // as a plain path string so the later mv/sudo-mv is just `mv src dst`
+    // as a plain path string so the later cp/sudo-cp is just `cp src dst`
     // with no shell control structures for sudo to misparse.
     let resolve_cmd = format!(
         "if [ -e {dest} ] || [ ! -e \"$HOME\"/{dest} ]; then printf '%s' {dest}; else printf '%s' \"$HOME\"/{dest}; fi",
@@ -2069,9 +2069,12 @@ pub async fn sftp_write_file_text(
 
     let cleanup = || async { let _ = run_capture(&state, &session_id, &format!("rm -f {}", shq(&tmp_path)), 5).await; };
 
-    let mv_cmd = format!("mv {} {}", shq(&tmp_path), shq(&resolved_dest));
+    // cp, not mv: writing into the existing file keeps its owner and mode. mv swapped in the
+    // 0600 user-owned temp file, so a sudo save of /etc/hosts left it unreadable to daemons.
+    let mv_cmd = format!("cp {} {}", shq(&tmp_path), shq(&resolved_dest));
     let (mv_code, mv_out) = run_capture(&state, &session_id, &mv_cmd, 10).await?;
     if mv_code == 0 {
+        cleanup().await;
         return Ok(());
     }
 
@@ -2083,12 +2086,13 @@ pub async fn sftp_write_file_text(
     }
 
     // Root-owned destination (e.g. /etc/nginx/nginx.conf): retry the same
-    // mv under sudo, same silent-elevation pattern as docker.rs's
+    // cp under sudo, same silent-elevation pattern as docker.rs's
     // run_docker_smart — non-interactive sudo first, then the session's
     // saved password via `sudo -S -p ''` if one exists.
     let sudo_cmd = format!("sudo -n {}", mv_cmd);
     let (sudo_code, sudo_out) = run_capture(&state, &session_id, &sudo_cmd, 10).await?;
     if sudo_code == 0 {
+        cleanup().await;
         return Ok(());
     }
 

@@ -98,7 +98,7 @@ cargo clippy
 
 ## 4. Live SSH Protocol Smoke Testing (`russh_smoke_test`)
 
-Because unit tests use in-memory mocks and cannot simulate a real SSH2 wire handshake, SubTerm includes a standalone integration smoke test in [`src-tauri/examples/russh_smoke_test.rs`](file:///d:/REPO/SubTerm/src-tauri/examples/russh_smoke_test.rs).
+Because unit tests use in-memory mocks and cannot simulate a real SSH2 wire handshake, SubTerm includes a standalone integration smoke test in [`src-tauri/examples/russh_smoke_test.rs`](../src-tauri/examples/russh_smoke_test.rs).
 
 ### 4.1 What the Smoke Test Covers
 The harness executes 7 end-to-end verification steps against an active OpenSSH server:
@@ -160,7 +160,7 @@ cargo run --example russh_smoke_test --features full-ssh-algos
 
 ## 5. CI / CD Quality Gates
 
-SubTerm's continuous integration workflow ([`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) automatically runs on all pull requests and pushes to `main`:
+SubTerm's continuous integration workflow ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) automatically runs on all pull requests and pushes to `main`:
 
 ```yaml
 - name: Lint and Typecheck

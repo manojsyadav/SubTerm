@@ -35,6 +35,8 @@ import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
 import LocalFilesView from "./components/LocalFilesView";
 import { TitleBar } from "./components/TitleBar";
+import { SessionList } from "./components/SessionList";
+import { useSessionMeta, metaKeyOf, sessionKind, parseMetaKey } from "./sessions/sessionMeta";
 import { saveAllAutoRecordings } from "./terminal/autoRecord";
 import { normalizeReduceMotion, shouldReduceMotion, normalizeHighContrast, shouldUseHighContrast } from "./ui/reduceMotion";
 import { clampOpacity, normalizeBlur, OPACITY_KEY, BLUR_KEY } from "./ui/windowOpacity";
@@ -910,6 +912,103 @@ function DesktopApp() {
       />
     );
 
+  // ---- Session lists (sidebar) -------------------------------------------------
+  // Open sessions are listed under their sidebar item (Servers / SFTP / RDP; Local
+  // lists its shells) with names, pins and groups kept per workspace.
+  const sessionMeta = useSessionMeta(activeProfile ?? undefined);
+  const nameOf = (s: Session) => {
+    const key = metaKeyOf(s);
+    return (key && sessionMeta.meta.names[key]) || tabNames[s.id] || s.serverName;
+  };
+  const displayNames = Object.fromEntries(sessions.map((s) => [s.id, nameOf(s)]));
+  // Saved servers keep their name across restarts; quick-connect sessions only for this run.
+  const renameSession = (sid: string, name: string | null) => {
+    const sess = sessions.find((x) => x.id === sid);
+    if (!sess) return;
+    const value = name && name !== sess.serverName ? name : null;
+    const key = metaKeyOf(sess);
+    if (key) sessionMeta.rename(key, value);
+    else setTabNames((prev) => { const { [sid]: _, ...rest } = prev; return value ? { ...rest, [sid]: value } : rest; });
+  };
+  const selectSession = (sid: string, split: boolean) => {
+    // Ctrl/Cmd+click tiles this session beside the one on screen (as the old tabs did).
+    if (split && activeView.startsWith('session-') && activeView !== sid) {
+      setMergedSessionIds((prev) => {
+        if (prev.length === 0) return [activeView, sid];
+        if (prev.includes(sid)) { const next = prev.filter((id) => id !== sid); return next.length < 2 ? [] : next; }
+        return [...prev, sid];
+      });
+      return;
+    }
+    if (!mergedSessionIds.includes(sid)) setMergedSessionIds([]);
+    setActiveView(sid);
+  };
+  const closeSessionAsked = async (sid: string) => {
+    if (sessionStatuses[sid] === 'connected') {
+      const ok = await confirm({ title: 'Close this session?', message: 'The connection will be dropped.', okLabel: 'Close', destructive: true });
+      if (!ok) return;
+    }
+    broadcast.removeSession(sid);
+    unpinSessionFromWall(sid);
+    closeSession(sid);
+  };
+  const sessionMenu = {
+    keyOf: (sid: string) => { const sess = sessions.find((x) => x.id === sid); return sess ? metaKeyOf(sess) : null; },
+    meta: sessionMeta.meta,
+    togglePin: sessionMeta.togglePin,
+    setGroup: sessionMeta.setGroup,
+    newGroup: async (key: string) => {
+      const name = (await textPrompt({ title: 'New group', message: 'Name for the group:', placeholder: 'e.g. Production', okLabel: 'Create' }))?.trim();
+      if (name) sessionMeta.setGroup(key, name);
+    },
+  };
+  const railList = (itemId: string) => {
+    const kind = itemId === 'nodes' ? 'ssh' : itemId === 'sftp' ? 'sftp' : itemId === 'rdp' ? 'rdp' : null;
+    if (!kind) return null;
+    return (
+      <SessionList
+        variant="rail"
+        label={`Open ${itemId === 'nodes' ? 'servers' : itemId === 'sftp' ? 'SFTP sessions' : 'remote desktops'}`}
+        sessions={sessions.filter((x) => sessionKind(x) === kind)}
+        meta={sessionMeta.meta}
+        activeView={activeView}
+        mergedSessionIds={mergedSessionIds}
+        statuses={sessionStatuses}
+        nameOf={nameOf}
+        onSelect={selectSession}
+        onMenu={(sid, x, y) => setTabMenu({ x, y, sessionId: sid })}
+        onClose={(sid) => { void closeSessionAsked(sid); }}
+        onToggleGroup={sessionMeta.toggleCollapsed}
+      />
+    );
+  };
+  // Which sidebar item lights up for the session on screen.
+  const activeSessionKind = (() => {
+    const sess = sessions.find((x) => x.id === activeView);
+    if (!sess) return null;
+    return ({ local: 'local', ssh: 'nodes', sftp: 'sftp', rdp: 'rdp' } as const)[sessionKind(sess)];
+  })();
+
+  // Pinned sessions reopen once per unlock, after the server list has loaded.
+  const pinnedOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!isUnlocked) { pinnedOpenedRef.current = false; return; }
+    if (pinnedOpenedRef.current || servers.length === 0) return;
+    pinnedOpenedRef.current = true;
+    const open = new Set(sessionsRef.current.map((x) => metaKeyOf(x)));
+    for (const key of sessionMeta.meta.pinned) {
+      if (open.has(key)) continue;
+      const parsed = parseMetaKey(key);
+      if (!parsed) continue;
+      if (parsed.kind === 'local') { if (!IS_MOBILE_OS) openLocalTerminal(localStorage.getItem('subterm-local-shell') || undefined); continue; }
+      const server = servers.find((x) => x.id === parsed.serverId);
+      if (!server) continue;
+      if (parsed.kind === 'sftp') openServer(server, 'sftp', { fullWidth: true });
+      else openServer(server);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnlocked, servers]);
+
   // The Local tab's shells, listed in the sidebar under Local.
   const localSession = sessions.find((s) => s.isLocal);
   const localTabs = localSession
@@ -922,7 +1021,7 @@ function DesktopApp() {
 
   // TitleBar is a module-level component (stable identity), so React keeps the tab
   // strip mounted across renders; it only needs the state it shows.
-  const titleBarProps = { confirm, activeView, appWindow, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setTabMenu, setTabNames, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
+  const titleBarProps = { confirm, activeView, appWindow, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setTabMenu, sshKeys, tabMenu, tabNames: displayNames, renameSession, sessionMenu, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
 
   // h-full (not h-screen) so the layout tracks --vv-h from main.tsx —
   // when the Android soft keyboard opens the visualViewport shrinks and the
@@ -961,7 +1060,8 @@ function DesktopApp() {
           (terminal gains the ~50px the vertical rail used to eat). */}
       <div className={`flex-1 flex ${isMobile ? 'flex-col-reverse' : ''} overflow-hidden pt-10`}>
         <Sidebar
-          activeTab={activeView.startsWith('session-local-') ? 'local' : activeView.startsWith('session-') ? 'nodes' : activeView}
+          activeTab={activeSessionKind ?? activeView}
+          renderUnder={railList}
           setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else if (tab === 'network') setIsNetworkToolsOpen(true); else setActiveView(tab); }}
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}

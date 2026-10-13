@@ -147,7 +147,7 @@ npm test
 # Test production Vite bundling
 npm run build
 ```
-`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](file:///d:/REPO/SubTerm/.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (unused imports/vars, `react-hooks/exhaustive-deps` gaps) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
+`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (unused imports/vars, `react-hooks/exhaustive-deps` gaps) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
 
 ### 5.2 Rust Backend Verification
 ```bash
@@ -163,7 +163,7 @@ cargo test
 cargo clippy
 ```
 
-**Live SSH protocol smoke test** — `cargo test` doesn't touch a real network, so after a `russh`/`russh-sftp` upgrade or any change to `ssh_manager.rs`'s connect/auth/channel code, run [`src-tauri/examples/russh_smoke_test.rs`](file:///d:/REPO/SubTerm/src-tauri/examples/russh_smoke_test.rs) against any local `sshd` (a throwaway keypair in its `authorized_keys` is enough) to exercise connect, publickey auth, exec, and the port-forward channel-bridge pattern end-to-end:
+**Live SSH protocol smoke test** — `cargo test` doesn't touch a real network, so after a `russh`/`russh-sftp` upgrade or any change to `ssh_manager.rs`'s connect/auth/channel code, run [`src-tauri/examples/russh_smoke_test.rs`](../src-tauri/examples/russh_smoke_test.rs) against any local `sshd` (a throwaway keypair in its `authorized_keys` is enough) to exercise connect, publickey auth, exec, and the port-forward channel-bridge pattern end-to-end:
 ```bash
 cd src-tauri
 SMOKE_SSH_PORT=2222 SMOKE_SSH_KEY=/path/to/client_key SMOKE_SSH_USER=youruser cargo run --example russh_smoke_test

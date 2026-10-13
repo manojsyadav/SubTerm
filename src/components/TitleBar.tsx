@@ -1,9 +1,9 @@
-// The window's title bar: quick-access bookmarks, the
-// session tab strip (with its context menu and the mobile session picker), the Wall
+// The window's title bar: quick-access bookmarks, the session menu (opened from the
+// sidebar session lists) and the mobile session picker, the Wall
 // and broadcast controls, and the window buttons. Moved out of DesktopApp, which
 // owns all of the state it shows; this component only renders it.
 import { invoke } from "@tauri-apps/api/core";
-import { X, Key, Square, Copy, MoreVertical, Radio, ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command } from "lucide-react";
+import { X, Key, Square, Copy, Radio, ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command } from "lucide-react";
 import logoUrl from "../assets/logo.png";
 import { useConfirm } from "../ui/confirm";
 import { RenameInput } from "../ui/renameInput";
@@ -15,6 +15,7 @@ import { WallItem } from "../hooks/useWallManager";
 import type { Window as AppWindow } from "@tauri-apps/api/window";
 import type { SshKey } from "../types";
 import type { BroadcastContextValue } from "../ui/broadcast";
+import type { SessionMeta } from "../sessions/sessionMeta";
 
 export interface TitleBarProps {
   activeView: string;
@@ -44,7 +45,16 @@ export interface TitleBarProps {
   setSessionStatuses: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   setTabMenu: React.Dispatch<React.SetStateAction<{ x: number; y: number; sessionId: string } | null>>;
-  setTabNames: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  /** Rename a session (null = back to its server name); saved servers remember it. */
+  renameSession: (sessionId: string, name: string | null) => void;
+  /** Pin and group actions for the tab menu (see sessions/sessionMeta). */
+  sessionMenu: {
+    keyOf: (sessionId: string) => string | null;
+    meta: SessionMeta;
+    togglePin: (key: string) => void;
+    setGroup: (key: string, group: string | null) => void;
+    newGroup: (key: string) => void;
+  };
   sshKeys: SshKey[];
   tabMenu: { x: number; y: number; sessionId: string } | null;
   tabNames: Record<string, string>;
@@ -84,7 +94,8 @@ export function TitleBar(props: TitleBarProps) {
     setSessionStatuses,
     setSessions,
     setTabMenu,
-    setTabNames,
+    renameSession,
+    sessionMenu,
     sshKeys,
     tabMenu,
     tabNames,
@@ -378,173 +389,6 @@ export function TitleBar(props: TitleBarProps) {
           </div>
         )}
 
-        {/* Tab strip is a drag region; tabs themselves opt out via no-drag so
-            clicking a tab selects it instead of dragging the window. On phone
-            the horizontal scroll is replaced by the dropdown above; the
-            strip below is hidden on mobile. */}
-        <div
-          data-tauri-drag-region
-          className={`${isMobile ? 'hidden' : 'flex'} flex-1 gap-1 overflow-x-auto no-scrollbar h-full items-end pb-1`}
-          onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY; }}
-        >
-          {sessions
-            .filter((s) => !quickAccessServersList.some((qs) => qs.id === s.serverId || qs.name === s.serverName))
-            .map(s => {
-            const st = sessionStatuses[s.id] ?? "connecting";
-            // Dot palette: green = connected, amber = connecting, red = failed
-            // or disconnected. The pulse animation only runs while connecting
-            // so a steady-state tab doesn't draw the eye every half second.
-            const dotTone =
-              st === "connected"    ? "bg-emerald-400" :
-              st === "connecting"   ? "bg-amber-400 animate-pulse" :
-              st === "failed"       ? "bg-rose-500" :
-              st === "disconnected" ? "bg-rose-500" :
-                                      "bg-zinc-500";
-            const dotTitle =
-              st === "connected"    ? "Connected" :
-              st === "connecting"   ? "Connecting…" :
-              st === "failed"       ? "Connection failed" :
-              st === "disconnected" ? "Disconnected" :
-                                      st;
-            // Broadcast indicator: small orange dot next to the status dot when
-            // this session is in the target set AND broadcast is armed. Kept
-            // separate from the status dot so the user can still tell "is it
-            // connected?" and "is it broadcasting?" at a glance.
-            const isBroadcastTarget = broadcast.enabled && broadcast.targetSessionIds.has(s.id);
-            const isMergedTab = mergedSessionIds.includes(s.id);
-            return (
-              <div
-                key={s.id}
-                onClick={(e) => {
-                  // Ctrl/⌘-click toggles this tab in the split beside the
-                  // currently-active session view — a quick keyboard-free
-                  // way to tile two servers together without going through
-                  // the right-click menu.
-                  if ((e.ctrlKey || e.metaKey) && activeView.startsWith('session-') && activeView !== s.id) {
-                    setMergedSessionIds(prev => {
-                      // Fresh split: seed with the anchor first so it holds
-                      // position 0 for the rest of the split's lifetime.
-                      if (prev.length === 0) return [activeView, s.id];
-                      if (prev.includes(s.id)) {
-                        const next = prev.filter(id => id !== s.id);
-                        return next.length < 2 ? [] : next;
-                      }
-                      return [...prev, s.id];
-                    });
-                    return;
-                  }
-                  // Plain click on a tab that isn't part of the current
-                  // split exits the split — the user is asking for a
-                  // single-tab view of s.id, not "tile s.id next to the
-                  // sessions I had merged".
-                  if (!mergedSessionIds.includes(s.id)) setMergedSessionIds([]);
-                  setActiveView(s.id);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setTabMenu({ x: e.clientX, y: e.clientY, sessionId: s.id });
-                }}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  setTabMenu({ x: e.clientX, y: e.clientY, sessionId: s.id });
-                }}
-                // No max-width / no truncate: the user explicitly wants full
-                // node names visible even when many sessions are open. The tab
-                // row itself is horizontally scrollable (overflow-x-auto +
-                // wheel-to-horizontal scroll above), so wider tabs just mean
-                // more scrolling — they never hide the name behind an ellipsis.
-                // `whitespace-nowrap` keeps long names on a single line; without
-                // it a tab with a 30-char hostname would wrap into a two-line
-                // pill and break the row's height.
-                title={isMergedTab ? `${tabNames[s.id] ?? s.serverName} · split beside current view (Ctrl-click to unpair)` : (tabNames[s.id] ?? s.serverName)}
-                className={`group no-drag flex items-center w-[130px] h-7 px-2 rounded-md cursor-pointer transition-all shrink-0 mr-1 overflow-hidden ${
-                  activeView === s.id
-                    ? 'bg-primary/15 text-primary border border-primary/40 shadow-inner shadow-primary/10'
-                    : isMergedTab
-                      ? 'bg-primary/[0.05] text-primary/80 border border-primary/25 hover:bg-primary/10'
-                      : 'bg-white/[0.06] text-zinc-300 border border-white/10 hover:bg-white/[0.1] hover:border-white/20 hover:text-white'
-                }`}
-              >
-                <span
-                  title={dotTitle}
-                  className={`w-2 h-2 rounded-full mr-1.5 shrink-0 ${dotTone}`}
-                  aria-label={dotTitle}
-                />
-                {isBroadcastTarget && (
-                  <span
-                    title="Broadcast target"
-                    aria-label="Broadcast target"
-                    className="w-1.5 h-1.5 rounded-full mr-1 shrink-0 bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.7)]"
-                  />
-                )}
-                {isMergedTab && (
-                  <Columns size={9} className="text-primary/70 mr-1 shrink-0" />
-                )}
-                <span className="shrink-0 mr-1 opacity-80" style={s.color ? { color: s.color } : {}}>
-                  {renderServerIcon(s.icon || "server", 11)}
-                </span>
-                <span className="text-[11px] font-semibold truncate flex-1 min-w-0 text-left tracking-tight">{tabNames[s.id] ?? s.serverName}</span>
-                {s.isProduction && (
-                  <span className="ml-1 px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
-                    PROD
-                  </span>
-                )}
-                {/* Mobile-only actions trigger. On phone we surface the same
-                    tabMenu (Reconnect / Disconnect / Close) here since there
-                    is no right-click on touch — a single kebab is a cleaner
-                    affordance than a naked X plus a hidden long-press menu.
-                    The X below is desktop-only so we don't stack both. */}
-                <button
-                  type="button"
-                  aria-label="Session actions"
-                  className="sm:hidden ml-1 h-5 w-5 flex items-center justify-center rounded hover:bg-white/5 shrink-0 text-zinc-400"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setTabMenu({ x: rect.left, y: rect.bottom, sessionId: s.id });
-                  }}
-                >
-                  <MoreVertical size={13} />
-                </button>
-                {/* Desktop-only inline close. Hidden until hover so the tab
-                    reads clean at rest; sizing (w-5 h-5, 12 px icon) matches
-                    the terminal-tab close inside SessionView so both tab
-                    strips look like siblings. */}
-                <button
-                  type="button"
-                  aria-label="Close session"
-                  className="hidden sm:flex ml-1 h-5 w-5 items-center justify-center rounded hover:bg-white/5 shrink-0 opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-400 transition-opacity"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    // Only confirm when there's an actual live connection to
-                    // drop — connecting/failed/disconnected close instantly.
-                    // Status source of truth is the same sessionStatuses map
-                    // that drives the coloured dot above.
-                    if (sessionStatuses[s.id] === "connected") {
-                      const ok = await confirm({
-                        title: "Close this session?",
-                        message: "The SSH connection will be dropped.",
-                        okLabel: "Close",
-                        destructive: true,
-                      });
-                      if (!ok) return;
-                    }
-                    setSessions(prev => prev.filter(sess => sess.id !== s.id));
-                    setSessionStatuses(prev => {
-                      const { [s.id]: _, ...rest } = prev;
-                      return rest;
-                    });
-                    broadcast.removeSession(s.id);
-                    unpinSessionFromWall(s.id);
-                    setActiveView(prev => (prev === s.id ? "nodes" : prev));
-                  }}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
       </div>
       {/* Centre cluster: Command Palette, Wall and Broadcast, centred in the title bar
           (the left and right parts take equal widths, so this stays in the middle). */}
@@ -782,20 +626,43 @@ export function TitleBar(props: TitleBarProps) {
               initialValue={tabNames[targetId] ?? (sessions.find(s => s.id === targetId)?.serverName ?? "")}
               placeholder="Custom tab name…"
               onCommit={(newVal) => {
-                const trimmed = newVal.trim();
-                const defaultName = sessions.find(s => s.id === targetId)?.serverName;
-                setTabNames(prev => {
-                  if (trimmed && trimmed !== defaultName) {
-                    return { ...prev, [targetId]: trimmed };
-                  } else {
-                    const { [targetId]: _, ...rest } = prev;
-                    return rest;
-                  }
-                });
+                renameSession(targetId, newVal.trim() || null);
                 setTabMenu(null);
               }}
               onCancel={() => setTabMenu(null)}
             />
+            {(() => {
+              const key = sessionMenu.keyOf(targetId);
+              if (!key) return null; // quick-connect sessions have no saved server to remember
+              const pinned = sessionMenu.meta.pinned.includes(key);
+              const current = sessionMenu.meta.groups[key] ?? null;
+              const groups = [...new Set(Object.values(sessionMenu.meta.groups))].sort((a, b) => a.localeCompare(b));
+              return (
+                <>
+                  <button
+                    className="w-full text-left px-3 py-1.5 hover:bg-primary/15 hover:text-primary text-zinc-200 flex items-center gap-2"
+                    onClick={() => { sessionMenu.togglePin(key); setTabMenu(null); }}
+                  >
+                    {pinned ? <><PinOff size={12} className="text-zinc-500" /> Unpin session</> : <><Pin size={12} className="text-zinc-500" /> Pin session (top of list, reopens on start)</>}
+                  </button>
+                  <div className="px-3 pt-1.5 pb-1 text-[9.5px] font-bold uppercase tracking-widest text-zinc-500">Group</div>
+                  <div className="px-2 pb-1 flex flex-wrap gap-1">
+                    {groups.map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => { sessionMenu.setGroup(key, current === g ? null : g); setTabMenu(null); }}
+                        className={`px-2 py-0.5 rounded-full border text-[10.5px] ${current === g ? "bg-primary/15 border-primary/40 text-primary" : "border-white/10 text-zinc-300 hover:bg-white/10"}`}
+                        title={current === g ? "Remove from this group" : `Move to ${g}`}
+                      >{g}</button>
+                    ))}
+                    <button
+                      onClick={() => { setTabMenu(null); sessionMenu.newGroup(key); }}
+                      className="px-2 py-0.5 rounded-full border border-dashed border-white/15 text-zinc-400 hover:text-white text-[10.5px]"
+                    >+ New group</button>
+                  </div>
+                </>
+              );
+            })()}
             <div className="h-px bg-white/10 my-1" />
 
             <button

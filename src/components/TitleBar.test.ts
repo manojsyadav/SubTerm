@@ -29,7 +29,7 @@ beforeEach(() => {
       { id: "session-b", serverId: 2, serverName: "db-1" },
     ],
     setActiveView: fn(), setBroadcastMenuOpen: fn(), setIsCommandPaletteOpen: fn(), setIsUnlockModalOpen: fn(),     setMergedSessionIds: fn(), setMobileSessionPickerOpen: fn(), setSessionStatuses: fn(), setSessions: fn(),
-    setTabMenu: fn(), setTabNames: fn(), sshKeys: [], tabMenu: null, tabNames: {},
+    setTabMenu: fn(), renameSession: fn(), sessionMenu: { keyOf: () => null, meta: { names: {}, pinned: [], groups: {}, collapsed: [] }, togglePin: fn(), setGroup: fn(), newGroup: fn() }, sshKeys: [], tabMenu: null, tabNames: {},
     toggleMaximize: fn(), unpinSessionFromWall: fn(), unpinTerminalFromWall: fn(), wallEnabled: false, wallHasTerminal: () => false, wallItems: [],
   };
   host = document.createElement("div");
@@ -39,21 +39,37 @@ beforeEach(() => {
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); });
 
-const tab = (name: string) => [...host.querySelectorAll("div")].reverse().find((d) => d.textContent?.trim().startsWith(name) && d.querySelector('[aria-label="Close session"]'))!;
+function rerender(extra: Partial<Props>) {
+  props = { ...props, ...extra };
+  act(() => root.render(createElement(TitleBar, props)));
+}
 
-describe("TitleBar session tabs", () => {
-  it("shows every session and switches on click", () => {
-    expect(host.textContent).toContain("web-1");
-    expect(host.textContent).toContain("db-1");
-    act(() => tab("db-1").click());
-    expect(props.setActiveView).toHaveBeenCalledWith("session-b");
-    expect(props.setMergedSessionIds).toHaveBeenCalledWith([]);
+describe("TitleBar", () => {
+  it("no longer shows a session tab strip on desktop (sessions live in the sidebar)", () => {
+    expect(host.textContent).not.toContain("web-1");
+    expect(host.textContent).not.toContain("db-1");
   });
 
-  it("asks through the app's confirm dialog before closing a connected session", async () => {
-    const close = tab("db-1").querySelector('[aria-label="Close session"]') as HTMLButtonElement;
-    await act(async () => { close.click(); });
-    expect(props.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Close this session?" }));
-    expect(props.setSessions).toHaveBeenCalled();
+  it("session menu renames, pins and groups a saved-server session", () => {
+    const togglePin = vi.fn(), setGroup = vi.fn(), newGroup = vi.fn();
+    rerender({
+      tabMenu: { x: 10, y: 10, sessionId: "session-b" },
+      sessionMenu: { keyOf: () => "ssh:2", meta: { names: {}, pinned: [], groups: { "ssh:1": "Prod" }, collapsed: [] }, togglePin, setGroup, newGroup },
+    });
+    const btn = (text: string) => [...host.querySelectorAll("button")].find((b) => b.textContent?.includes(text)) as HTMLButtonElement;
+    act(() => btn("Pin session").click());
+    expect(togglePin).toHaveBeenCalledWith("ssh:2");
+    rerender({ tabMenu: { x: 10, y: 10, sessionId: "session-b" } });
+    act(() => btn("Prod").click());
+    expect(setGroup).toHaveBeenCalledWith("ssh:2", "Prod");
+    rerender({ tabMenu: { x: 10, y: 10, sessionId: "session-b" } });
+    act(() => btn("+ New group").click());
+    expect(newGroup).toHaveBeenCalledWith("ssh:2");
+  });
+
+  it("hides pin and group for sessions without a saved server", () => {
+    rerender({ tabMenu: { x: 10, y: 10, sessionId: "session-b" } }); // keyOf returns null
+    expect(host.textContent).not.toContain("Pin session");
+    expect(host.textContent).toContain("Rename tab");
   });
 });
