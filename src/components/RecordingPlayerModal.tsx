@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
-import { X, Play, Pause, RotateCcw, FolderOpen, FastForward } from "lucide-react";
+import { X, Play, Pause, RotateCcw, FolderOpen, FastForward, Film } from "lucide-react";
 import { parseCast, type ParsedCast } from "../terminal/recorder";
 import { compressIdle, countPlayed, parseResize, formatClock } from "../terminal/playback";
+import { captureFrames, framesToSvg } from "../terminal/svgExport";
+import { saveTextFile } from "../terminal/saveFile";
 
 const SPEEDS = [0.5, 1, 2, 4, 8];
 const IDLE_CAP_SECONDS = 1.5;
@@ -16,6 +18,7 @@ export function RecordingPlayerModal({ onClose }: Props) {
   const [cast, setCast] = useState<ParsedCast | null>(null);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [skipIdle, setSkipIdle] = useState(true);
@@ -139,6 +142,20 @@ export function RecordingPlayerModal({ onClose }: Props) {
     }
   };
 
+  const exportSvg = async () => {
+    if (!cast) return;
+    setExporting(true);
+    try {
+      const frames = await captureFrames(cast.header, events);
+      const svg = framesToSvg(frames, cast.header.width, cast.header.height);
+      await saveTextFile(svg, `${(fileName || "recording").replace(/\.[^.]+$/, "")}.svg`, "svg");
+    } catch (e) {
+      setError(`SVG export failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const togglePlay = () => {
     if (!cast) return;
     if (!playing && posRef.current >= duration) seek(0);
@@ -159,6 +176,17 @@ export function RecordingPlayerModal({ onClose }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {cast && (
+              <button
+                type="button"
+                disabled={exporting}
+                onClick={() => { void exportSvg(); }}
+                title="Save as an animated SVG (plays in browsers and on GitHub). Uses the Skip idle setting."
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-zinc-200 bg-white/5 hover:bg-white/10 disabled:opacity-50"
+              >
+                <Film size={13} /> {exporting ? "Exporting…" : "Export SVG"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
