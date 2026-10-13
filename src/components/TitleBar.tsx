@@ -1,9 +1,9 @@
-// The window's title bar: profile pill, local-shell and quick-access bookmarks, the
+// The window's title bar: local-shell and quick-access bookmarks, the
 // session tab strip (with its context menu and the mobile session picker), the Wall
 // and broadcast controls, and the window buttons. Moved out of DesktopApp, which
 // owns all of the state it shows; this component only renders it.
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, X, Terminal, Key, ArrowLeftRight, Square, Copy, MoreVertical, Radio, ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command, Lock, Settings } from "lucide-react";
+import { Plus, X, Terminal, Key, Square, Copy, MoreVertical, Radio, ChevronDown, Columns, LayoutGrid, Pin, PinOff, Command } from "lucide-react";
 import logoUrl from "../assets/logo.png";
 import { useConfirm } from "../ui/confirm";
 import { RenameInput } from "../ui/renameInput";
@@ -17,7 +17,6 @@ import type { SshKey } from "../types";
 import type { BroadcastContextValue } from "../ui/broadcast";
 
 export interface TitleBarProps {
-  activeProfile: string | null;
   activeView: string;
   appWindow: AppWindow;
   /** The app's confirm dialog (useConfirm), not window.confirm. */
@@ -26,7 +25,6 @@ export interface TitleBarProps {
   broadcast: BroadcastContextValue;
   broadcastMenuOpen: boolean;
   closeSession: (sessId: string) => void;
-  handleLockProfile: () => Promise<void>;
   isMaximized: boolean;
   isMobile: boolean;
   isUnlocked: boolean;
@@ -36,8 +34,6 @@ export interface TitleBarProps {
   openLocalTerminal: (preferredShell?: string, forceNew?: boolean) => void;
   openServer: (server: Server, initialTool?: Session["initialTool"], opts?: { fullWidth?: boolean }) => void;
   pinTerminalToWall: (sid: string, terminalId: string) => void;
-  profileDropdownOpen: boolean;
-  profileIcon: string;
   quickAccessServersList: Server[];
   sessionActiveTerm: Record<string, string>;
   sessionStatuses: Record<string, string>;
@@ -46,10 +42,8 @@ export interface TitleBarProps {
   setBroadcastMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsCommandPaletteOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsUnlockModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsWorkspaceSwitcherOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setMergedSessionIds: React.Dispatch<React.SetStateAction<string[]>>;
   setMobileSessionPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setProfileDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSessionStatuses: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   setShellMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -70,14 +64,12 @@ export interface TitleBarProps {
 export function TitleBar(props: TitleBarProps) {
   const {
     confirm,
-    activeProfile,
     activeView,
     appWindow,
     availableShells,
     broadcast,
     broadcastMenuOpen,
     closeSession,
-    handleLockProfile,
     isMaximized,
     isMobile,
     isUnlocked,
@@ -87,8 +79,6 @@ export function TitleBar(props: TitleBarProps) {
     openLocalTerminal,
     openServer,
     pinTerminalToWall,
-    profileDropdownOpen,
-    profileIcon,
     quickAccessServersList,
     sessionActiveTerm,
     sessionStatuses,
@@ -97,10 +87,8 @@ export function TitleBar(props: TitleBarProps) {
     setBroadcastMenuOpen,
     setIsCommandPaletteOpen,
     setIsUnlockModalOpen,
-    setIsWorkspaceSwitcherOpen,
     setMergedSessionIds,
     setMobileSessionPickerOpen,
-    setProfileDropdownOpen,
     setSessionStatuses,
     setSessions,
     setShellMenuOpen,
@@ -138,96 +126,6 @@ export function TitleBar(props: TitleBarProps) {
       <div className="hidden sm:flex items-center gap-2 pr-2 pl-[75px] md:pl-2 shrink-0" data-tauri-drag-region>
         <img src={logoUrl} alt="" draggable={false} className="h-6 w-auto max-w-[24px] object-contain select-none" />
         <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
-      </div>
-
-      {/* Profile / Unlock Pill (Top Left) */}
-      <div className="hidden sm:flex items-center no-drag mr-1">
-        {!isUnlocked ? (
-          <button
-            type="button"
-            onClick={() => setIsUnlockModalOpen(true)}
-            title="Unlock Vault"
-            className="h-7 px-2.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/5 group"
-          >
-            <Lock size={12} className="text-amber-400 group-hover:scale-110 transition-transform" />
-            <span>Unlock</span>
-          </button>
-        ) : (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setProfileDropdownOpen((prev) => !prev)}
-              title={`Workspace: ${activeProfile || "Default"}`}
-              className="h-7 px-2.5 rounded-md bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-all shadow-sm"
-            >
-              <span className="text-xs select-none">{profileIcon || "💼"}</span>
-              <span className="font-semibold max-w-[100px] truncate">{activeProfile || "Workspace"}</span>
-              <ChevronDown size={11} className={`text-zinc-400 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {profileDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)} />
-                <div className="absolute left-0 top-full mt-1.5 w-64 py-1.5 bg-[#141418] border border-white/10 rounded-xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[11.5px]">
-                  {/* Header info */}
-                  <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0 select-none">
-                      {profileIcon || "💼"}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-white text-xs truncate">{activeProfile || "Default Workspace"}</div>
-                      <div className="text-[10px] text-zinc-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <span>Active Workspace</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Switch Workspace */}
-                  <div className="p-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        setIsWorkspaceSwitcherOpen(true);
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-zinc-300 hover:text-white flex items-center justify-between transition-colors font-medium"
-                    >
-                      <div className="flex items-center gap-2">
-                        <ArrowLeftRight size={13} className="text-primary" />
-                        <span>Switch Workspace</span>
-                      </div>
-                      <kbd className="text-[9px] bg-black/40 px-1 py-0.5 rounded text-zinc-500 font-mono border border-white/5">1-click</kbd>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        setActiveView("settings");
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-zinc-300 hover:text-white flex items-center gap-2 transition-colors font-medium"
-                    >
-                      <Settings size={13} className="text-zinc-400" />
-                      <span>Workspace Settings</span>
-                    </button>
-                    <div className="border-t border-white/5 my-1" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        handleLockProfile();
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-amber-500/10 text-amber-300/90 hover:text-amber-300 flex items-center gap-2 transition-colors font-medium"
-                    >
-                      <Lock size={13} />
-                      <span>Lock Vault</span>
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Top Bar Bookmarks Strip: Local Shell + Quick Access Servers */}

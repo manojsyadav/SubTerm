@@ -36,6 +36,9 @@ interface SidebarProps {
   /** Installed local shells, offered on right-click of Local (desktop rail). */
   localShells?: { id: string; name: string }[];
   onOpenLocalShell?: (shellId: string) => void;
+  /** Active workspace, shown on the Switch workspace button (the title bar no longer has one). */
+  workspaceName?: string;
+  workspaceIcon?: string;
 }
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -58,8 +61,15 @@ export const Sidebar = ({
   showNetworkTools = true,
   localShells = [],
   onOpenLocalShell,
+  workspaceName,
+  workspaceIcon,
 }: SidebarProps) => {
   const [shellMenu, setShellMenu] = useState<{ x: number; y: number } | null>(null);
+  const switchTitle = workspaceName ? `Workspace: ${workspaceName} (click to switch)` : "Switch workspace";
+  // The workspace's own icon (an emoji) when it has one, so the active workspace is visible at a glance.
+  const workspaceBadge = workspaceIcon
+    ? <span className="text-[18px] leading-none select-none">{workspaceIcon}</span>
+    : <ArrowLeftRight size={18} />;
   // Live health pulse state across monitored servers
   const [healthState, setHealthState] = useState<"ok" | "warning" | "critical" | "idle">("idle");
   const [alertSummary, setAlertSummary] = useState<string | null>(null);
@@ -237,9 +247,10 @@ export const Sidebar = ({
             <button
               onClick={onSwitchProfile || onLogout}
               className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
-              title="Switch workspace"
+              title={switchTitle}
+              aria-label={switchTitle}
             >
-              <ArrowLeftRight size={18} />
+              {workspaceBadge}
             </button>
           )}
           <button
@@ -350,9 +361,10 @@ export const Sidebar = ({
           <button
             onClick={onSwitchProfile || onLogout}
             className="p-2.5 rounded-xl transition-all flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10"
-            title="Switch workspace"
+            title={switchTitle}
+            aria-label={switchTitle}
           >
-            <ArrowLeftRight size={18} />
+            {workspaceBadge}
           </button>
         )}
         <button

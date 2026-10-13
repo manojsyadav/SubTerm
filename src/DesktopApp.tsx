@@ -347,7 +347,6 @@ function DesktopApp() {
 
   const [availableShells, setAvailableShells] = useState<{ id: string; name: string; command: string }[]>([]);
   const [shellMenuOpen, setShellMenuOpen] = useState(false);
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isWorkspaceSwitcherOpen, setIsWorkspaceSwitcherOpen] = useState(false);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const { icon: profileIcon } = useProfileIcon(activeProfile);
@@ -480,7 +479,6 @@ function DesktopApp() {
 
   const switchWorkspace = async (targetProfile: string) => {
     if (targetProfile === activeProfile) return;
-    setProfileDropdownOpen(false);
 
     if (sessions.length > 0) {
       const ok = await confirm({
@@ -915,7 +913,7 @@ function DesktopApp() {
 
   // TitleBar is a module-level component (stable identity), so React keeps the tab
   // strip mounted across renders; it only needs the state it shows.
-  const titleBarProps = { confirm, activeProfile, activeView, appWindow, availableShells, broadcast, broadcastMenuOpen, closeSession, handleLockProfile, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openDefaultLocal, openLocalTerminal, openServer, pinTerminalToWall, profileDropdownOpen, profileIcon, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setIsWorkspaceSwitcherOpen, setMergedSessionIds, setMobileSessionPickerOpen, setProfileDropdownOpen, setSessionStatuses, setSessions, setShellMenuOpen, setTabMenu, setTabNames, shellMenuOpen, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
+  const titleBarProps = { confirm, activeView, appWindow, availableShells, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openDefaultLocal, openLocalTerminal, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setShellMenuOpen, setTabMenu, setTabNames, shellMenuOpen, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
 
   // h-full (not h-screen) so the layout tracks --vv-h from main.tsx —
   // when the Android soft keyboard opens the visualViewport shrinks and the
@@ -966,6 +964,8 @@ function DesktopApp() {
           onLogout={handleLogout}
           onLock={handleLockProfile}
           onSwitchProfile={() => (isUnlocked ? setIsWorkspaceSwitcherOpen(true) : setIsUnlockModalOpen(true))}
+          workspaceName={activeProfile || undefined}
+          workspaceIcon={profileIcon}
           enableMonitoring={appSettings.enableMonitoring}
         />
 

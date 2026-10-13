@@ -18,18 +18,17 @@ beforeEach(() => {
   const fn = () => vi.fn();
   props = {
     confirm: vi.fn(async () => true) as unknown as Props["confirm"],
-    activeProfile: "work", activeView: "session-a", appWindow: { minimize: fn(), close: fn() } as unknown as Props["appWindow"],
+    activeView: "session-a", appWindow: { minimize: fn(), close: fn() } as unknown as Props["appWindow"],
     availableShells: [], broadcast: { enabled: false, selected: new Set(), toggleEnabled: fn(), toggle: fn(), selectAll: fn(), clear: fn(), removeSession: fn() } as unknown as Props["broadcast"],
-    broadcastMenuOpen: false, closeSession: fn(), handleLockProfile: vi.fn(async () => {}), isMaximized: false, isMobile: false, isUnlocked: true,
+    broadcastMenuOpen: false, closeSession: fn(), isMaximized: false, isMobile: false, isUnlocked: true,
     mergedSessionIds: [], mobileSessionPickerOpen: false, openDefaultLocal: fn(), openLocalTerminal: fn(), openServer: fn(), pinTerminalToWall: fn(),
-    profileDropdownOpen: false, profileIcon: "user", quickAccessServersList: [], sessionActiveTerm: {},
+    quickAccessServersList: [], sessionActiveTerm: {},
     sessionStatuses: { "session-a": "connected", "session-b": "connected" },
     sessions: [
       { id: "session-a", serverId: 1, serverName: "web-1" },
       { id: "session-b", serverId: 2, serverName: "db-1" },
     ],
-    setActiveView: fn(), setBroadcastMenuOpen: fn(), setIsCommandPaletteOpen: fn(), setIsUnlockModalOpen: fn(), setIsWorkspaceSwitcherOpen: fn(),
-    setMergedSessionIds: fn(), setMobileSessionPickerOpen: fn(), setProfileDropdownOpen: fn(), setSessionStatuses: fn(), setSessions: fn(),
+    setActiveView: fn(), setBroadcastMenuOpen: fn(), setIsCommandPaletteOpen: fn(), setIsUnlockModalOpen: fn(),     setMergedSessionIds: fn(), setMobileSessionPickerOpen: fn(), setSessionStatuses: fn(), setSessions: fn(),
     setShellMenuOpen: fn(), setTabMenu: fn(), setTabNames: fn(), shellMenuOpen: false, sshKeys: [], tabMenu: null, tabNames: {},
     toggleMaximize: fn(), unpinSessionFromWall: fn(), unpinTerminalFromWall: fn(), wallEnabled: false, wallHasTerminal: () => false, wallItems: [],
   };

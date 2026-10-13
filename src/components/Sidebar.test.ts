@@ -44,3 +44,14 @@ describe("Sidebar Local shell menu", () => {
     expect(host.querySelector("[role=menu]")).toBeNull();
   });
 });
+
+describe("Sidebar workspace button", () => {
+  it("shows the active workspace's icon and name and opens the switcher", () => {
+    const onSwitchProfile = vi.fn();
+    render({ workspaceName: "work", workspaceIcon: "🚀", onSwitchProfile });
+    const btn = host.querySelector('[aria-label^="Workspace: work"]') as HTMLButtonElement;
+    expect(btn.textContent).toBe("🚀");
+    act(() => btn.click());
+    expect(onSwitchProfile).toHaveBeenCalled();
+  });
+});

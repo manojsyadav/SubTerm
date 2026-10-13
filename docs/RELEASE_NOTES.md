@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(ui)` — One workspace control**:
+  The workspace menu at the top left is gone; it repeated the sidebar's Switch workspace and Lock buttons. The sidebar's Switch workspace button now shows the active workspace's icon, with its name on hover.
+
 - **`feat(rdp)` — Embedded RDP: clipboard, sound and resize**:
   Text copied on the remote desktop can be pasted here, and text copied here is offered to the remote side when you click into its screen. Remote sound plays through SubTerm (a **Sound on/off** button in the RDP bar, remembered). Embedded RDP sessions open as tabs next to SSH sessions instead of covering the window. The remote desktop follows the window size shortly after you stop resizing. Screen updates are merged and sent at most about 30 times a second, which helps on slow links. The RDP helper now ships in Windows installers and is built and bundled for macOS and Linux too.
 
