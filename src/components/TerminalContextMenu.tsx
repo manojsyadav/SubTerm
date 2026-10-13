@@ -10,6 +10,7 @@ import {
   KeyRound,
   Circle,
   Square,
+  Check,
 } from "lucide-react";
 
 export interface ContextMenuState {
@@ -33,6 +34,9 @@ interface TerminalContextMenuProps {
   recording: boolean | null;
   onStartRecording: (withInput: boolean) => void;
   onStopRecording: (format: "cast" | "text") => void;
+  /** null = not offered (local terminal or unsaved server); otherwise the current setting. */
+  alwaysRecord?: boolean | null;
+  onToggleAlwaysRecord?: () => void;
   onPasteSavedPassword: () => void;
 }
 
@@ -49,6 +53,8 @@ export function TerminalContextMenu({
   recording,
   onStartRecording,
   onStopRecording,
+  alwaysRecord = null,
+  onToggleAlwaysRecord,
   onPasteSavedPassword,
 }: TerminalContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -270,6 +276,19 @@ export function TerminalContextMenu({
                   <span>Start recording with keystrokes</span>
                 </button>
               </>
+            )}
+            {alwaysRecord !== null && (
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={alwaysRecord}
+                onClick={() => { onToggleAlwaysRecord?.(); onClose(); }}
+                title="Record output (not keystrokes) every time this server opens, saved to the recordings folder when the tab closes"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-zinc-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+              >
+                <Check size={13} className={alwaysRecord ? "text-emerald-400" : "text-transparent"} />
+                <span>Always record this server</span>
+              </button>
             )}
           </>
         )}

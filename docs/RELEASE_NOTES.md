@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(recording)` — Animated SVG export and always-record servers**:
+  The recording player has **Export SVG**: an animated SVG with colours that plays in browsers and on GitHub, for runbooks (it follows the Skip idle setting). A terminal's right-click menu has **Always record this server**: every session to that server records its output (never keystrokes) and is saved without a dialog to the `recordings` folder in the app data directory when the tab closes.
+
 - **`feat(updates)` — Update check inside the app**:
   SubTerm now checks GitHub releases at startup inside the app too, not only on the unlock screen (which auto-unlocked workspaces skip), and shows a dismissible notice for a newer version. Settings > General > Updates turns the startup check off and has a **Check for updates** button. Nothing is downloaded automatically.
 

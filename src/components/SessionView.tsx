@@ -2218,6 +2218,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                         isProd={isProd}
                         isLocal={session.isLocal}
                         localShell={session?.localShell}
+                        profile={profile}
                         onTerminalClosed={(details) => handleTerminalClosed(t.id, details)}
                       />
                       {inTile && (

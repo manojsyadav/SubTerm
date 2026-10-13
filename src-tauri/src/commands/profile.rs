@@ -644,6 +644,33 @@ pub(crate) async fn save_audit_log(
 /// reliably save anything inside Tauri, so saving goes through the OS dialog.
 /// `extension` is without the dot (e.g. "cast"). Returns the chosen path, or
 /// `None` when the user cancels.
+/// Folder for automatic ("always record this server") recordings, created on demand.
+#[tauri::command]
+pub(crate) fn recordings_dir(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager as _;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("recordings");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create {:?}: {}", dir, e))?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+/// `name` reduced to a plain file name: no folders, no characters Windows rejects.
+pub(crate) fn safe_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+        .collect();
+    let cleaned = cleaned.trim_start_matches('.');
+    if cleaned.is_empty() { "recording.cast".into() } else { cleaned.chars().take(150).collect() }
+}
+
+/// Save an automatic recording into `recordings_dir` without a dialog. Returns the path.
+#[tauri::command]
+pub(crate) async fn save_recording(app: tauri::AppHandle, content: String, filename: String) -> Result<String, String> {
+    let path = std::path::Path::new(&recordings_dir(app)?).join(safe_file_name(&filename));
+    std::fs::write(&path, content).map_err(|e| format!("Failed to write {:?}: {}", path, e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub(crate) async fn save_text_file(
     content: String,
@@ -1296,4 +1323,17 @@ pub(crate) async fn create_profile(
     }
     save_vault_internal(&db_state)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod safe_file_name_tests {
+    use super::safe_file_name;
+
+    #[test]
+    fn keeps_recordings_inside_the_folder() {
+        assert_eq!(safe_file_name("session-web-1-2026.cast"), "session-web-1-2026.cast");
+        assert_eq!(safe_file_name("../../evil.cast"), "_.._evil.cast");
+        assert_eq!(safe_file_name(r"a/b\c:d.cast"), "a_b_c_d.cast");
+        assert_eq!(safe_file_name("..."), "recording.cast");
+    }
 }
