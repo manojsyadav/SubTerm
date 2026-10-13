@@ -82,10 +82,17 @@ This document tracks active development tasks, pending architectural optimizatio
     - The three newly-extracted views (`LibraryView`, `LoginsView`, `LogsView`): search/filter, add/edit/delete flows, and the commands/notes tab toggle.
     - Sudo-elevated SFTP file save to a root-owned path, with and without a saved session password.
 
+- [ ] 🔴 **P1 · S** — **Host-key prompt is cut off by the 15 s handshake timeout** (2026-10-13 audit)
+  - `connect_stream` waits for `check_server_key`, so a first connection where the user takes more than 15 s to check the fingerprint fails with "did not finish SSH handshake", and Accept then does nothing (`commands/connection.rs:1219-1221,1760-1775`, jump host `533-539`). Pause the timeout while a prompt is open.
+- [ ] 🟡 **P2 · M** — **Embedded RDP accepts any TLS certificate** (`rdp-helper/src/main.rs:267-317`). On a hostile network the NTLM response can be captured. Pin `server_public_key` on first use and reuse the fingerprint prompt.
+- [ ] 🟢 **P3 · S** — **Single-stream download leaves a truncated file on a read/write error** (`commands/sftp.rs`, unlike cancel and the parallel path). `remove_file` on both error paths.
+- [ ] 🟢 **P3 · S** — **Trigger/prompt detection decodes each chunk without `{stream:true}`** (`TerminalView.tsx:1571`), so a split multibyte character becomes U+FFFD. One decoder per terminal, as `recorder.ts` does.
+
 ---
 
 ## Settled decisions (not doing, and why)
 
+- **No tar fast path for folder transfers** (removed 2026-10-13). It ran `tar` on the server and unpacked locally, which skipped every local path guard — a malicious server could drop files outside the chosen folder, e.g. into the Windows Startup folder — quoted server paths in double quotes (so `$(…)` ran), used guessable `/tmp` names, and reported "done" when tar failed. Folder transfers always use the guarded per-file walk. Revisit only with extraction into a temp dir plus per-entry validation, single-quote escaping, `mktemp`, and exit-code checks.
 - **No transfer-concurrency setting.** Uploads and downloads take one slot per session on purpose (`acquireTransferSlot`): two transfers aimed at the same path would both pass the backend's exists check and write into the file together. Revisit only with a per-path lock.
 - **No "trim trailing spaces on copy" or "Alt as Meta" options.** Selection text already omits trailing whitespace, and xterm already sends Alt as an ESC prefix on desktop.
 - **No separate "show hidden files by default" setting.** The file browser's own toggle already remembers the choice.

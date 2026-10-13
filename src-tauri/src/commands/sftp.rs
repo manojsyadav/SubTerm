@@ -759,40 +759,6 @@ pub async fn sftp_download_file(
     Ok(())
 }
 
-#[allow(dead_code)]
-fn run_local_tar_extract(archive_path: &std::path::Path, target_dir: &std::path::Path) -> Result<(), String> {
-    let mut cmd = std::process::Command::new("tar");
-    cmd.arg("-xzf").arg(archive_path).arg("-C").arg(target_dir);
-    #[cfg(target_os = "windows")]
-    {
-        #[allow(unused_imports)]
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
-    let status = cmd.status().map_err(|e| format!("Failed to spawn local tar: {}", e))?;
-    if !status.success() {
-        return Err(format!("Local tar extract exited with code: {:?}", status.code()));
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn run_local_tar_create(archive_path: &std::path::Path, parent_dir: &std::path::Path, folder_name: &str) -> Result<(), String> {
-    let mut cmd = std::process::Command::new("tar");
-    cmd.arg("-czf").arg(archive_path).arg("-C").arg(parent_dir).arg(folder_name);
-    #[cfg(target_os = "windows")]
-    {
-        #[allow(unused_imports)]
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
-    let status = cmd.status().map_err(|e| format!("Failed to spawn local tar: {}", e))?;
-    if !status.success() {
-        return Err(format!("Local tar create exited with code: {:?}", status.code()));
-    }
-    Ok(())
-}
-
 pub async fn exec_ssh_command_helper(
     state: &SshState,
     session_id: &str,
@@ -907,81 +873,6 @@ pub async fn sftp_download_dir(
     };
 
     emit_progress(0, 0, "progress", None);
-
-    // Phase 0: Smart Tar Acceleration (50x-100x Faster SFTP Directory Transfer)
-    // Avoids thousands of sequential SFTP network round trips by creating a single
-    // compressed tar stream on the remote server and unpacking locally.
-    let smart_tar_success = {
-        let parent_remote = if let Some((p, _)) = remote_path.trim_end_matches('/').rsplit_once('/') {
-            if p.is_empty() { "/" } else { p }
-        } else {
-            "/"
-        };
-        let tmp_remote_tar = format!("/tmp/_subterm_dl_{}.tar.gz", &id);
-        let tar_cmd = format!(
-            "tar -czf \"{}\" -C \"{}\" \"{}\"",
-            tmp_remote_tar.replace('"', "\\\""),
-            parent_remote.replace('"', "\\\""),
-            folder_name.replace('"', "\\\"")
-        );
-
-        if exec_ssh_command_helper(&state, &session_id, &tar_cmd).await.is_ok() {
-            if let Ok(meta) = sftp.metadata(&tmp_remote_tar).await {
-                let archive_size = meta.size.unwrap_or(0);
-                if archive_size > 0 {
-                    let local_tmp_tar = std::env::temp_dir().join(format!("_subterm_dl_{}.tar.gz", &id));
-                    let download_res = async {
-                        let mut remote_file = sftp.open(&tmp_remote_tar).await.map_err(|e| e.to_string())?;
-                        let mut local_file = tokio::fs::File::create(&local_tmp_tar).await.map_err(|e| e.to_string())?;
-                        let mut transferred = 0u64;
-                        let mut buf = vec![0u8; 128 * 1024];
-
-                        while transferred < archive_size {
-                            if cancel.load(Ordering::Relaxed) {
-                                return Err("cancelled".to_string());
-                            }
-                            let n = remote_file.read(&mut buf).await.map_err(|e| e.to_string())?;
-                            if n == 0 { break; }
-                            local_file.write_all(&buf[..n]).await.map_err(|e| e.to_string())?;
-                            transferred += n as u64;
-                            emit_progress(transferred, archive_size, "progress", None);
-                        }
-                        local_file.flush().await.map_err(|e| e.to_string())?;
-                        Ok::<(), String>(())
-                    }.await;
-
-                    let mut unpacked = false;
-                    if download_res.is_ok() {
-                        let dst_parent = std::path::PathBuf::from(&local_path);
-                        if run_local_tar_extract(&local_tmp_tar, &dst_parent).is_ok() {
-                            unpacked = true;
-                        }
-                    }
-
-                    let _ = tokio::fs::remove_file(&local_tmp_tar).await;
-                    let _ = exec_ssh_command_helper(&state, &session_id, &format!("rm -f \"{}\"", tmp_remote_tar)).await;
-
-                    if unpacked {
-                        emit_progress(archive_size, archive_size, "done", None);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    let _ = exec_ssh_command_helper(&state, &session_id, &format!("rm -f \"{}\"", tmp_remote_tar)).await;
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    };
-
-    if smart_tar_success {
-        return Ok(());
-    }
 
     // Phase 1: enumerate. Collect every file under remote_path along with
     // its relative path (so we can preserve the tree on the local side) and
@@ -1348,62 +1239,6 @@ pub async fn sftp_upload_dir(
     };
 
     emit_progress(0, 0, "progress", None);
-
-    // Phase 0: Smart Tar Acceleration for Uploads (50x-100x Faster SFTP Directory Upload)
-    let smart_tar_upload_success = {
-        let local_parent = local_root.parent().unwrap_or(&local_root);
-        let local_tmp_tar = std::env::temp_dir().join(format!("_subterm_up_{}.tar.gz", &id));
-
-        if run_local_tar_create(&local_tmp_tar, local_parent, &folder_name).is_ok() {
-            let upload_res = async {
-                let local_file = tokio::fs::File::open(&local_tmp_tar).await.map_err(|e| e.to_string())?;
-                let archive_size = local_file.metadata().await.map_err(|e| e.to_string())?.len();
-                let tmp_remote_tar = format!("/tmp/_subterm_up_{}.tar.gz", &id);
-                let mut remote_file = sftp.create(&tmp_remote_tar).await.map_err(|e| e.to_string())?;
-                let mut reader = tokio::io::BufReader::with_capacity(128 * 1024, local_file);
-                let mut transferred = 0u64;
-                let mut buf = vec![0u8; 128 * 1024];
-
-                while transferred < archive_size {
-                    if cancel.load(Ordering::Relaxed) {
-                        drop(remote_file);
-                        let _ = exec_ssh_command_helper(&state, &session_id, &format!("rm -f \"{}\"", tmp_remote_tar)).await;
-                        return Err("cancelled".to_string());
-                    }
-                    let n = tokio::io::AsyncReadExt::read(&mut reader, &mut buf).await.map_err(|e| e.to_string())?;
-                    if n == 0 { break; }
-                    remote_file.write_all(&buf[..n]).await.map_err(|e| e.to_string())?;
-                    transferred += n as u64;
-                    emit_progress(transferred, archive_size, "progress", None);
-                }
-                drop(remote_file);
-
-                // Unpack on remote server
-                let unpack_cmd = format!(
-                    "tar -xzf \"{}\" -C \"{}\" && rm -f \"{}\"",
-                    tmp_remote_tar.replace('"', "\\\""),
-                    remote_path.replace('"', "\\\""),
-                    tmp_remote_tar.replace('"', "\\\"")
-                );
-                exec_ssh_command_helper(&state, &session_id, &unpack_cmd).await?;
-                Ok::<u64, String>(archive_size)
-            }.await;
-
-            let _ = tokio::fs::remove_file(&local_tmp_tar).await;
-            if let Ok(archive_size) = upload_res {
-                emit_progress(archive_size, archive_size, "done", None);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    };
-
-    if smart_tar_upload_success {
-        return Ok(());
-    }
 
     // Phase 1: enumerate. Collect every local file under local_root along
     // with its relative path (POSIX-style for the remote side) and size.
