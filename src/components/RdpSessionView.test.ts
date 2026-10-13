@@ -139,3 +139,20 @@ describe("RdpSessionView", () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe("RdpSessionView in a tab", () => {
+  it("fills the tab instead of covering the window and reports its status", async () => {
+    act(() => root.unmount());
+    const onStatusChange = vi.fn();
+    root = createRoot(host);
+    act(() => root.render(createElement(RdpSessionView, { serverId: 7, serverName: "win-1", onClose, embedded: true, onStatusChange })));
+    const view = host.querySelector('[aria-label="Remote Desktop: win-1"]')!;
+    expect(view.getAttribute("role")).toBe("region");
+    expect(view.className).not.toContain("fixed");
+    expect(onStatusChange).toHaveBeenLastCalledWith("idle");
+    const ch = await connect();
+    expect(onStatusChange).toHaveBeenLastCalledWith("connecting");
+    act(() => ch.onmessage!(bytes(1, 0x00, 0x05, 0xd0, 0x02)));
+    expect(onStatusChange).toHaveBeenLastCalledWith("connected");
+  });
+});

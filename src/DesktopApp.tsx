@@ -212,10 +212,13 @@ function DesktopApp() {
 
   const vaultRef = useRef<ReturnType<typeof useProfileVault> | null>(null);
 
-  const [rdpView, setRdpView] = useState<{ id: number; name: string } | null>(null);
 
   const sessionManager = useSessionManager({
-    onOpenRdpEmbedded: (s) => setRdpView({ id: s.id, name: s.name }),
+    onOpenRdpEmbedded: (s) => {
+      const id = `session-rdp-${s.id}-${Date.now()}`;
+      setSessions((prev) => [...prev, { id, serverId: s.id, serverName: s.name, protocol: "rdp", icon: s.icon, color: s.color ?? null }]);
+      setActiveView(id);
+    },
     onSessionClosed: (sid) => {
       broadcast.removeSession(sid);
       unpinSessionFromWall(sid);
@@ -391,7 +394,7 @@ function DesktopApp() {
   // Tell the file views which sessions exist (for server-to-server SFTP copy).
   useEffect(() => {
     publishOpenSessions(
-      sessions.map((s) => ({
+      sessions.filter((s) => s.protocol !== "rdp").map((s) => ({
         id: s.id,
         name: s.serverName,
         connected: sessionStatuses[s.id] === "connected",
@@ -884,6 +887,32 @@ function DesktopApp() {
     return servers.slice(0, Math.min(3, servers.length));
   }, [appSettings.quickAccessServerIds, servers]);
 
+  // One session tab's content: the SSH session view, or the remote desktop for an
+  // embedded RDP tab. Used by the normal, split and hidden-tab renderings below.
+  const sessionBody = (sess: Session, chromeless: boolean, active: boolean) =>
+    sess.protocol === "rdp" ? (
+      <Suspense fallback={null}>
+        <RdpSessionView
+          embedded
+          serverId={sess.serverId}
+          serverName={sess.serverName}
+          onClose={getCloseHandler(sess.id)}
+          onStatusChange={(status) => handleSessionStatus(sess.id, status)}
+        />
+      </Suspense>
+    ) : (
+      <SessionView
+        session={sess}
+        onClose={getCloseHandler(sess.id)}
+        addLog={addLog}
+        onStatusChange={handleSessionStatus}
+        onTerminalsChange={handleTerminalsChange}
+        chromeless={chromeless}
+        isSessionActive={active}
+        onOpenSettings={() => setActiveView("settings")}
+      />
+    );
+
   // TitleBar is a module-level component (stable identity), so React keeps the tab
   // strip mounted across renders; it only needs the state it shows.
   const titleBarProps = { confirm, activeProfile, activeView, appWindow, availableShells, broadcast, broadcastMenuOpen, closeSession, handleLockProfile, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openDefaultLocal, openLocalTerminal, openServer, pinTerminalToWall, profileDropdownOpen, profileIcon, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setIsWorkspaceSwitcherOpen, setMergedSessionIds, setMobileSessionPickerOpen, setProfileDropdownOpen, setSessionStatuses, setSessions, setShellMenuOpen, setTabMenu, setTabNames, shellMenuOpen, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
@@ -1182,16 +1211,7 @@ function DesktopApp() {
                                   if (activeView === sess.id) setActiveView("nodes");
                                 }}
                               >
-                                <SessionView
-                                  session={sess}
-                                  onClose={getCloseHandler(sess.id)}
-                                  addLog={addLog}
-                                  onStatusChange={handleSessionStatus}
-                                  onTerminalsChange={handleTerminalsChange}
-                                  chromeless={!isFocused}
-                                  isSessionActive={isFocused && viewIsSession}
-                                  onOpenSettings={() => setActiveView("settings")}
-                                />
+                                {sessionBody(sess, !isFocused, isFocused && viewIsSession)}
                               </ErrorBoundary>
                             </div>
                             {notLast && (
@@ -1251,16 +1271,7 @@ function DesktopApp() {
                               if (activeView === sess.id) setActiveView("nodes");
                             }}
                           >
-                            <SessionView
-                              session={sess}
-                              onClose={getCloseHandler(sess.id)}
-                              addLog={addLog}
-                              onStatusChange={handleSessionStatus}
-                              onTerminalsChange={handleTerminalsChange}
-                              chromeless={true}
-                              isSessionActive={false}
-                              onOpenSettings={() => setActiveView("settings")}
-                            />
+                            {sessionBody(sess, true, false)}
                           </ErrorBoundary>
                         </div>
                       ))}
@@ -1282,16 +1293,7 @@ function DesktopApp() {
                                 if (activeView === sess.id) setActiveView("nodes");
                               }}
                             >
-                              <SessionView
-                                session={sess}
-                                onClose={getCloseHandler(sess.id)}
-                                addLog={addLog}
-                                onStatusChange={handleSessionStatus}
-                                onTerminalsChange={handleTerminalsChange}
-                                chromeless={false}
-                                isSessionActive={isFocused && viewIsSession}
-                                onOpenSettings={() => setActiveView("settings")}
-                              />
+                              {sessionBody(sess, false, isFocused && viewIsSession)}
                             </ErrorBoundary>
                           </div>
                         );
@@ -1528,11 +1530,6 @@ function DesktopApp() {
         prefill={quickConnectPrefill}
       />
 
-      {rdpView && (
-        <Suspense fallback={null}>
-          <RdpSessionView key={rdpView.id} serverId={rdpView.id} serverName={rdpView.name} onClose={() => setRdpView(null)} />
-        </Suspense>
-      )}
 
       {recordingEnabled && isRecordingPlayerOpen && (
         <Suspense fallback={null}>

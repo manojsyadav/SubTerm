@@ -838,7 +838,7 @@ export function TitleBar(props: TitleBarProps) {
                 </div>
                 <div className="flex items-center gap-1.5 px-1 pb-2 border-b border-white/5">
                   <button
-                    onClick={() => broadcast.selectAll(sessions.map(s => s.id))}
+                    onClick={() => broadcast.selectAll(sessions.filter(s => s.protocol !== 'rdp').map(s => s.id))}
                     className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/10 text-[10px] uppercase tracking-wider text-zinc-300 hover:bg-white/[0.08] hover:text-white"
                   >
                     All

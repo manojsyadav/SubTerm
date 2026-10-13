@@ -16,6 +16,8 @@ export type Session = {
   /** Open the initial tool across the whole window instead of beside the terminal. */
   toolFull?: boolean;
   isLocal?: boolean;
+  /** Embedded remote desktop tab (RdpSessionView) instead of an SSH session. */
+  protocol?: "rdp";
   localShell?: string;
   isProduction?: boolean;
   icon?: string;

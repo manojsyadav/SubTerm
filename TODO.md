@@ -41,7 +41,8 @@ This document tracks active development tasks, pending architectural optimizatio
 
 - [ ] 🟡 **P2 · M** — **RDP embedded view: verify against a real signed-in session, then a real tab**
   - Built but never seen working, because no test account was available (the handshake now reaches the credential check with every channel registered): screen and input, **clipboard** text both ways (copy on the remote side, paste here; copy here, then click into the remote screen and paste), **sound** (Sound on/off button; off at connect means the server is not asked for audio), **resize** (the remote desktop follows the window about 0.4 s after you stop resizing; the server re-activates the session), merged screen updates. Risks to look for: a sound or reactivation error ends the session instead of only that feature.
-  - Still open: a real tab instead of the full-window view (needs the session model in `DesktopApp.tsx` to hold non-SSH sessions), and the first macOS/Linux release build with the helper (configured in `tauri.macos.conf.json` / `tauri.linux.conf.json`, never run yet).
+  - Embedded RDP now opens as a session tab (status dot, close, split with Ctrl+click, several at once); check that a hidden RDP tab keeps its session, that keys go only to the focused tab, and that locking closes RDP tabs.
+  - Still open: the first macOS/Linux release build with the helper (configured in `tauri.macos.conf.json` / `tauri.linux.conf.json`, never run yet).
   - Why a helper program: IronRDP pins `picky`/`curve25519-dalek` pre-release versions that cannot resolve in the same lockfile as `russh`. Revisit if either side moves.
 
 - [ ] 🟢 **P3 · L** — **iOS / iPadOS: first Mac build**

@@ -15,13 +15,17 @@ interface Props {
   serverId: number;
   serverName: string;
   onClose: () => void;
+  /** Inside a session tab (fills it) rather than covering the whole window. */
+  embedded?: boolean;
+  /** Tab status dot: "idle" (sign-in), "connecting", "connected" or "disconnected". */
+  onStatusChange?: (status: string) => void;
 }
 
 type Phase = "password" | "connecting" | "live" | "ended";
 
 const even = (n: number) => Math.max(0, Math.floor(n)) & ~1;
 
-export default function RdpSessionView({ serverId, serverName, onClose }: Props) {
+export default function RdpSessionView({ serverId, serverName, onClose, embedded = false, onStatusChange }: Props) {
   const [phase, setPhase] = useState<Phase>("password");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -130,6 +134,10 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
     if (moveTimerRef.current !== null) window.clearTimeout(moveTimerRef.current);
   }, [disconnect]);
 
+  useEffect(() => {
+    onStatusChange?.(phase === "live" ? "connected" : phase === "connecting" ? "connecting" : phase === "ended" ? "disconnected" : "idle");
+  }, [phase, onStatusChange]);
+
   const toggleMuted = () => {
     const next = !muted;
     setMuted(next);
@@ -233,7 +241,11 @@ export default function RdpSessionView({ serverId, serverName, onClose }: Props)
   const close = () => { disconnect(); onClose(); };
 
   return (
-    <div className="fixed inset-0 z-[90] flex flex-col bg-[#0a0a0c]" role="dialog" aria-label={`Remote Desktop: ${serverName}`}>
+    <div
+      className={embedded ? "h-full w-full flex flex-col bg-[#0a0a0c]" : "fixed inset-0 z-[90] flex flex-col bg-[#0a0a0c]"}
+      role={embedded ? "region" : "dialog"}
+      aria-label={`Remote Desktop: ${serverName}`}
+    >
       <div className="h-9 shrink-0 flex items-center gap-3 px-3 border-b border-white/10 bg-[#111114] text-[12px] text-zinc-200">
         <Monitor size={14} className="text-primary" />
         <span className="font-semibold truncate">{serverName}</span>
