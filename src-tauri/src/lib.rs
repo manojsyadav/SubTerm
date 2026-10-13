@@ -18,6 +18,8 @@ mod hlc;
 mod identity;
 mod vault;
 mod commands;
+#[cfg(desktop)]
+mod identifier_migration;
 pub use commands::tunnels::start_tunnel_specs_on;
 pub(crate) use commands::sync::{decrypt_entity, encrypt_entity, SyncRecord, SyncReport};
 pub(crate) use commands::connection::SSH_KEEPALIVE_SECS;
@@ -140,6 +142,11 @@ pub(crate) use commands::sftp::{is_safe_dir_entry_name, session_drag_dir, sessio
 /// ship on both platforms — only the wrapping is different.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before anything opens app data or the webview: carry data over from the old
+    // `com.subterm.app` identifier (see identifier_migration.rs).
+    #[cfg(desktop)]
+    identifier_migration::run();
+
     // Tauri 2 on Linux embeds webkit2gtk-4.1. Two failure modes have to be
     // headed off before the WebKit child process spawns, because once it's
     // up the env it inherited is the only one it sees:

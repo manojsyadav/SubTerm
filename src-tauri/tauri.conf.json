@@ -1,7 +1,7 @@
 {
   "productName": "SubTerm",
   "version": "0.4.1",
-  "identifier": "com.subterm.app",
+  "identifier": "com.subterm.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",

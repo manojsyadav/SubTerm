@@ -1,4 +1,5 @@
 {
+  "identifier": "com.subterm.app",
   "app": {
     "windows": [
       {
