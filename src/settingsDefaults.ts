@@ -18,6 +18,7 @@ export const SETTING_DEFAULTS = {
   terminalLineHeight: 1.15,
   uiZoom: 100,
   reduceMotion: "system",
+  highContrast: "system",
   notifyLongCommandSec: 0,
   notifyOnDisconnect: false,
   historyMaxEntries: 1000,
@@ -75,6 +76,7 @@ export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
   "line-height": "terminalLineHeight",
   "ui-zoom": "uiZoom",
   "reduce-motion": "reduceMotion",
+  "high-contrast": "highContrast",
   "notify-long": "notifyLongCommandSec",
   "notify-disconnect": "notifyOnDisconnect",
   "history-max": "historyMaxEntries",
@@ -119,7 +121,7 @@ export type ResettablePage = "general" | "appearance" | "terminal" | "features";
 
 const PAGE_ROWS: Record<ResettablePage, string[]> = {
   general: ["startup-view", "local-shell", "enable-monitoring", "auto-lock", "lock-on-minimize", "clear-clipboard", "confirm-on-close"],
-  appearance: ["accent", "background", "ui-zoom", "reduce-motion", "editor-font-size", "editor-tab-size", "editor-word-wrap", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-color", "terminal-padding", "cursor-blink", "webgl", "bell"],
+  appearance: ["accent", "background", "ui-zoom", "reduce-motion", "high-contrast", "editor-font-size", "editor-tab-size", "editor-word-wrap", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-color", "terminal-padding", "cursor-blink", "webgl", "bell"],
   terminal: ["notify-long", "notify-disconnect", "history-max", "history-days", "overwrite-policy", "right-click", "copy-on-select", "open-links", "paste-review", "word-separators", "scroll-on-input", "auto-copy-output", "auto-close", "audit-download", "keepalive", "connect-timeout", "host-key-policy", "reconnect-attempts", "reconnect-delay", "default-port", "default-user", "default-agent", "command-widget"],
   features: ["ssh-mode", ...FEATURES.map((f) => f.key as string)],
 };

@@ -48,3 +48,16 @@ html.reduce-motion [class*="fade-in"],
 html.reduce-motion [class*="zoom-in"] {
   animation: none !important;
 }
+
+/* Settings > Appearance > High contrast. The UI has no colour tokens, so this lifts the
+   few muted utility classes it uses everywhere (secondary text, hairline borders). */
+html.high-contrast .text-zinc-400 { color: #f4f4f5 !important; }
+html.high-contrast .text-zinc-500,
+html.high-contrast .text-zinc-600,
+html.high-contrast .text-zinc-700 { color: #d4d4d8 !important; }
+html.high-contrast .placeholder\:text-zinc-500::placeholder,
+html.high-contrast .placeholder\:text-zinc-600::placeholder { color: #a1a1aa !important; }
+html.high-contrast .border-white\/5,
+html.high-contrast .border-white\/10 { border-color: rgba(255, 255, 255, 0.4) !important; }
+html.high-contrast .disabled\:opacity-40:disabled { opacity: 0.6 !important; }
+html.high-contrast :focus-visible { outline: 2px solid #facc15 !important; outline-offset: 2px; }

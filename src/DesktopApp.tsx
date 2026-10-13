@@ -46,7 +46,7 @@ import { LoginsView } from "./components/LoginsView";
 import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
 import LocalFilesView from "./components/LocalFilesView";
-import { normalizeReduceMotion, shouldReduceMotion } from "./ui/reduceMotion";
+import { normalizeReduceMotion, shouldReduceMotion, normalizeHighContrast, shouldUseHighContrast } from "./ui/reduceMotion";
 import { useIdleLock, useLockOnHidden } from "./hooks/useIdleLock";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
@@ -142,6 +142,7 @@ function DesktopApp() {
     notifyLongCommandSec: Math.max(0, parseInt(localStorage.getItem('subterm-notify-long-sec') || '0', 10) || 0),
     notifyOnDisconnect: localStorage.getItem('subterm-notify-disconnect') === 'true',
     reduceMotion: normalizeReduceMotion(localStorage.getItem('subterm-reduce-motion')) as string,
+    highContrast: normalizeHighContrast(localStorage.getItem('subterm-high-contrast')) as string,
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -183,6 +184,15 @@ function DesktopApp() {
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
   }, [appSettings.reduceMotion]);
+
+  // High contrast: same pattern, following the OS "more contrast" preference by default.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-contrast: more)');
+    const apply = () => document.documentElement.classList.toggle('high-contrast', shouldUseHighContrast(normalizeHighContrast(appSettings.highContrast), mq.matches));
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [appSettings.highContrast]);
 
   const wallManager = useWallManager();
   const {
@@ -708,6 +718,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-notify-long-sec', String(appSettings.notifyLongCommandSec ?? 0));
     localStorage.setItem('subterm-notify-disconnect', appSettings.notifyOnDisconnect ? 'true' : 'false');
     localStorage.setItem('subterm-reduce-motion', appSettings.reduceMotion || 'system');
+    localStorage.setItem('subterm-high-contrast', appSettings.highContrast || 'system');
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));

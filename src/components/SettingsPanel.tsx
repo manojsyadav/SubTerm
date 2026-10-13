@@ -208,6 +208,17 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
           <option value="off">Never reduce</option>
         </select>
       </Row>
+      <Row id="high-contrast" label="High contrast" desc="Brighter secondary text, stronger borders and a visible keyboard focus ring. Terminal colours come from the terminal theme. System follows your operating system's contrast setting.">
+        <select
+          value={settings.highContrast || "system"}
+          onChange={(e) => setSettings({ ...settings, highContrast: e.target.value })}
+          className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+        >
+          <option value="system">Follow system (default)</option>
+          <option value="on">Always on</option>
+          <option value="off">Off</option>
+        </select>
+      </Row>
     </SectionCard>
     <SectionCard id="quick-editor" title="Quick Editor" subtitle="For files opened in the built-in editor. Changes apply the next time you open a file.">
       <Row id="editor-font-size" label="Font size">
@@ -1258,6 +1269,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "ui-zoom-row", page: "appearance", label: "Zoom level", keywords: "zoom scale size dpi" },
   { id: "accessibility", page: "appearance", label: "Accessibility", keywords: "accessibility motion animation reduce" },
   { id: "reduce-motion", page: "appearance", label: "Reduce motion", keywords: "reduce motion animation transition accessibility vestibular" },
+  { id: "high-contrast", page: "appearance", label: "High contrast", keywords: "high contrast accessibility low vision readability borders focus" },
   { id: "quick-editor", page: "appearance", label: "Quick Editor", keywords: "editor font tab wrap file edit" },
   { id: "editor-font-size", page: "appearance", label: "Editor font size", keywords: "editor font size text" },
   { id: "editor-tab-size", page: "appearance", label: "Editor tab width", keywords: "editor tab indent spaces" },

@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(a11y)` — High contrast**:
+  Settings > Appearance > Accessibility > High contrast brightens secondary text, strengthens borders and shows a visible keyboard focus ring. It follows the operating system's contrast setting by default. Terminal colours still come from the terminal theme.
+
 - **`feat(nav)` — Pick a shell from the sidebar**:
   Right-click **Local** in the sidebar to open PowerShell, CMD, Git Bash, WSL or any other installed shell; a plain click still opens the default one.
 
@@ -154,6 +157,9 @@
   Upgraded `russh` 0.40.2 → 0.63.3, clearing [RUSTSEC-2026-0153/0154](https://rustsec.org/advisories/RUSTSEC-2026-0154) (an unbounded-allocation DoS on untrusted SSH packet parsing). Along the way: the crypto backend moved to `ring` (both build profiles, no OpenSSL/Perl toolchain needed anymore, even for the "legacy algorithms" build), and RSA host-key support is now in every build by default instead of needing the legacy-compatibility feature flag. SSH agent forwarding's internals were also simplified — it now streams directly instead of a hand-rolled byte-routing layer the old API forced. See git history on `src-tauri/Cargo.toml`/`src-tauri/src/ssh_manager.rs` for the full technical breakdown. Live-verified against a real local `sshd` (connect, publickey auth, exec, port forwarding, and the exact channel-bridge pattern agent forwarding now uses — see `src-tauri/examples/russh_smoke_test.rs`); a full agent-forwarding round trip with a real ssh-agent process, keyboard-interactive auth, and SFTP transfer specifically are still pending (tracked in `TODO.md`).
 
 ### 🐛 Bug Fixes
+
+- **`fix(ui)` — Reduce motion had no effect**:
+  Its stylesheet (`src/index.css`, which also holds the terminal scrollbar styling) was never imported, so the setting changed nothing. It is loaded now.
 
 - **`fix(rdp)` — Embedded RDP pins the server certificate**:
   It used to accept any TLS certificate, so on a hostile network the sign-in exchange could be captured. Now the first connection shows the certificate's `SHA256:` fingerprint and waits for **Trust and connect** before any credentials are sent. The fingerprint is saved under Settings > Known Hosts (type `rdp-tls`), and a changed certificate gets a red warning.
