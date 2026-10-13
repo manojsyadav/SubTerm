@@ -24,7 +24,7 @@ use ironrdp::session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
 use serde::Deserialize;
 use sspi::network_client::reqwest_network_client::ReqwestNetworkClient;
 use tokio_rustls::rustls;
-use wire::{crop_rgba, read_input, write_frame, Input, OUT_CERT, OUT_CLOSED, OUT_CONNECTED, OUT_ERROR, OUT_UPDATE};
+use wire::{crop_rgba, read_input, write_frame, Dirty, Input, OUT_CERT, OUT_CLOSED, OUT_CONNECTED, OUT_ERROR, OUT_UPDATE};
 
 #[derive(Deserialize)]
 struct Request {
@@ -105,12 +105,16 @@ fn run() -> anyhow::Result<String> {
     }
     .build();
     let mut input_db = Database::new();
+    // Screen changes are merged and sent at most every FLUSH_EVERY, or as soon as the
+    // server goes quiet, instead of one frame per update rectangle.
+    let mut dirty = Dirty::default();
+    let mut last_flush = std::time::Instant::now();
 
     loop {
         while let Ok(ev) = rx.try_recv() {
             if ev == Input::Disconnect {
                 if let Ok(outs) = stage.graceful_shutdown() {
-                    let _ = handle_outputs(&mut framed, &image, outs);
+                    let _ = handle_outputs(&mut framed, &mut dirty, outs);
                 }
                 return Ok("disconnected".into());
             }
@@ -119,23 +123,48 @@ fn run() -> anyhow::Result<String> {
                 continue;
             }
             let outs = stage.process_fastpath_input(&mut image, &events).context("send input")?;
-            if let Some(reason) = handle_outputs(&mut framed, &image, outs)? {
+            if let Some(reason) = handle_outputs(&mut framed, &mut dirty, outs)? {
                 return Ok(reason);
             }
         }
 
-        match framed.read_pdu() {
+        let idle = match framed.read_pdu() {
             Ok((action, payload)) => {
                 let outs = stage.process(&mut image, action, &payload).context("process frame")?;
-                if let Some(reason) = handle_outputs(&mut framed, &image, outs)? {
+                if let Some(reason) = handle_outputs(&mut framed, &mut dirty, outs)? {
+                    flush_dirty(&mut dirty, &image)?;
                     return Ok(reason);
                 }
+                false
             }
-            Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => true,
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok("the server closed the connection".into()),
             Err(e) => return Err(anyhow::Error::new(e).context("read from server")),
+        };
+        if idle || last_flush.elapsed() >= FLUSH_EVERY {
+            flush_dirty(&mut dirty, &image)?;
+            last_flush = std::time::Instant::now();
         }
     }
+}
+
+/// Longest a screen change waits while the server keeps streaming (~30 fps).
+const FLUSH_EVERY: Duration = Duration::from_millis(33);
+
+/// Send the merged dirty rectangle, if any, as one UPDATE frame.
+fn flush_dirty(dirty: &mut Dirty, image: &DecodedImage) -> anyhow::Result<()> {
+    let Some((l, t, r, b)) = dirty.take() else { return Ok(()) };
+    let r = r.min(usize::from(image.width()).saturating_sub(1));
+    let b = b.min(usize::from(image.height()).saturating_sub(1));
+    if r < l || b < t {
+        return Ok(());
+    }
+    let mut payload = Vec::with_capacity(8 + (r + 1 - l) * (b + 1 - t) * 4);
+    for v in [l, t, r + 1 - l, b + 1 - t] {
+        payload.extend_from_slice(&(v as u16).to_le_bytes());
+    }
+    payload.extend_from_slice(&crop_rgba(image.data(), usize::from(image.width()), l, t, r, b));
+    write_frame(&mut std::io::stdout().lock(), OUT_UPDATE, &payload).context("send update")
 }
 
 fn to_operations(ev: Input) -> Vec<Operation> {
@@ -165,23 +194,12 @@ fn to_operations(ev: Input) -> Vec<Operation> {
 
 /// Write replies to the server and forward screen changes to the app.
 /// Returns `Some(reason)` when the session should end.
-fn handle_outputs(framed: &mut Framed, image: &DecodedImage, outs: Vec<ActiveStageOutput>) -> anyhow::Result<Option<String>> {
+fn handle_outputs(framed: &mut Framed, dirty: &mut Dirty, outs: Vec<ActiveStageOutput>) -> anyhow::Result<Option<String>> {
     for out in outs {
         match out {
             ActiveStageOutput::ResponseFrame(frame) => framed.write_all(&frame).context("write to server")?,
             ActiveStageOutput::GraphicsUpdate(rect) => {
-                let (l, t) = (usize::from(rect.left), usize::from(rect.top));
-                let r = usize::from(rect.right).min(usize::from(image.width()).saturating_sub(1));
-                let b = usize::from(rect.bottom).min(usize::from(image.height()).saturating_sub(1));
-                if r < l || b < t {
-                    continue;
-                }
-                let mut payload = Vec::with_capacity(8 + (r + 1 - l) * (b + 1 - t) * 4);
-                for v in [l, t, r + 1 - l, b + 1 - t] {
-                    payload.extend_from_slice(&(v as u16).to_le_bytes());
-                }
-                payload.extend_from_slice(&crop_rgba(image.data(), usize::from(image.width()), l, t, r, b));
-                write_frame(&mut std::io::stdout().lock(), OUT_UPDATE, &payload).context("send update")?;
+                dirty.add(usize::from(rect.left), usize::from(rect.top), usize::from(rect.right), usize::from(rect.bottom));
             }
             ActiveStageOutput::Terminate(reason) => return Ok(Some(reason.description())),
             ActiveStageOutput::DeactivateAll => {

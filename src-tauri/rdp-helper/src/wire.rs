@@ -76,6 +76,26 @@ pub fn read_input(r: &mut impl Read) -> io::Result<Option<Input>> {
     Ok(Some(ev))
 }
 
+/// Union of the screen rectangles changed since the last flush (inclusive bounds).
+#[derive(Debug, Default)]
+pub struct Dirty(Option<(usize, usize, usize, usize)>);
+
+impl Dirty {
+    pub fn add(&mut self, left: usize, top: usize, right: usize, bottom: usize) {
+        if right < left || bottom < top {
+            return;
+        }
+        self.0 = Some(match self.0 {
+            None => (left, top, right, bottom),
+            Some((l, t, r, b)) => (l.min(left), t.min(top), r.max(right), b.max(bottom)),
+        });
+    }
+
+    pub fn take(&mut self) -> Option<(usize, usize, usize, usize)> {
+        self.0.take()
+    }
+}
+
 /// Pixels of the rectangle `[left..=right] x [top..=bottom]` from a `stride`-wide RGBA image.
 pub fn crop_rgba(data: &[u8], stride_px: usize, left: usize, top: usize, right: usize, bottom: usize) -> Vec<u8> {
     let w = right + 1 - left;
@@ -120,6 +140,17 @@ mod tests {
     fn rejects_unknown_and_truncated_input() {
         assert!(read_input(&mut &[9u8][..]).is_err());
         assert!(read_input(&mut &[1u8, 0, 0][..]).is_err());
+    }
+
+    #[test]
+    fn dirty_rectangles_merge_into_their_union() {
+        let mut d = Dirty::default();
+        assert_eq!(d.take(), None);
+        d.add(10, 10, 20, 20);
+        d.add(5, 15, 12, 40);
+        d.add(30, 0, 29, 5); // empty, ignored
+        assert_eq!(d.take(), Some((5, 10, 20, 40)));
+        assert_eq!(d.take(), None);
     }
 
     #[test]
