@@ -1,3 +1,5 @@
+import { promptTail } from "./passwordPrompt";
+
 /**
  * Detect an interactive `ssh` / `sftp` command typed in a local shell so the
  * app can offer to save the target as a server and open it natively.
@@ -163,3 +165,12 @@ export function parseSshFromScreen(screenLine: string, typed: string, edited: bo
   }
   return null;
 }
+
+/**
+ * Fallback for an ssh that ends without printing anything SSH_ENDED_RE knows
+ * (`~.`, a killed client): the screen ends in PowerShell's or cmd's own prompt
+ * (`PS C:\Users\me>` / `C:\Users\me>`), which a Linux remote does not print.
+ * shortcut: Windows shells only; local bash/WSL prompts look like remote ones.
+ */
+export const endsWithWindowsShellPrompt = (out: string): boolean =>
+  /(?:^|\n)(?:PS )?[A-Za-z]:\[^\n<>|]*> ?$/.test(promptTail(out));

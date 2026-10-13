@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSshCommand, parseSshFromScreen, SSH_ENDED_RE } from "./sshCommand";
+import { parseSshCommand, parseSshFromScreen, SSH_ENDED_RE, endsWithWindowsShellPrompt } from "./sshCommand";
 
 describe("parseSshCommand", () => {
   it("parses user@host", () => {
@@ -83,5 +83,18 @@ describe("parseSshFromScreen", () => {
 
   it("still rejects complex invocations", () => {
     expect(parseSshFromScreen("$ ssh host ls", "ssh host ls", false)).toBeNull();
+  });
+});
+
+describe("endsWithWindowsShellPrompt", () => {
+  it("sees PowerShell and cmd prompts at the end of output", () => {
+    expect(endsWithWindowsShellPrompt("\r\nPS C:\Users\me> ")).toBe(true);
+    expect(endsWithWindowsShellPrompt("\x1b[32mPS D:\REPO>\x1b[0m ")).toBe(true);
+    expect(endsWithWindowsShellPrompt("Microsoft Windows\r\nC:\Windows\System32>")).toBe(true);
+  });
+  it("ignores remote prompts and prompts that are not last", () => {
+    expect(endsWithWindowsShellPrompt("user@host:~$ ")).toBe(false);
+    expect(endsWithWindowsShellPrompt("PS C:\> ssh box\r\nuser@box:~$ ")).toBe(false);
+    expect(endsWithWindowsShellPrompt("echo C:\a > b")).toBe(false);
   });
 });

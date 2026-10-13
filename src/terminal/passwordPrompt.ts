@@ -4,7 +4,7 @@
 // no-echo prompt the output still ENDS with the prompt text because the user's
 // keystrokes were never echoed back. We strip ANSI colour/OSC sequences first
 // and only match when the prompt is the trailing content.
-const promptTail = (out: string): string =>
+export const promptTail = (out: string): string =>
   out
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC …BEL/ST
     .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")          // CSI …final

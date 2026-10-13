@@ -20,7 +20,7 @@ const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ defa
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
-import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE } from '../terminal/sshCommand';
+import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE, endsWithWindowsShellPrompt } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
 import { notifyDesktop, shouldNotifyLongCommand } from '../util/desktopNotify';
@@ -1590,7 +1590,7 @@ const TerminalView = ({
         const combined = recentOutputRef.current + txt;
         recentOutputRef.current = combined.length > 512 ? combined.slice(-512) : combined;
         if (probeOutputRef.current !== null) probeOutputRef.current += txt;
-        if (sshForegroundRef.current && SSH_ENDED_RE.test(txt)) sshForegroundRef.current = false;
+        if (sshForegroundRef.current && (SSH_ENDED_RE.test(txt) || endsWithWindowsShellPrompt(recentOutputRef.current))) sshForegroundRef.current = false;
         // Output that no longer ends in the prompt (sudo timed out, the command ended) retires the offer.
         if (sudoOfferRef.current && !looksLikeSudoPrompt(recentOutputRef.current)) showSudoOffer(false);
         else if (!isLocal && !sudoOfferRef.current && isFeatureEnabled('sudoFill') && looksLikeSudoPrompt(recentOutputRef.current)) {
