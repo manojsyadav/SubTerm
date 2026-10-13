@@ -297,6 +297,7 @@ const TerminalView = ({
         cwd: localCwd || null,
         shell: localShell || null,
         channel: outputChannelRef.current,
+        shellIntegrationOn: isFeatureEnabled('terminalCommandBlocks'),
       }).catch(e => {
         term.writeln(`\x1b[31mRestart local terminal failed: ${e}\x1b[0m`);
       });
@@ -1077,6 +1078,7 @@ const TerminalView = ({
             cwd: localCwd || null,
             shell: localShell || null,
             channel: outputChannelRef.current,
+            shellIntegrationOn: isFeatureEnabled('terminalCommandBlocks'),
           }).catch(e => {
             term.writeln(`\x1b[31mFailed to open local terminal: ${e}\x1b[0m`);
           });

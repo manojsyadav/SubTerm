@@ -872,7 +872,7 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
           </SectionCard>
 
           <SectionCard id="notifications" title="Notifications" subtitle="System notifications while SubTerm is in the background. They depend on the system allowing them for this app; the Activity Log records session drops either way.">
-            <Row id="notify-long" label="Long command finished" desc="Needs shell integration (the shell must send OSC 133 markers), otherwise SubTerm cannot tell when a command ends.">
+            <Row id="notify-long" label="Long command finished" desc="Needs shell integration (OSC 133 markers). SubTerm adds it to local PowerShell and bash when Command blocks is on; remote shells and local cmd/WSL need their own.">
               <select
                 value={settings.notifyLongCommandSec ?? 0}
                 onChange={(e) => setSettings({ ...settings, notifyLongCommandSec: parseInt(e.target.value, 10) || 0 })}

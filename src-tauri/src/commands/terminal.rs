@@ -210,6 +210,51 @@ pub async fn close_terminal(
     Ok(())
 }
 
+/// PowerShell prompt wrapper that reports each command's end (OSC 133;D with the
+/// exit code) and the prompt start (OSC 133;A), so long-command notifications and
+/// command blocks work without the user installing shell integration. `$global:?`
+/// must be read first, before anything else in the function resets it.
+const PWSH_INTEGRATION: &str = r#"$global:__stPrompt = $function:prompt
+function global:prompt {
+  $ok = $global:?
+  $c = if ($ok) { 0 } elseif ($global:LASTEXITCODE) { $global:LASTEXITCODE } else { 1 }
+  $e = [char]27; $b = [char]7
+  "$e]133;D;$c$b$e]133;A$b" + (& $global:__stPrompt)
+}"#;
+
+/// bash equivalent; a PROMPT_COMMAND set in the user's .bashrc replaces it.
+const BASH_PROMPT_COMMAND: &str = r#"printf '\033]133;D;%s\007\033]133;A\007' "$?""#;
+
+#[cfg_attr(mobile, allow(dead_code))]
+enum ShellIntegration {
+    Args(Vec<String>),
+    Env(&'static str, &'static str),
+}
+
+/// How to add OSC 133 markers to `shell_cmd`, if it is a shell we know how to hook.
+/// cmd has no prompt hook, and WSL does not pass the environment through.
+#[cfg_attr(mobile, allow(dead_code))]
+fn shell_integration(shell_cmd: &str) -> Option<ShellIntegration> {
+    let name = std::path::Path::new(shell_cmd)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    match name.as_str() {
+        "pwsh" | "powershell" => {
+            use base64::Engine as _;
+            // -EncodedCommand takes base64 of UTF-16LE and sidesteps all argument quoting.
+            let utf16: Vec<u8> = PWSH_INTEGRATION.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            Some(ShellIntegration::Args(vec![
+                "-NoExit".into(),
+                "-EncodedCommand".into(),
+                base64::engine::general_purpose::STANDARD.encode(utf16),
+            ]))
+        }
+        "bash" => Some(ShellIntegration::Env("PROMPT_COMMAND", BASH_PROMPT_COMMAND)),
+        _ => None,
+    }
+}
+
 #[cfg(desktop)]
 #[tauri::command]
 pub async fn open_local_terminal(
@@ -221,6 +266,7 @@ pub async fn open_local_terminal(
     cwd: Option<String>,
     shell: Option<String>,
     channel: OutputChannel,
+    shell_integration_on: Option<bool>,
 ) -> Result<(), String> {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
     use std::io::{Read, Write};
@@ -327,6 +373,13 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
     let mut cmd = CommandBuilder::new(&shell_cmd);
     for arg in &shell_args {
         cmd.arg(arg);
+    }
+    if shell_integration_on.unwrap_or(false) {
+        match shell_integration(&shell_cmd) {
+            Some(ShellIntegration::Args(args)) => args.iter().for_each(|a| cmd.arg(a)),
+            Some(ShellIntegration::Env(k, v)) => cmd.env(k, v),
+            None => {}
+        }
     }
     if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) {
         cmd.cwd(dir);
@@ -564,6 +617,7 @@ pub async fn open_local_terminal(
     _cwd: Option<String>,
     _shell: Option<String>,
     _channel: OutputChannel,
+    _shell_integration_on: Option<bool>,
 ) -> Result<(), String> {
     Err("Local terminal is not supported on Android".to_string())
 }
@@ -593,3 +647,23 @@ pub fn set_ssh_connect_timeout(secs: u64) -> Result<(), String> {
 }
 
 
+
+#[cfg(test)]
+mod shell_integration_tests {
+    use super::*;
+
+    #[test]
+    fn hooks_powershell_and_bash_only() {
+        use base64::Engine as _;
+        let Some(ShellIntegration::Args(args)) = shell_integration("/usr/bin/pwsh") else { panic!("pwsh") };
+        assert_eq!(&args[..2], ["-NoExit", "-EncodedCommand"]);
+        let raw = base64::engine::general_purpose::STANDARD.decode(&args[2]).unwrap();
+        let units: Vec<u16> = raw.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        assert_eq!(String::from_utf16(&units).unwrap(), PWSH_INTEGRATION);
+        assert!(matches!(shell_integration("powershell.exe"), Some(ShellIntegration::Args(_))));
+        assert!(matches!(shell_integration("/bin/bash"), Some(ShellIntegration::Env("PROMPT_COMMAND", _))));
+        assert!(shell_integration("cmd.exe").is_none());
+        assert!(shell_integration("wsl.exe").is_none());
+        assert!(shell_integration("/usr/bin/zsh").is_none());
+    }
+}

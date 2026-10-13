@@ -9,6 +9,9 @@
 - **`feat(terminal)` — Fill the saved password at a sudo prompt**:
   When a server asks `[sudo] password for …` in a session that logged in with a saved password, a bar offers **Fill password**. Before sending, SubTerm types `x` + Backspace and refuses if anything echoes back, so the password only goes to a prompt that hides input (the right-click **Paste saved password** uses the same check). The bar closes when you type or the prompt goes away. Off switch: Settings > Features > Terminal > Offer saved password at sudo prompts.
 
+- **`feat(terminal)` — Built-in shell integration for local shells**:
+  Local PowerShell and bash tabs now report when each command ends (OSC 133), so command blocks show exit codes and "Long command finished" notifications work without installing anything. It wraps your existing PowerShell prompt and sets `PROMPT_COMMAND` for bash (a `PROMPT_COMMAND` in your `.bashrc` takes precedence). Applies while Command blocks is on; local cmd and WSL are not covered.
+
 - **`feat(nav)` — Pick a shell from the sidebar**:
   Right-click **Local** in the sidebar to open PowerShell, CMD, Git Bash, WSL or any other installed shell; a plain click still opens the default one.
 
