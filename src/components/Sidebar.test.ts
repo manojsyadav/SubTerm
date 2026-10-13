@@ -55,3 +55,27 @@ describe("Sidebar workspace button", () => {
     expect(onSwitchProfile).toHaveBeenCalled();
   });
 });
+
+describe("Sidebar Local shell list", () => {
+  it("lists the Local tab's shells under Local and selects, closes and adds them", () => {
+    const onSelectLocalTab = vi.fn(), onCloseLocalTab = vi.fn(), onNewLocalTab = vi.fn();
+    render({
+      localTabs: [{ id: "t1", label: "PWSH", title: "pwsh (tab 1)" }, { id: "t2", label: "WSL", title: "wsl (tab 2)" }],
+      activeLocalTab: "t2", onSelectLocalTab, onCloseLocalTab, onNewLocalTab,
+    });
+    const tabs = [...host.querySelectorAll('[role="tablist"][aria-label="Local shells"] [role="tab"]')] as HTMLButtonElement[];
+    expect(tabs.map((t) => t.textContent)).toEqual(["PWSH", "WSL"]);
+    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+    act(() => tabs[0].click());
+    expect(onSelectLocalTab).toHaveBeenCalledWith("t1");
+    act(() => (host.querySelector('[aria-label="Close wsl (tab 2)"]') as HTMLButtonElement).click());
+    expect(onCloseLocalTab).toHaveBeenCalledWith("t2");
+    act(() => (host.querySelector('[aria-label="New local shell"]') as HTMLButtonElement).click());
+    expect(onNewLocalTab).toHaveBeenCalled();
+  });
+
+  it("shows nothing extra without a Local tab", () => {
+    render({ localTabs: [] });
+    expect(host.querySelector('[aria-label="Local shells"]')).toBeNull();
+  });
+});

@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 
 export type WallItem = { id: string; sessionId: string; terminalId: string };
-export type SessionTerm = { id: string; title: string; container?: { name: string; useSudo: boolean } };
+export type SessionTerm = { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string };
 
 export function useWallManager() {
   // "Wall" pinboard — a permanent tab at the end of the session strip

@@ -117,7 +117,7 @@ interface SessionViewProps {
   addLog: (msg: string, type?: string) => void;
   onStatusChange?: (sessionId: string, status: string) => void;
   chromeless?: boolean;
-  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean } }[], activeTab: string) => void;
+  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string }[], activeTab: string) => void;
   isSessionActive?: boolean;
   onOpenSettings?: () => void;
 }
@@ -680,6 +680,40 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     setActiveTab(newId);
   };
 
+  // Close one terminal sub-tab (the strip's x, or the sidebar's Local list).
+  const closeTerminalTab = (id: string) => {
+    if (terminals.length <= 1) return;
+    setTerminals(prev => prev.filter(x => x.id !== id));
+    if (activeTab === id) setActiveTab(terminals.find(x => x.id !== id)!.id);
+    // Closing a terminal that's participating in the split
+    // has to drop it from splitTerminals AND splitRatios or
+    // the flex layout renders a torn-down partner.
+    if (splitTerminals.includes(id)) {
+      const idx = splitTerminals.indexOf(id);
+      const nextTerms = splitTerminals.filter(x => x !== id);
+      const nextRatios = splitRatios.filter((_, i) => i !== idx);
+      // Falling below 2 members collapses back to the plain
+      // absolute-overlap layout.
+      if (nextTerms.length < 2) {
+        setSplitTerminals([]);
+        setSplitRatios([]);
+      } else {
+        setSplitTerminals(nextTerms);
+        setSplitRatios(nextRatios);
+      }
+    }
+  };
+  const closeTerminalTabRef = useRef(closeTerminalTab);
+  closeTerminalTabRef.current = closeTerminalTab;
+  useEffect(() => {
+    const onClose = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (id) closeTerminalTabRef.current(id);
+    };
+    window.addEventListener(`subterm-close-terminal-${session.id}`, onClose);
+    return () => window.removeEventListener(`subterm-close-terminal-${session.id}`, onClose);
+  }, [session.id]);
+
   const addNewTerminal = () => {
     const newId = `${session.id}-term-${Date.now()}`;
     setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
@@ -696,6 +730,12 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     };
     // Focus the next/previous split pane (or terminal tab when not split), wrapping around.
     const handleFocusPane = (e: Event) => {
+      // `{ id }` focuses that terminal (the sidebar's Local list); `{ dir }` cycles panes.
+      const wanted = (e as CustomEvent<{ id?: string } | undefined>).detail?.id;
+      if (wanted) {
+        if (terminals.some(t => t.id === wanted)) setActiveTab(wanted);
+        return;
+      }
       const ids = splitTerminals.length >= 2 ? splitTerminals : terminals.map(t => t.id);
       const next = cyclePaneId(ids, activeTab, (e as CustomEvent<{ dir?: number } | undefined>).detail?.dir === -1 ? -1 : 1);
       if (next) setActiveTab(next);
@@ -880,6 +920,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // tool takes full width and the terminal is hidden behind a back-chip.
   const isCompact = useIsCompact();
   const fullTool = isCompact || toolFull;
+  // Desktop: a Local tab's shells are listed in the sidebar under Local instead of this strip.
+  const localTabsInSidebar = !!session.isLocal && !isCompact;
   // Width of the right-side tool pane in pixels. The divider drag updates this
   // and we sync it to localStorage so subsequent sessions remember the split.
   // First-time default is a quarter of the current window width — looks right
@@ -1604,7 +1646,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-1 sm:mr-4 mask-fade-right"
           onWheel={(e) => { e.currentTarget.scrollLeft += e.deltaY; }}
         >
-        {terminals.map(t => {
+        {!localTabsInSidebar && terminals.map(t => {
           // Highlight every terminal currently participating in the split
           // — the keyboard-focused one gets the primary tint, the others
           // a softer accent, so the pairing is obvious at a glance.
@@ -1657,25 +1699,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setTerminals(prev => prev.filter(x => x.id !== t.id));
-                  if (activeTab === t.id) setActiveTab(terminals[0].id);
-                  // Closing a terminal that's participating in the split
-                  // has to drop it from splitTerminals AND splitRatios or
-                  // the flex layout renders a torn-down partner.
-                  if (splitTerminals.includes(t.id)) {
-                    const idx = splitTerminals.indexOf(t.id);
-                    const nextTerms = splitTerminals.filter(id => id !== t.id);
-                    const nextRatios = splitRatios.filter((_, i) => i !== idx);
-                    // Falling below 2 members collapses back to the plain
-                    // absolute-overlap layout.
-                    if (nextTerms.length < 2) {
-                      setSplitTerminals([]);
-                      setSplitRatios([]);
-                    } else {
-                      setSplitTerminals(nextTerms);
-                      setSplitRatios(nextRatios);
-                    }
-                  }
+                  closeTerminalTab(t.id);
                 }}
                 aria-label="Close terminal"
                 className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-white/5 hover:text-red-400 text-zinc-500 transition-all"
@@ -1695,6 +1719,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               badges, no orientation glyphs stealing attention) while
               still exposing the power features via a discoverable
               secondary gesture. */}
+          {!localTabsInSidebar && (
           <button
             onClick={() => {
               const newId = `${session.id}-term-${Date.now()}`;
@@ -1720,6 +1745,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               </span>
             )}
           </button>
+          )}
 
           {/* Dedicated split controls */}
           {splitTerminals.length >= 2 ? (

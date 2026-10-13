@@ -911,6 +911,16 @@ function DesktopApp() {
       />
     );
 
+  // The Local tab's shells, listed in the sidebar under Local.
+  const localSession = sessions.find((s) => s.isLocal);
+  const localTabs = localSession
+    ? (sessionTerminals[localSession.id] ?? []).map((t, i) => {
+        const shell = t.shell ?? localSession.localShell;
+        const label = !shell ? "SHELL" : ({ powershell: "PS", "git-bash": "BASH" } as Record<string, string>)[shell] ?? shell.slice(0, 5).toUpperCase();
+        return { id: t.id, label, title: `${shell || "Default shell"} (tab ${i + 1})` };
+      })
+    : [];
+
   // TitleBar is a module-level component (stable identity), so React keeps the tab
   // strip mounted across renders; it only needs the state it shows.
   const titleBarProps = { confirm, activeView, appWindow, availableShells, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openDefaultLocal, openLocalTerminal, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setShellMenuOpen, setTabMenu, setTabNames, shellMenuOpen, sshKeys, tabMenu, tabNames, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
@@ -957,6 +967,15 @@ function DesktopApp() {
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
           localShells={availableShells}
+          localTabs={localTabs}
+          activeLocalTab={localSession && activeView === localSession.id ? sessionActiveTerm[localSession.id] ?? null : null}
+          onSelectLocalTab={(id) => {
+            if (!localSession) return;
+            setActiveView(localSession.id);
+            window.dispatchEvent(new CustomEvent(`submarine-focus-pane-${localSession.id}`, { detail: { id } }));
+          }}
+          onCloseLocalTab={(id) => localSession && window.dispatchEvent(new CustomEvent(`subterm-close-terminal-${localSession.id}`, { detail: { id } }))}
+          onNewLocalTab={() => openLocalTerminal(undefined, true)}
           onOpenLocalShell={(id) => openLocalTerminal(id, true)}
           isMobile={isMobile}
           isUnlocked={isUnlocked}

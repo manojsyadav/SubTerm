@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Server, KeyRound, Braces, Activity, Settings, Lock, ArrowLeftRight, Terminal, FolderOpen, Monitor, Network } from "lucide-react";
+import { Server, KeyRound, Braces, Activity, Settings, Lock, ArrowLeftRight, Terminal, FolderOpen, Monitor, Network, Plus, X } from "lucide-react";
 
 interface MonitorListRow {
   node_id: number;
@@ -39,6 +39,12 @@ interface SidebarProps {
   /** Active workspace, shown on the Switch workspace button (the title bar no longer has one). */
   workspaceName?: string;
   workspaceIcon?: string;
+  /** Shells open in the Local tab, listed under the Local item (desktop rail). */
+  localTabs?: { id: string; label: string; title: string }[];
+  activeLocalTab?: string | null;
+  onSelectLocalTab?: (id: string) => void;
+  onCloseLocalTab?: (id: string) => void;
+  onNewLocalTab?: () => void;
 }
 
 // Vertical rail on desktop, horizontal bottom dock on mobile. Layout swap is
@@ -63,6 +69,11 @@ export const Sidebar = ({
   onOpenLocalShell,
   workspaceName,
   workspaceIcon,
+  localTabs = [],
+  activeLocalTab = null,
+  onSelectLocalTab,
+  onCloseLocalTab,
+  onNewLocalTab,
 }: SidebarProps) => {
   const [shellMenu, setShellMenu] = useState<{ x: number; y: number } | null>(null);
   const switchTitle = workspaceName ? `Workspace: ${workspaceName} (click to switch)` : "Switch workspace";
@@ -273,8 +284,8 @@ export const Sidebar = ({
     <aside className="w-14 h-full bg-background border-r border-white/5 flex flex-col items-center py-6 shrink-0 relative z-10 shadow-2xl brightness-95 transition-all">
       <nav className="flex flex-col gap-3 w-full px-2">
         {items.map((item) => (
+          <Fragment key={item.id}>
           <button
-            key={item.id}
             onClick={() => setActiveTab(item.id)}
             onContextMenu={item.id === 'local' && onOpenLocalShell && localShells.length > 0 ? (e) => {
               e.preventDefault();
@@ -311,6 +322,49 @@ export const Sidebar = ({
             )}
             {activeTab === item.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-primary rounded-r-full shadow-[0_0_10px_rgba(var(--primary),1)]" />}
           </button>
+          {item.id === 'local' && localTabs.length > 0 && (
+            <div role="tablist" aria-label="Local shells" aria-orientation="vertical" className="-mt-1.5 flex flex-col gap-1">
+              {localTabs.map((t) => (
+                <div key={t.id} className="relative group/tab">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={t.id === activeLocalTab}
+                    onClick={() => onSelectLocalTab?.(t.id)}
+                    title={t.title}
+                    className={`w-full h-7 px-0.5 rounded-lg text-[9px] font-bold uppercase tracking-tight truncate border transition-colors ${
+                      t.id === activeLocalTab
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5 border-transparent'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                  {localTabs.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => onCloseLocalTab?.(t.id)}
+                      aria-label={`Close ${t.title}`}
+                      title="Close"
+                      className="absolute -top-1 -right-1 hidden group-hover/tab:flex focus:flex w-3.5 h-3.5 rounded-full bg-zinc-800 border border-white/10 items-center justify-center text-zinc-400 hover:text-red-400"
+                    >
+                      <X size={8} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={onNewLocalTab}
+                aria-label="New local shell"
+                title="Open another shell (right-click Local to pick which)"
+                className="h-6 rounded-lg border border-dashed border-white/10 text-zinc-500 hover:text-white hover:bg-white/5 flex items-center justify-center"
+              >
+                <Plus size={11} />
+              </button>
+            </div>
+          )}
+          </Fragment>
         ))}
       </nav>
 
