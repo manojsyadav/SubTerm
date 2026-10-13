@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(terminal)` — Drop files onto a terminal**:
+  Dropping files (a screenshot for Claude Code, say) onto a terminal types their paths at the prompt, quoted for the shell (PowerShell/cmd, bash, and WSL with `C:\` turned into `/mnt/c/`). On an SSH session each file is first uploaded to `/tmp/subterm-drop-…` on the server and that path is typed, so a tool running remotely can open it. Nothing is executed. Drops onto the file browser now also land on the right spot at display scaling other than 100%.
+
 - **`feat(terminal)` — Local shells share one Local tab**:
   Opening another local shell (picking PowerShell, CMD, Git Bash or WSL from the sidebar or the top bar, or New tab) adds a sub-tab inside the **Local** tab instead of a new top-level tab, so SSH sessions stay easy to find. Each sub-tab runs its own shell and is named after it; clicking Local just brings the tab forward.
 

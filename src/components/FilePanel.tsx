@@ -11,6 +11,7 @@ import {
   Eye, EyeOff, GitCompare,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
+import { toCssPoint } from "../terminal/dropPaths";
 import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions } from "../ui/confirm";
 import { IS_MOBILE_OS } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
@@ -836,7 +837,9 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       async (event) => {
         const { paths, position } = event.payload || ({} as { paths?: string[]; position: { x: number; y: number } });
         if (!paths?.length || !dropTargetRef.current) return;
-        const hit = document.elementFromPoint(position.x, position.y);
+        // Tauri reports physical pixels; elementFromPoint wants CSS pixels.
+        const pt = toCssPoint(position);
+        const hit = document.elementFromPoint(pt.x, pt.y);
         if (!hit || !dropTargetRef.current.contains(hit)) return;
         setDragOver(false);
         const dir = currentPathRef.current;

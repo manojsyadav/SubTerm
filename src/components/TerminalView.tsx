@@ -11,6 +11,7 @@ import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
 import { WebglAddon } from 'xterm-addon-webgl';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { localShellKind, quotePaths, remoteDropPath, toCssPoint } from '../terminal/dropPaths';
 import { MoreVertical, AlertTriangle, FileCode, Play, X, Copy, Check, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
 import 'xterm/css/xterm.css';
 import { useIsNarrow } from '../hooks/useViewport';
@@ -653,6 +654,51 @@ const TerminalView = ({
 
   // Output received while the echo probe is running; null when no probe is active.
   const probeOutputRef = useRef<string | null>(null);
+  // Files dropped onto this terminal are typed as paths, so a tool in the shell (Claude
+  // Code, say) can read them. On an SSH session the local path means nothing to the
+  // server, so each file is uploaded to /tmp there first and that path is typed.
+  // Tauri delivers OS drops as one global event; only the terminal under the cursor acts.
+  const dropRef = useRef<{ disabled: boolean; isLocal: boolean; localShell?: string }>({ disabled, isLocal, localShell });
+  dropRef.current = { disabled, isLocal, localShell };
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let alive = true;
+    listen<{ paths: string[]; position: { x: number; y: number } }>('tauri://drag-drop', async (event) => {
+      const { paths, position } = event.payload || ({} as { paths?: string[]; position: { x: number; y: number } });
+      const root = terminalRef.current?.parentElement;
+      if (!paths?.length || !root || dropRef.current.disabled) return;
+      const pt = toCssPoint(position);
+      const hit = document.elementFromPoint(pt.x, pt.y);
+      if (!hit || !root.contains(hit)) return;
+      const write = (text: string) =>
+        invoke('write_terminal_data', { terminalId, data: Array.from(new TextEncoder().encode(text)) }).catch(console.error);
+      if (dropRef.current.isLocal) {
+        const kind = localShellKind(dropRef.current.localShell, navigator.userAgent.includes('Windows'));
+        void write(quotePaths(paths, kind));
+        xtermRef.current?.focus();
+        return;
+      }
+      const uploaded: string[] = [];
+      for (const p of paths) {
+        const remote = remoteDropPath(p);
+        notify(`Uploading ${p.split(/[\\/]/).pop()}...`);
+        try {
+          await invoke('sftp_upload_file', { sessionId, localPath: p, remotePath: remote, overwrite: false });
+          uploaded.push(remote);
+        } catch (e) {
+          notify(`Upload failed: ${e}`, 'err');
+        }
+      }
+      if (uploaded.length) {
+        void write(uploaded.join(' ') + ' ');
+        notify(uploaded.length === 1 ? `Uploaded to ${uploaded[0]}` : `Uploaded ${uploaded.length} files to /tmp`);
+        xtermRef.current?.focus();
+      }
+    }).then((fn) => { if (alive) unlisten = fn; else fn(); });
+    return () => { alive = false; unlisten?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, terminalId]);
+
   const handlePasteSavedPassword = async () => {
     try {
       // Type "x" + Backspace and listen: a hidden prompt shows nothing back, so the
