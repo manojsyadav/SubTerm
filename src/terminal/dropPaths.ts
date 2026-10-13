@@ -1,13 +1,14 @@
 // Files dropped onto a terminal are typed as paths (Windows Terminal style), so a
 // tool running in the shell (Claude Code, an editor, scp) can pick them up.
 
-export type ShellKind = "windows" | "posix" | "wsl";
+export type ShellKind = "windows" | "cmd" | "posix" | "wsl";
 
 /** How the shell behind a local terminal wants paths written. */
 export function localShellKind(shell: string | undefined, isWindowsHost: boolean): ShellKind {
   const s = (shell || "").toLowerCase();
   if (s === "wsl" || s.endsWith("wsl.exe")) return "wsl";
   if (s.includes("bash") || s.includes("zsh") || s.includes("fish") || s.endsWith("/sh")) return "posix";
+  if (s === "cmd" || s.endsWith("cmd.exe")) return "cmd";
   return isWindowsHost ? "windows" : "posix";
 }
 
@@ -22,8 +23,11 @@ export function quotePaths(paths: readonly string[], kind: ShellKind): string {
   const quoted = paths.map((p) => {
     if (kind === "wsl") return posixQuote(toWslPath(p));
     if (kind === "posix") return posixQuote(p);
-    // PowerShell and cmd: Windows paths cannot contain `"`, so double quotes are always safe.
-    return /[\s&()^;,'`$%!@#[\]{}]/.test(p) ? `"${p}"` : p;
+    // cmd has no literal quoting; Windows paths cannot contain `"`, so double quotes at least keep spaces.
+    if (kind === "cmd") return /[\s&()^;,'`$%!@#[\]{}]/.test(p) ? `"${p}"` : p;
+    // PowerShell (the default local shell): it runs `$(...)` inside double quotes, so a downloaded
+    // `a$(Start-Process calc).txt` would execute. Single quotes are literal; `'` doubles.
+    return /[\s&()^;,'`$%!@#[\]{}]/.test(p) ? `'${p.replace(/'/g, "''")}'` : p;
   });
   return quoted.join(" ") + " ";
 }

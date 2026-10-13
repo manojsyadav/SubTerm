@@ -5,7 +5,7 @@ describe("dropped file paths", () => {
   it("picks the quoting style from the shell", () => {
     expect(localShellKind("", true)).toBe("windows");
     expect(localShellKind("pwsh", true)).toBe("windows");
-    expect(localShellKind("cmd", true)).toBe("windows");
+    expect(localShellKind("cmd", true)).toBe("cmd");
     expect(localShellKind("wsl", true)).toBe("wsl");
     expect(localShellKind("git-bash", true)).toBe("posix");
     expect(localShellKind(undefined, false)).toBe("posix");
@@ -13,7 +13,13 @@ describe("dropped file paths", () => {
 
   it("quotes for PowerShell/cmd only when needed", () => {
     expect(quotePaths(["C:\\shots\\a.png"], "windows")).toBe("C:\\shots\\a.png ");
-    expect(quotePaths(["C:\\My Shots\\a (1).png", "D:\\b.png"], "windows")).toBe('"C:\\My Shots\\a (1).png" D:\\b.png ');
+    expect(quotePaths(["C:\\My Shots\\a (1).png", "D:\\b.png"], "windows")).toBe("'C:\\My Shots\\a (1).png' D:\\b.png ");
+    expect(quotePaths(["C:\\My Shots\\a (1).png"], "cmd")).toBe('"C:\\My Shots\\a (1).png" ');
+  });
+
+  it("never lets PowerShell expand a dropped file name", () => {
+    expect(quotePaths(["C:\\dl\\a$(Start-Process calc).txt"], "windows")).toBe("'C:\\dl\\a$(Start-Process calc).txt' ");
+    expect(quotePaths(["C:\\dl\\it's.txt"], "windows")).toBe("'C:\\dl\\it''s.txt' ");
   });
 
   it("single-quotes for POSIX shells and maps drives for WSL", () => {
