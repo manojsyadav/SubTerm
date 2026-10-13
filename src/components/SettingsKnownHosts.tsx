@@ -110,7 +110,7 @@ export function SettingsKnownHosts() {
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Host public keys trusted during SSH handshakes. Saved in your AES-256-GCM encrypted vault.
+                Host keys trusted during SSH handshakes, and RDP certificates (type rdp-tls). Saved in your AES-256-GCM encrypted vault.
               </p>
             </div>
           </div>

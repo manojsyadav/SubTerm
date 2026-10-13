@@ -115,11 +115,11 @@ export function SettingsQuickCommands() {
   };
 
   return (
-    <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8" id="quick-commands-setting">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
+    <section className="break-inside-avoid mb-4 sm:mb-8 bg-[#121215] border border-white/5 rounded-2xl p-5 sm:p-6 shadow-xl" id="quick-commands-setting">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-white">
           <Terminal size={14} className="text-primary" /> Quick Commands by OS / Environment
-        </div>
+        </h3>
         <button
           type="button"
           onClick={() => {
@@ -134,7 +134,7 @@ export function SettingsQuickCommands() {
         </button>
       </div>
 
-      <div className="bg-[#121215] border border-white/5 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
+      <div className="space-y-5">
         <div className="space-y-1">
           <p className="text-xs text-zinc-400 leading-relaxed">
             Customize the quick action ribbon buttons that appear atop the terminal. SubTerm automatically detects the connected host OS (Linux, TrueNAS, Windows PowerShell/CMD, macOS) and renders the matching commands.

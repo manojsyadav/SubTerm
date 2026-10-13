@@ -228,11 +228,11 @@ export const SettingsProfileManagement = ({
   const hasUnsyncedProfiles = profiles.some((p) => syncStatusMap[p] === false);
 
   return (
-    <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8" id="profile-management-setting">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
+    <section className="break-inside-avoid mb-4 sm:mb-8 bg-[#121215] border border-white/5 rounded-2xl p-5 sm:p-6 shadow-xl" id="profile-management-setting">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-white">
           <User size={14} className="text-primary" /> Profile & Workspace Management
-        </div>
+        </h3>
         {isUnlocked ? (
           <button
             type="button"
@@ -257,7 +257,7 @@ export const SettingsProfileManagement = ({
         )}
       </div>
 
-      <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 space-y-4 shadow-xl">
+      <div className="space-y-4">
         <p className="text-xs text-zinc-400 leading-relaxed">
           Manage encrypted workspaces. All workspaces can be synchronized to your single Unified Master Password for 1-click zero-prompt switching.
         </p>

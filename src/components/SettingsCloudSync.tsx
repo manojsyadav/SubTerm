@@ -324,17 +324,17 @@ export function SettingsCloudSync({
   const isOwner = shareStatus?.role === "owner";
 
   return (
-    <section className="break-inside-avoid space-y-3 mb-4 sm:mb-8" id="cloud-sync-setting">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-widest text-xs">
+    <section className="break-inside-avoid mb-4 sm:mb-8 bg-[#121215] border border-white/5 rounded-2xl p-5 sm:p-6 shadow-xl" id="cloud-sync-setting">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-white">
           <Cloud size={14} className="text-primary" /> Cloud Sync & Collaboration
-        </div>
+        </h3>
         {lastSyncLabel && (
           <span className="text-[11px] text-zinc-500 font-mono">Last sync: {lastSyncLabel}</span>
         )}
       </div>
 
-      <div className="bg-[#121215] border border-white/5 rounded-2xl p-5 sm:p-6 space-y-6 shadow-xl">
+      <div className="space-y-6">
         {err && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-200 text-xs flex gap-2 items-center">
             <AlertTriangle size={14} className="shrink-0" />
