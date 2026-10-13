@@ -36,6 +36,10 @@ export interface AppSettings {
   reduceMotion: string;
   /** "system" (follow the OS "more contrast" preference), "on" or "off". */
   highContrast: string;
+  /** Window background opacity, 30-100 (%). */
+  windowOpacity: number;
+  /** Windows backdrop behind a translucent window: "none", "acrylic" or "mica". */
+  windowBlur: string;
   /** Notify when a command that took at least this many seconds finishes in the background; 0 = off. */
   notifyLongCommandSec: number;
   /** Notify when an SSH session drops while the window is in the background. */

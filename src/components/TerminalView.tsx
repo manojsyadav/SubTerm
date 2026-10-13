@@ -24,6 +24,7 @@ import { IS_MOBILE_OS } from '../util/platform';
 import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE, endsWithWindowsShellPrompt } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
+import { readOpacity, withBackgroundOpacity } from '../ui/windowOpacity';
 import { notifyDesktop, shouldNotifyLongCommand } from '../util/desktopNotify';
 import { playTerminalBellChime } from '../terminal/bell';
 import { looksLikePasswordPrompt, looksLikeSudoPrompt, probeWasEchoed } from '../terminal/passwordPrompt';
@@ -770,7 +771,8 @@ const TerminalView = ({
       fontFamily,
       lineHeight,
       scrollback,
-      theme: withCursorColor(getTerminalTheme(themeId)),
+      theme: withBackgroundOpacity(withCursorColor(getTerminalTheme(themeId))),
+      allowTransparency: readOpacity() < 100,
       wordSeparator: localStorage.getItem('subterm-word-separators') ?? undefined,
       scrollOnUserInput: localStorage.getItem('subterm-scroll-on-input') !== 'false',
       allowProposedApi: true
@@ -1781,7 +1783,8 @@ const TerminalView = ({
         term.options.scrollback = newScrollback;
       }
       const newThemeId = localStorage.getItem('subterm-terminal-theme') || 'subterm-dark';
-      term.options.theme = withCursorColor(getTerminalTheme(newThemeId));
+      term.options.allowTransparency = readOpacity() < 100;
+      term.options.theme = withBackgroundOpacity(withCursorColor(getTerminalTheme(newThemeId)));
       const newSeparators = localStorage.getItem('subterm-word-separators');
       if (newSeparators !== null && term.options.wordSeparator !== newSeparators) term.options.wordSeparator = newSeparators;
       term.options.scrollOnUserInput = localStorage.getItem('subterm-scroll-on-input') !== 'false';
@@ -1901,7 +1904,7 @@ const TerminalView = ({
           xtermRef.current?.focus();
         }
       }}
-      className={`h-full w-full bg-[#09090b] p-2 pr-2 pb-0 relative flex flex-col transition-all duration-150 ${
+      className={`terminal-surface h-full w-full bg-[#09090b] p-2 pr-2 pb-0 relative flex flex-col transition-all duration-150 ${
         bellActive ? "ring-2 ring-amber-400 shadow-[inset_0_0_24px_rgba(251,191,36,0.25)]" : ""
       }`}
     >

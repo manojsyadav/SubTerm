@@ -15,6 +15,9 @@
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.
 
+- **`feat(appearance)` — Window opacity and background effect**:
+  Settings > Appearance > Accessibility has **Window opacity** (30–100%), which lets the desktop show through the window and terminal background while text stays solid, and **Background effect** (Acrylic blur or Mica) on Windows 11. Defaults keep the window opaque.
+
 - **`feat(sync)` — Keyboard shortcuts sync**:
   Customised shortcuts are now stored in the profile vault and take part in Cloud Sync (a new **Keyboard shortcuts** category that can be switched off per device). Mac and Windows/Linux keep separate sets because Cmd and Ctrl differ. The first unlock on a device uploads shortcuts customised there before; after that the profile's synced set is used, so shortcuts now follow the profile.
 

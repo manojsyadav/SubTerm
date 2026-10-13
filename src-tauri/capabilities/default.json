@@ -9,6 +9,7 @@
     "core:app:default",
     "core:path:default",
     "core:window:default",
+    "core:window:allow-set-effects",
     "core:window:allow-minimize",
     "core:window:allow-close",
     "core:window:allow-destroy",

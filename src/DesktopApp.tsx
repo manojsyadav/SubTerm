@@ -47,6 +47,8 @@ import { isFeatureEnabled } from "./featureFlags";
 import { ServerPickerView } from "./components/ServerPickerView";
 import LocalFilesView from "./components/LocalFilesView";
 import { normalizeReduceMotion, shouldReduceMotion, normalizeHighContrast, shouldUseHighContrast } from "./ui/reduceMotion";
+import { clampOpacity, normalizeBlur, OPACITY_KEY, BLUR_KEY } from "./ui/windowOpacity";
+import { Effect } from "@tauri-apps/api/window";
 import { useIdleLock, useLockOnHidden } from "./hooks/useIdleLock";
 import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
@@ -144,6 +146,8 @@ function DesktopApp() {
     checkUpdates: localStorage.getItem('subterm-update-check') !== 'false',
     reduceMotion: normalizeReduceMotion(localStorage.getItem('subterm-reduce-motion')) as string,
     highContrast: normalizeHighContrast(localStorage.getItem('subterm-high-contrast')) as string,
+    windowOpacity: clampOpacity(localStorage.getItem(OPACITY_KEY) ?? 100),
+    windowBlur: normalizeBlur(localStorage.getItem(BLUR_KEY)) as string,
     uiZoom: Math.min(200, Math.max(50, parseInt(localStorage.getItem('subterm-ui-zoom') || '100', 10) || 100)),
     autoLockMin: Math.max(0, parseInt(localStorage.getItem('subterm-auto-lock-min') || '0', 10) || 0),
     lockOnMinimize: localStorage.getItem('subterm-lock-on-minimize') === 'true',
@@ -185,6 +189,18 @@ function DesktopApp() {
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
   }, [appSettings.reduceMotion]);
+
+  // Window opacity and blur (desktop). Blur effects are a Windows backdrop; elsewhere they are ignored.
+  useEffect(() => {
+    if (IS_MOBILE_OS) return;
+    const pct = clampOpacity(appSettings.windowOpacity);
+    const blur = normalizeBlur(appSettings.windowBlur);
+    const translucent = pct < 100 || blur !== 'none';
+    document.documentElement.classList.toggle('translucent', translucent);
+    document.documentElement.style.setProperty('--surface-alpha', String(pct / 100));
+    const effects = blur === 'acrylic' ? [Effect.Acrylic] : blur === 'mica' ? [Effect.Mica] : [];
+    getCurrentWindow().setEffects({ effects }).catch(() => { /* not supported on this OS */ });
+  }, [appSettings.windowOpacity, appSettings.windowBlur]);
 
   // High contrast: same pattern, following the OS "more contrast" preference by default.
   useEffect(() => {
@@ -733,6 +749,8 @@ function DesktopApp() {
     localStorage.setItem('subterm-update-check', appSettings.checkUpdates === false ? 'false' : 'true');
     localStorage.setItem('subterm-reduce-motion', appSettings.reduceMotion || 'system');
     localStorage.setItem('subterm-high-contrast', appSettings.highContrast || 'system');
+    localStorage.setItem(OPACITY_KEY, String(clampOpacity(appSettings.windowOpacity)));
+    localStorage.setItem(BLUR_KEY, normalizeBlur(appSettings.windowBlur));
     localStorage.setItem('subterm-ui-zoom', String(appSettings.uiZoom ?? 100));
     localStorage.setItem('subterm-host-key-policy', appSettings.hostKeyPolicy === 'strict' ? 'strict' : 'ask');
     localStorage.setItem('subterm-ssh-connect-timeout-sec', String(appSettings.sshConnectTimeoutSec ?? 10));

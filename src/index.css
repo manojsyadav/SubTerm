@@ -49,6 +49,13 @@ html.reduce-motion [class*="zoom-in"] {
   animation: none !important;
 }
 
+/* Settings > Appearance > Window opacity. DesktopApp sets the class and --surface-alpha;
+   only the window and terminal backgrounds fade, panels and text stay solid. */
+html.translucent,
+html.translucent body { background: transparent !important; }
+html.translucent .bg-background { background-color: rgb(10 10 12 / var(--surface-alpha, 1)) !important; }
+html.translucent .terminal-surface { background-color: transparent !important; }
+
 /* Settings > Appearance > High contrast. The UI has no colour tokens, so this lifts the
    few muted utility classes it uses everywhere (secondary text, hairline borders). */
 html.high-contrast .text-zinc-400 { color: #f4f4f5 !important; }

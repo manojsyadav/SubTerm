@@ -2175,7 +2175,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           "back to terminal" affordance (clicking the active tool toggles
           it off). This avoids squeezing a usable terminal + tool into a
           mobile-sized window. */}
-      <div className="flex-1 flex overflow-hidden relative bg-[#09090b]">
+      <div className="terminal-surface flex-1 flex overflow-hidden relative bg-[#09090b]">
         {/* Left Panel: Active Terminals.
             On compact + activeTool, hide entirely so the tool fills the
             screen. Terminals stay mounted (no PTY teardown) — just CSS

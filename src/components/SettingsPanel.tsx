@@ -209,6 +209,36 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
           <option value="off">Never reduce</option>
         </select>
       </Row>
+      {!IS_MOBILE_OS && (
+        <Row id="window-opacity" label="Window opacity" desc="Lets the desktop show through the window and terminal background. Text stays solid. Combine with a blur effect for readability.">
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={30}
+              max={100}
+              step={5}
+              value={settings.windowOpacity ?? 100}
+              onChange={(e) => setSettings({ ...settings, windowOpacity: Number(e.target.value) })}
+              aria-label="Window opacity"
+              className="w-32 accent-[rgb(var(--primary))]"
+            />
+            <span className="w-10 text-right text-xs font-mono text-zinc-300">{settings.windowOpacity ?? 100}%</span>
+          </div>
+        </Row>
+      )}
+      {!IS_MOBILE_OS && (
+        <Row id="window-blur" label="Background effect" desc="Windows 11 backdrop behind a see-through window. Acrylic blurs what is behind it; Mica tints it with your wallpaper. Has no effect on other systems.">
+          <select
+            value={settings.windowBlur || "none"}
+            onChange={(e) => setSettings({ ...settings, windowBlur: e.target.value })}
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+          >
+            <option value="none">None</option>
+            <option value="acrylic">Acrylic (blur)</option>
+            <option value="mica">Mica</option>
+          </select>
+        </Row>
+      )}
       <Row id="high-contrast" label="High contrast" desc="Brighter secondary text, stronger borders and a visible keyboard focus ring. Terminal colours come from the terminal theme. System follows your operating system's contrast setting.">
         <select
           value={settings.highContrast || "system"}
@@ -1307,6 +1337,8 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "ui-zoom-row", page: "appearance", label: "Zoom level", keywords: "zoom scale size dpi" },
   { id: "accessibility", page: "appearance", label: "Accessibility", keywords: "accessibility motion animation reduce" },
   { id: "reduce-motion", page: "appearance", label: "Reduce motion", keywords: "reduce motion animation transition accessibility vestibular" },
+  { id: "window-opacity", page: "appearance", label: "Window opacity", keywords: "opacity transparency transparent see through window background" },
+  { id: "window-blur", page: "appearance", label: "Background effect", keywords: "blur acrylic mica backdrop transparency window" },
   { id: "high-contrast", page: "appearance", label: "High contrast", keywords: "high contrast accessibility low vision readability borders focus" },
   { id: "quick-editor", page: "appearance", label: "Quick Editor", keywords: "editor font tab wrap file edit" },
   { id: "editor-font-size", page: "appearance", label: "Editor font size", keywords: "editor font size text" },
