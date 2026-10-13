@@ -58,9 +58,7 @@ This document tracks active development tasks, pending architectural optimizatio
   - Keyboard-interactive (2FA) auth specifically also wasn't exercised live this session (the smoke test only covers publickey auth) — worth including in the same manual pass.
   - To re-run the smoke test: stand up any local `sshd` with a throwaway keypair in its `authorized_keys`, then `SMOKE_SSH_PORT=<port> SMOKE_SSH_KEY=<path> SMOKE_SSH_USER=<user> cargo run --example russh_smoke_test [--features full-ssh-algos]` from `src-tauri`.
 
-- [ ] 🟡 **P2 · M** — **Further `DesktopApp.tsx` decomposition (session-tab sidebar)**
-  - Snippets (`LibraryView`), Credentials (`LoginsView`), Logs and (now) the Fleet Wall are separate components (`src/components/{LibraryView,LoginsView,LogsView,WallView}.tsx`); `DesktopApp.tsx` is ~2,480 lines, down from 2,991. `WallView` has jsdom component tests.
-  - Still in `DesktopApp.tsx`: the session-tab sidebar / drag-reorder / tiling logic. It reads and writes `activeView` and session refs throughout, and a slip breaks live SSH sessions, so cut it only with a manual click-through (tab switch, drag-reorder, split, close, reconnect) after each step.
+- [ ] 🟡 **P2 · S** — **Click through the extracted title bar** (`src/components/TitleBar.tsx`, moved out of `DesktopApp.tsx`, which is now ~1,700 lines, down from 2,823): tab switch, Ctrl+click split, right-click and double-click tab menu (rename, pin to Wall, close others / to the right), close with and without a live connection, the mobile session picker, profile pill, local-shell menu, quick-access bookmarks, broadcast menu, Wall button, minimise / maximise / close. The move was mechanical (same JSX, values passed as props) and two component tests cover tab switch and close, but nothing has been clicked in the app.
 
 - [ ] 🟡 **P2 · S** — **Manual click-through for session-only verified features**
   - Several features this session were validated by `typecheck`/`lint`/`build`/unit tests only, not live interaction — bundling as one follow-up pass rather than one line each:

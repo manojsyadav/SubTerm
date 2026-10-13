@@ -50,7 +50,7 @@ interface BroadcastActions {
   stateRef: React.MutableRefObject<BroadcastState>;
 }
 
-type BroadcastContextValue = BroadcastState & BroadcastActions;
+export type BroadcastContextValue = BroadcastState & BroadcastActions;
 
 const BroadcastContext = createContext<BroadcastContextValue | null>(null);
 
