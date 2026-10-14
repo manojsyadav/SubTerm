@@ -94,6 +94,30 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ---
 
+## 🚀 Planned Features & Explorers
+
+- 🟡 **P2 · M** — **MCP (Model Context Protocol) Servers**
+  - Integrate Model Context Protocol (MCP) server support into SubTerm.
+  - Enable connecting custom MCP tool servers (local stdio or SSE/HTTP) so AI assistants and copilot agents can query homelab services, run diagnostic tools, and interact with external systems.
+  - Provide a configuration UI in Settings for adding, enabling/disabling, testing, and managing MCP server definitions and environment variables.
+
+- 🟡 **P2 · M** — **Embedded Web Browser Tab**
+  - Leverage Tauri's underlying Chromium webview engine to provide a built-in tabbed browser view inside SubTerm sessions.
+  - Open web management consoles (Proxmox, TrueNAS, Portainer, router portals, Grafana) and local/remote dev servers directly beside terminal & SFTP tabs.
+  - Implement a streamlined browser toolbar with URL navigation, back/forward/refresh, certificate override handling for local self-signed homelab IPs, and quick bookmarks.
+
+- 🟡 **P2 · M** — **Local & Remote File Explorer**
+  - Full-featured local and remote file explorer with directory tree navigation, breadcrumbs, search/filtering, multi-file batch operations, file preview, and drag-and-drop transfers.
+  - Bi-directional sync between the active terminal directory and the explorer view (reveal CWD in explorer and navigate terminal to selected folder).
+
+- 🟡 **P2 · L** — **NAS Storage Explorer (SMB / NFS / WebDAV / S3)**
+  - Dedicated Network-Attached Storage (NAS) explorer for browsing and managing shared homelab storage repositories.
+  - Multi-protocol support: SMB/CIFS shares, NFS network mounts, WebDAV endpoints, and S3 / MinIO object storage buckets.
+  - Store NAS connection profiles and credentials safely in SubTerm's encrypted vault.
+  - Enable high-speed direct file transfers between NAS shares, local storage, and remote SSH hosts.
+
+---
+
 ## Settled decisions (not doing, and why)
 
 - **No "trim trailing spaces on copy" or "Alt as Meta" options.** Selection text already omits trailing whitespace, and xterm already sends Alt as an ESC prefix on desktop.
