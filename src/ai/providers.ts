@@ -51,11 +51,15 @@ export const deleteProvider = (id: number) => invoke<void>("ai_delete_provider",
 export const saveProvider = (p: Omit<AiProvider, "id" | "hasKey"> & { id?: number; apiKey?: string }) =>
   invoke<number>("ai_save_provider", { provider: { ...p, id: p.id ?? null, apiKey: p.apiKey ?? null } });
 
-export function chat(id: number, system: string, messages: ChatMsg[], tools: ToolDef[], onText: (t: string) => void) {
+/** `requestId` lets `cancelChat` stop it; a stopped call rejects with STOPPED. */
+export function chat(id: number, system: string, messages: ChatMsg[], tools: ToolDef[], onText: (t: string) => void, requestId?: string) {
   const ch = new Channel<string>();
   ch.onmessage = onText;
-  return invoke<ChatMsg>("ai_chat", { id, system, messages, tools, onText: ch });
+  return invoke<ChatMsg>("ai_chat", { id, system, messages, tools, onText: ch, requestId: requestId ?? null });
 }
+
+export const STOPPED = "[AI] STOPPED";
+export const cancelChat = (requestId: string) => invoke<void>("ai_cancel", { requestId });
 
 export const getLastProvider = () => Number(localStorage.getItem(LAST_PROVIDER_KEY)) || null;
 export const setLastProvider = (id: number) => localStorage.setItem(LAST_PROVIDER_KEY, String(id));

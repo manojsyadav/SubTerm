@@ -88,9 +88,11 @@ export interface AgentIO {
   runCommand: (command: string) => Promise<string>;
   readTerminal: (lines: number) => string;
   onUpdate: (messages: ChatMsg[]) => void;
+  /** Checked between steps; true ends the loop. */
+  stopped?: () => boolean;
 }
 
-export type AgentEnd = "done" | "declined" | "step-limit";
+export type AgentEnd = "done" | "declined" | "step-limit" | "stopped";
 
 /**
  * Chat until the model stops calling tools. A declined command ends the loop
@@ -100,6 +102,7 @@ export type AgentEnd = "done" | "declined" | "step-limit";
 export async function runAgent(start: ChatMsg[], io: AgentIO, maxSteps = 10): Promise<AgentEnd> {
   const msgs = [...start];
   for (let step = 0; step < maxSteps; step++) {
+    if (io.stopped?.()) return "stopped";
     const reply = await io.chat(msgs);
     msgs.push(reply);
     io.onUpdate([...msgs]);
@@ -113,6 +116,7 @@ export async function runAgent(start: ChatMsg[], io: AgentIO, maxSteps = 10): Pr
       io.onUpdate([...msgs]);
     }
     if (declined) return "declined";
+    if (io.stopped?.()) return "stopped";
   }
   return "step-limit";
 }

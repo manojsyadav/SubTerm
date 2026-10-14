@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Sparkles, X, Send, CornerDownLeft, Play, Loader2, Trash2, TerminalSquare } from "lucide-react";
+import { Sparkles, X, Send, CornerDownLeft, Play, Loader2, Trash2, TerminalSquare, Square } from "lucide-react";
 import {
   AI_PROVIDERS_CHANGED,
   chat,
@@ -10,6 +10,8 @@ import {
   setLastProvider,
   type AiProvider,
   type ChatMsg,
+  STOPPED,
+  cancelChat,
 } from "../ai/providers";
 import { TOOLS, formatExec, isReadOnly, runAgent, splitFences, type ExecResult, type Mode } from "../ai/agentLoop";
 import { useConfirm } from "../ui/confirm";
@@ -88,6 +90,8 @@ export function AiPanel(props: Props) {
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<{ command: string; resolve: (ok: boolean) => void } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const stopRef = useRef(false);
+  const requestRef = useRef("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const effectiveMode: Mode = canRun ? mode : "suggest";
@@ -138,10 +142,19 @@ export function AiPanel(props: Props) {
     const history = [...entries, user];
     const agent = effectiveMode !== "suggest";
     const system = systemPrompt(target, isLocal, agent);
-    const turn = (msgs: ChatMsg[]) => {
+    const turn = async (msgs: ChatMsg[]): Promise<ChatMsg> => {
       setStreaming("");
-      return chat(provider.id, system, msgs, agent ? TOOLS : [], (t) => setStreaming((s) => s + t));
+      let text = "";
+      requestRef.current = crypto.randomUUID();
+      try {
+        return await chat(provider.id, system, msgs, agent ? TOOLS : [], (t) => { text += t; setStreaming((s) => s + t); }, requestRef.current);
+      } catch (e) {
+        // Keep what had streamed; a half-built tool call is dropped.
+        if (String(e).includes(STOPPED)) return { role: "assistant", content: text ? `${text} …(stopped)` : "(stopped)" };
+        throw e;
+      }
     };
+    stopRef.current = false;
     setEntries(history);
     setDraft("");
     setNotice("");
@@ -161,8 +174,10 @@ export function AiPanel(props: Props) {
         runCommand: execCommand,
         readTerminal,
         onUpdate: setEntries,
+        stopped: () => stopRef.current,
       }, MAX_STEPS);
       if (end === "declined") setNotice("Stopped because you skipped a command. Say what to do instead.");
+      if (end === "stopped") setNotice("Stopped.");
       if (end === "step-limit") setNotice(`Stopped after ${MAX_STEPS} steps. Send a message to let it continue.`);
     } catch (e) {
       setNotice(String(e));
@@ -177,6 +192,7 @@ export function AiPanel(props: Props) {
   // approval, and the result goes back so the model can pick the next step.
   const runAndSend = async (command: string) => {
     if (busy) return;
+    stopRef.current = false;
     setBusy(true);
     setNotice("");
     let result: string;
@@ -187,7 +203,15 @@ export function AiPanel(props: Props) {
     } finally {
       setBusy(false);
     }
+    if (stopRef.current) return;
     await send(`I ran this command:\n${command}\n\nResult:\n<terminal>\n${result}\n</terminal>\n\nWhat next?`, false, `Ran: ${command}  (${result.split("\n")[0]})`);
+  };
+
+  const stop = () => {
+    stopRef.current = true;
+    cancelChat(requestRef.current).catch(() => {});
+    pending?.resolve(false);
+    setPending(null);
   };
 
   const answer = (ok: boolean) => {
@@ -290,15 +314,21 @@ export function AiPanel(props: Props) {
             Output
           </label>
           <div className="flex-1" />
-          <button
-            type="button"
-            onClick={() => send(draft, includeTerminal)}
-            disabled={busy || !draft.trim() || !provider}
-            aria-label="Send"
-            className="p-1.5 rounded bg-primary/15 text-primary disabled:opacity-40"
-          >
-            <Send size={12} />
-          </button>
+          {busy ? (
+            <button type="button" onClick={stop} aria-label="Stop" title="Stop the reply and the remaining steps" className="p-1.5 rounded bg-rose-500/15 text-rose-300">
+              <Square size={12} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => send(draft, includeTerminal)}
+              disabled={!draft.trim() || !provider}
+              aria-label="Send"
+              className="p-1.5 rounded bg-primary/15 text-primary disabled:opacity-40"
+            >
+              <Send size={12} />
+            </button>
+          )}
         </div>
       </div>
     </div>

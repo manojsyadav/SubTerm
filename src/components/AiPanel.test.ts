@@ -9,9 +9,17 @@ import type { ChatMsg } from "../ai/providers";
 Element.prototype.scrollTo = () => {};
 
 let replies: ChatMsg[] = [];
+// When set, ai_chat streams this text and then hangs until ai_cancel.
+let hangWith: string | null = null;
+let cancelHung: (() => void) | null = null;
 let baseUrl = "http://localhost:11434/v1";
 const invokeMock = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
   if (cmd === "ai_list_providers") return [{ id: 1, name: "Ollama", kind: "openai", baseUrl, model: "qwen", hasKey: false }];
+  if (cmd === "ai_cancel") { cancelHung?.(); return; }
+  if (cmd === "ai_chat" && hangWith !== null) {
+    (args!.onText as { onmessage?: (t: string) => void }).onmessage?.(hangWith);
+    return new Promise((_, reject) => { cancelHung = () => reject("[AI] STOPPED"); });
+  }
   if (cmd === "ai_chat") {
     const r = replies.shift() ?? { role: "assistant", content: "All done." };
     (args!.onText as { onmessage?: (t: string) => void }).onmessage?.(r.content);
@@ -73,6 +81,7 @@ beforeEach(() => {
   invokeMock.mockClear();
   confirmMock.mockClear();
   replies = [];
+  hangWith = null;
   baseUrl = "http://localhost:11434/v1";
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); });
@@ -148,6 +157,18 @@ describe("AiPanel", () => {
     const lastChat = invokeMock.mock.calls.filter(([c]) => c === "ai_chat").at(-1)!;
     expect((lastChat[1]!.messages as ChatMsg[]).at(-1)!.content).toContain("/dev/sda1 91%");
     expect(lastChat[1]!.tools).toEqual([]);
+  });
+
+  it("Stop keeps the streamed text and frees the panel", async () => {
+    hangWith = "Partial answer";
+    await mount();
+    await ask("long question");
+    expect(button("Stop")).toBeTruthy();
+    await act(async () => { button("Stop").click(); });
+    await flush();
+    expect(invokeMock.mock.calls.some(([c]) => c === "ai_cancel")).toBe(true);
+    expect(host.textContent).toContain("Partial answer …(stopped)");
+    expect(button("Send")).toBeTruthy();
   });
 
   it("offers only Suggest in a container shell", async () => {

@@ -89,6 +89,15 @@ describe("runAgent", () => {
     expect(updates.at(-1)!.filter((m) => m.role === "tool").map((m) => m.toolCallId)).toEqual(["a", "b"]);
   });
 
+  it("ends when the user presses Stop between steps", async () => {
+    let stop = false;
+    const x = io([call("a", "uptime"), call("b", "uptime")]);
+    x.runCommand = vi.fn(async () => { stop = true; return "ran"; });
+    x.stopped = () => stop;
+    expect(await runAgent([{ role: "user", content: "go" }], x)).toBe("stopped");
+    expect(x.chat).toHaveBeenCalledTimes(1);
+  });
+
   it("stops at the step limit", async () => {
     const x = io(Array.from({ length: 5 }, (_, i) => call(String(i), "uptime")));
     expect(await runAgent([{ role: "user", content: "loop" }], x, 3)).toBe("step-limit");

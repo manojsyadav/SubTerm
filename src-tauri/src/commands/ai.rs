@@ -10,7 +10,7 @@ use crate::DbState;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tauri::ipc::Channel;
 use zeroize::Zeroizing;
@@ -223,12 +223,47 @@ pub async fn ai_chat(
     messages: Vec<ChatMsg>,
     tools: Vec<ToolDef>,
     on_text: Channel<String>,
+    request_id: Option<String>,
 ) -> Result<ChatMsg, String> {
     let p = load_provider(&state, id)?;
-    stream_chat(&p, &system, &messages, &tools, |t| {
+    cancellable(request_id, stream_chat(&p, &system, &messages, &tools, |t| {
         let _ = on_text.send(t);
-    })
+    }))
     .await
+}
+
+async fn cancellable<T>(
+    request_id: Option<String>,
+    work: impl std::future::Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    let Some(rid) = request_id else { return work.await };
+    let stop = Arc::new(tokio::sync::Notify::new());
+    running_chats().lock().map_err(|_| "[STATE] LOCK_FAILED")?.insert(rid.clone(), stop.clone());
+    let result = tokio::select! {
+        r = work => r,
+        _ = stop.notified() => Err(STOPPED.into()),
+    };
+    if let Ok(mut m) = running_chats().lock() {
+        m.remove(&rid);
+    }
+    result
+}
+
+/// What `ai_chat` returns when `ai_cancel` stopped it. The panel keeps the text already streamed.
+const STOPPED: &str = "[AI] STOPPED";
+
+fn running_chats() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>> {
+    static RUNNING: OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>> = OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// Stop the `ai_chat` started with this `request_id`. Dropping the stream closes the HTTP request.
+#[tauri::command]
+pub fn ai_cancel(request_id: String) {
+    if let Some(stop) = running_chats().lock().ok().and_then(|m| m.get(&request_id).cloned()) {
+        // notify_one keeps a permit, so a cancel that lands before the select starts waiting still counts.
+        stop.notify_one();
+    }
 }
 
 async fn stream_chat(
@@ -666,6 +701,19 @@ data: {"type":"message_stop"}"#;
         println!("second turn: {second:?}");
         assert_eq!(text, second.content, "streamed text matches the final message");
         assert!(second.content.contains('9') || !second.tool_calls.is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancel_stops_a_running_chat() {
+        let work = std::future::pending::<Result<(), String>>();
+        let task = tokio::spawn(cancellable(Some("r1".into()), work));
+        while running_chats().lock().unwrap().get("r1").is_none() {
+            tokio::task::yield_now().await;
+        }
+        ai_cancel("r1".into());
+        assert_eq!(task.await.unwrap(), Err(STOPPED.to_string()));
+        assert!(running_chats().lock().unwrap().get("r1").is_none());
+        ai_cancel("unknown".into()); // no-op
     }
 
     #[test]
