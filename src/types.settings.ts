@@ -91,6 +91,8 @@ export interface AppSettings {
   defaultSshPort: number;
   defaultSshUser: string;
   defaultAgentForward: boolean;
+  /** Polling interval in seconds for live SSH session telemetry (CPU %, MEM %, Temp). Default 30. */
+  telemetryIntervalSec: number;
 }
 
 export type SetAppSettings = (

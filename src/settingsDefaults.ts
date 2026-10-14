@@ -63,6 +63,7 @@ export const SETTING_DEFAULTS = {
   showAuditCopy: true,
   showAuditDownload: true,
   sshDetectMode: "prompt",
+  telemetryIntervalSec: 30,
 } as const satisfies Partial<AppSettings>;
 
 type DefaultKey = keyof typeof SETTING_DEFAULTS;
@@ -123,12 +124,13 @@ export const ROW_SETTING_KEY: Record<string, DefaultKey> = {
   "default-agent": "defaultAgentForward",
   "command-widget": "commandDismissSec",
   "ssh-mode": "sshDetectMode",
+  "telemetry-interval": "telemetryIntervalSec",
 };
 
 export type ResettablePage = "general" | "appearance" | "terminal" | "features";
 
 const PAGE_ROWS: Record<ResettablePage, string[]> = {
-  general: ["startup-view", "local-shell", "update-check", "enable-monitoring", "auto-lock", "lock-on-minimize", "clear-clipboard", "confirm-on-close"],
+  general: ["startup-view", "local-shell", "update-check", "enable-monitoring", "telemetry-interval", "auto-lock", "lock-on-minimize", "clear-clipboard", "confirm-on-close"],
   appearance: ["accent", "background", "ui-zoom", "reduce-motion", "high-contrast", "window-opacity", "window-blur", "session-list", "editor-font-size", "editor-tab-size", "editor-word-wrap", "theme", "font", "font-size", "line-height", "scrollback", "cursor-style", "cursor-color", "terminal-padding", "cursor-blink", "webgl", "bell"],
   terminal: ["notify-long", "notify-disconnect", "history-max", "history-days", "overwrite-policy", "right-click", "copy-on-select", "open-links", "paste-review", "word-separators", "scroll-on-input", "auto-copy-output", "auto-close", "audit-download", "keepalive", "connect-timeout", "host-key-policy", "reconnect-attempts", "reconnect-delay", "default-port", "default-user", "default-agent", "command-widget"],
   features: ["ssh-mode", ...FEATURES.map((f) => f.key as string)],

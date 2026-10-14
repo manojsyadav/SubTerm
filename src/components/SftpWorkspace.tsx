@@ -48,6 +48,8 @@ interface SftpWorkspaceProps {
   profile?: string;
   /** Full-width page: split puts Local and Remote side by side (WinSCP style) and is the default. */
   wide?: boolean;
+  /** Invoked whenever the remote browser path changes (or initializes). */
+  onRemotePathChange?: (path: string) => void;
 }
 
 // Profile names hold only [A-Za-z0-9_-], so ":" keeps the parts apart.
@@ -98,7 +100,7 @@ DragGhost.displayName = "DragGhost";
 
 const RemoteDualView = lazy(() => import("./RemoteDualView"));
 
-const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [], terminalId, onRevealTerminal, profile, wide = false }: SftpWorkspaceProps) => {
+const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfig = [], terminalId, onRevealTerminal, profile, wide = false, onRemotePathChange }: SftpWorkspaceProps) => {
   // Active sub-tab. Files is the default (the common workflow); Mirror is
   // for the per-server one-way replication setup.
   const [view, setView] = useState<SftpView>("files");
@@ -198,9 +200,18 @@ const SftpWorkspace = ({ sessionId, disabled = false, serverId = 0, mirrorsConfi
   );
   const saveDir = (side: "local" | "remote", path: string) => {
     savedDirsRef.current[side] = path;
+    if (side === "remote") {
+      onRemotePathChange?.(path);
+    }
     try { localStorage.setItem(storageKey, JSON.stringify(savedDirsRef.current)); }
     catch { /* quota or private-mode storage — ignore */ }
   };
+
+  useEffect(() => {
+    if (savedDirsRef.current.remote) {
+      onRemotePathChange?.(savedDirsRef.current.remote);
+    }
+  }, [onRemotePathChange]);
 
   // Source of truth for the active drag. Updated SYNCHRONOUSLY from the
   // panel's onMove via the ref so the window mouseup handler (which runs in

@@ -114,9 +114,10 @@ interface SessionViewProps {
   onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string; color?: string; renamed?: boolean }[], activeTab: string) => void;
   isSessionActive?: boolean;
   onOpenSettings?: () => void;
+  telemetryIntervalSec?: number;
 }
 
-const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings }: SessionViewProps) => {
+const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, chromeless = false, onTerminalsChange, isSessionActive = true, onOpenSettings, telemetryIntervalSec = 30 }: SessionViewProps) => {
   const broadcast = useBroadcast();
   const isProd = Boolean(session?.isProduction || /prod|production|live/i.test(session?.serverName || ""));
   const [status, setStatus] = useState<'connecting' | 'connected' | 'failed' | 'disconnected'>(() => session?.isLocal ? 'connected' : 'connecting');
@@ -458,6 +459,16 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
   const [gitBranch, setGitBranch] = useState<string>(() => getTerminalGitBranch(`${session.id}-term-0`) ?? "");
   const [activeCwd, setActiveCwd] = useState<string>(() => getTerminalCwd(`${session.id}-term-0`) ?? "");
+  const [sftpPath, setSftpPath] = useState<string>(() => {
+    try {
+      const raw = localStorage.getItem(`submarine-server-dirs-${session.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.remote) return parsed.remote;
+      }
+    } catch { /* ignore */ }
+    return "";
+  });
   const [cpuUsage, setCpuUsage] = useState<number | null>(null);
   const [memUsage, setMemUsage] = useState<number | null>(null);
   const [tempUsage, setTempUsage] = useState<number | null>(null);
@@ -526,12 +537,13 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     };
 
     poll();
-    const interval = setInterval(poll, 3500);
+    const intervalMs = Math.max(2, telemetryIntervalSec ?? 30) * 1000;
+    const interval = setInterval(poll, intervalMs);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [session?.id, session?.isLocal, status]);
+  }, [session?.id, session?.isLocal, status, telemetryIntervalSec]);
 
   useEffect(() => {
     if (!session?.serverId || session.serverId <= 0) return;
@@ -2488,6 +2500,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                   onRevealTerminal={() => setActiveTool(null)}
                   profile={profile}
                   wide={toolFull && !isCompact}
+                  onRemotePathChange={setSftpPath}
                 />
               </div>
             </div>
@@ -2678,15 +2691,20 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
           {/* Right: Path (CWD), CPU%, MEM%, Temp/Load, Host/Server details */}
           <div className="flex items-center gap-1.5 shrink-0 text-[11px] sm:text-[11.5px]">
-            {activeCwd && (
-              <div
-                title={`Working Directory: ${activeCwd}`}
-                className="h-6 flex items-center gap-1.5 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/10 max-w-[150px] sm:max-w-[260px] truncate"
-              >
-                <Folder size={12} className="text-zinc-500 shrink-0" />
-                <span className="truncate">{activeCwd}</span>
-              </div>
-            )}
+            {(() => {
+              const isSftp = activeTool === 'sftp' || (!activeTool && session?.initialTool === 'sftp');
+              const displayCwd = isSftp ? (sftpPath || activeCwd || "~") : (activeCwd || sftpPath || "~");
+              if (!displayCwd) return null;
+              return (
+                <div
+                  title={`${isSftp ? 'SFTP Remote Directory' : 'Working Directory'}: ${displayCwd}`}
+                  className="h-6 flex items-center gap-1.5 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/10 max-w-[150px] sm:max-w-[260px] truncate"
+                >
+                  <Folder size={12} className={isSftp ? "text-primary shrink-0" : "text-zinc-500 shrink-0"} />
+                  <span className="truncate">{displayCwd}</span>
+                </div>
+              );
+            })()}
 
             {cpuUsage !== null && (
               <div

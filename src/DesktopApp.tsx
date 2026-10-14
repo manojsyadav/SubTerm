@@ -161,6 +161,7 @@ function DesktopApp() {
     defaultSshPort: Math.min(65535, Math.max(1, parseInt(localStorage.getItem('subterm-default-ssh-port') || '22', 10) || 22)),
     defaultSshUser: localStorage.getItem('subterm-default-ssh-user') || '',
     defaultAgentForward: localStorage.getItem('subterm-default-agent-forward') === 'true',
+    telemetryIntervalSec: Math.min(300, Math.max(5, parseInt(localStorage.getItem('subterm-telemetry-interval-sec') || '30', 10) || 30)),
   });
 
   // Webview-level zoom (Settings > Appearance). Skipped on mobile, where the OS owns scaling.
@@ -762,6 +763,7 @@ function DesktopApp() {
     localStorage.setItem('subterm-default-ssh-port', String(appSettings.defaultSshPort ?? 22));
     localStorage.setItem('subterm-default-ssh-user', appSettings.defaultSshUser || '');
     localStorage.setItem('subterm-default-agent-forward', appSettings.defaultAgentForward ? 'true' : 'false');
+    localStorage.setItem('subterm-telemetry-interval-sec', String(appSettings.telemetryIntervalSec ?? 30));
     localStorage.setItem('subterm-terminal-line-height', String(appSettings.terminalLineHeight || 1.15));
     localStorage.setItem('subterm-terminal-scrollback', String(appSettings.terminalScrollback || 5000));
     localStorage.setItem('subterm-ssh-keepalive-sec', String(appSettings.sshKeepaliveSec || 20));
@@ -908,6 +910,7 @@ function DesktopApp() {
         chromeless={chromeless}
         isSessionActive={active}
         onOpenSettings={() => setActiveView("settings")}
+        telemetryIntervalSec={appSettings.telemetryIntervalSec}
       />
     );
 

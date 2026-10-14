@@ -815,6 +815,21 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
             <Row id="enable-monitoring" label="Enable monitoring" desc="Show the Monitor page and poll CPU, RAM, disk and outages in the background.">
               <Toggle checked={settings.enableMonitoring !== false} onChange={() => setSettings({ ...settings, enableMonitoring: !(settings.enableMonitoring !== false) })} />
             </Row>
+            <Row id="telemetry-interval" label="Session telemetry polling interval" desc="How often CPU, Memory, and Temperature are sampled in the active session status bar.">
+              <select
+                value={settings.telemetryIntervalSec ?? 30}
+                onChange={(e) => setSettings({ ...settings, telemetryIntervalSec: parseInt(e.target.value, 10) || 30 })}
+                className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
+              >
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={15}>15 seconds</option>
+                <option value={30}>30 seconds (default)</option>
+                <option value={60}>1 minute</option>
+                <option value={120}>2 minutes</option>
+                <option value={300}>5 minutes</option>
+              </select>
+            </Row>
             {settings.enableMonitoring !== false && onOpenMonitor && (
               <Row label="Polling and alerts" desc="Interval, timeouts, outage threshold, notifications and beep are set on the Monitor page.">
                 <button type="button" onClick={onOpenMonitor} className="px-3 h-8 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-bold hover:bg-primary/20">
@@ -1295,6 +1310,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "clear-clipboard", page: "general", label: "Clear clipboard on lock", keywords: "clipboard clear lock security password" },
   { id: "monitoring", page: "general", label: "Resource Monitoring", keywords: "monitor cpu ram disk outage polling" },
   { id: "enable-monitoring", page: "general", label: "Enable monitoring", keywords: "monitor cpu ram disk outage polling" },
+  { id: "telemetry-interval", page: "general", label: "Session telemetry polling interval", keywords: "telemetry polling interval cpu ram memory temp frequency status bar" },
   { id: "updates", page: "general", label: "Updates", keywords: "update version release new github check upgrade" },
   { id: "update-check", page: "general", label: "Check for updates when SubTerm starts", keywords: "update version release github automatic" },
   { id: "update-now", page: "general", label: "Check for updates now", keywords: "update version release github check" },
