@@ -112,8 +112,3 @@ This document tracks active development tasks, pending architectural optimizatio
   - Prepared architecture: desktop-only crates excluded for iOS, platform checks use `desktop` / `mobile`, iOS detection and Documents-folder sandbox handling exist, build scripts `ios:init` / `ios:dev` / `ios:build` configured in `package.json`, and instructions documented in [`docs/IOS.md`](docs/IOS.md).
   - When Apple hardware is available: run `npm run ios:init`, resolve any native crate build issues (`notify`, `if-watch`, C builds of `ring` / `zstd`), and validate SSH terminal, SFTP, and app suspend/resume.
 
----
-
-## Settled decisions (not doing, and why)
-
-- **No "Alt as Meta" option.** xterm already sends Alt as an ESC prefix on desktop.
