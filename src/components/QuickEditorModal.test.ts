@@ -29,7 +29,10 @@ async function open(path: string) {
   await act(async () => {
     root.render(createElement(QuickEditorModal, { isOpen: true, onClose: () => {}, entry: entry as never, provider: { id: "local", label: "Local" } }));
   });
-  // Let the file read and the lazy Markdown view settle.
+  // Wait for the file read (Edit enables) or its error, and for the lazy Markdown view; a fixed
+  // number of ticks was not enough when the whole suite runs in parallel.
+  const ready = () => btn(host, "Edit")?.disabled === false || /too large/.test(host.textContent ?? "");
+  for (let i = 0; i < 200 && !ready(); i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return host;
 }
