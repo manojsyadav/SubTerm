@@ -91,7 +91,6 @@ export interface AppSettings {
   defaultSshPort: number;
   defaultSshUser: string;
   defaultAgentForward: boolean;
-  quickAccessServerIds: number[];
 }
 
 export type SetAppSettings = (

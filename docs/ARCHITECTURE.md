@@ -255,7 +255,7 @@ The Settings interface (`src/components/SettingsPanel.tsx`) uses a 7-page vertic
 | `appearance` | Appearance | Unrestricted | Accent/background colors, terminal theme, fonts, cursor, WebGL, bell |
 | `terminal` | Terminal | Unrestricted | Right-click, copy on select, link opening, session behaviour, command widget, triggers |
 | `features` | Features | Unrestricted | Feature flags (`src/featureFlags.ts`) with per-feature options nested beneath |
-| `quick` | Quick Access | Per card | Pinned top-bar servers and quick commands (**Vault Locked**), keyboard shortcuts (unrestricted) |
+| `quick` | Quick Access | Per card | Quick commands (**Vault Locked**), keyboard shortcuts (unrestricted) |
 | `accounts` | Accounts & Sync | **Vault Locked** | Profiles (create/delete/rename, master password) and Cloud & Sync (API endpoint, auth, push/pull) |
 | `system` | System | **Vault Locked** | Known Hosts (trusted keys, revocation), Maintenance (factory reset, export, cleanup), Activity Log (session audits, diagnostics) |
 

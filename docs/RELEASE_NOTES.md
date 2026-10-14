@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(ui)` — Pin servers from the sidebar list; the title-bar server buttons are gone**:
+  Hovering a session in the sidebar list (Servers, SFTP or Remote Desktop, in the rail and the wide panel) shows a pin button. A pinned server stays at the top of its list and now stays listed after you close it, dimmed with a dashed border; one click connects again. It still reopens after unlock, as before. The quick-connect buttons in the title bar and the **Pinned Servers** card under Settings > Quick Access have been removed, and the servers you had picked there are not carried over: pin them from the sidebar instead.
+
 - **`feat(terminal)` — Right-click menu for terminal tabs and local shells**:
   Right-clicking a local shell in the sidebar (or in the wide sessions panel), or a terminal tab inside a session, now opens a menu like Windows Terminal's: **Change tab color**, **Rename tab**, **Duplicate tab** (same shell), **Split tab** (opens the same shell beside it), **Move tab** up or down, **Export text** (saves the scrollback as a `.log`), **Find**, **Close** other tabs or tabs below, and **Close tab**. A renamed local shell shows its new name in the sidebar; a coloured tab gets a stripe in that colour. Before, local shells in the sidebar had no right-click menu, and a session's tab strip only offered rename.
 

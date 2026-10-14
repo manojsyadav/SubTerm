@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { FolderOpen, Monitor, X, Terminal, Columns, Rows, Lock, Layers } from "lucide-react";
@@ -161,13 +161,6 @@ function DesktopApp() {
     defaultSshPort: Math.min(65535, Math.max(1, parseInt(localStorage.getItem('subterm-default-ssh-port') || '22', 10) || 22)),
     defaultSshUser: localStorage.getItem('subterm-default-ssh-user') || '',
     defaultAgentForward: localStorage.getItem('subterm-default-agent-forward') === 'true',
-    quickAccessServerIds: (() => {
-      try {
-        const raw = localStorage.getItem('subterm-quick-access-servers');
-        if (raw) return JSON.parse(raw);
-      } catch {}
-      return [];
-    })() as number[],
   });
 
   // Webview-level zoom (Settings > Appearance). Skipped on mobile, where the OS owns scaling.
@@ -761,7 +754,6 @@ function DesktopApp() {
     invoke('set_ssh_keepalive_interval', { secs: appSettings.sshKeepaliveSec || 20 }).catch(console.error);
     invoke('set_ssh_connect_timeout', { secs: appSettings.sshConnectTimeoutSec || 10 }).catch(console.error);
     invoke('set_host_key_policy', { strict: appSettings.hostKeyPolicy === 'strict' }).catch(console.error);
-    localStorage.setItem('subterm-quick-access-servers', JSON.stringify(appSettings.quickAccessServerIds || []));
     if (!appSettings.enableMonitoring) {
       if (activeView === 'monitor') {
         setActiveView('nodes');
@@ -879,17 +871,6 @@ function DesktopApp() {
     setIsPanelOpen(true);
   };
 
-  const quickAccessServersList = useMemo(() => {
-    const ids: number[] = appSettings.quickAccessServerIds || [];
-    if (ids.length > 0) {
-      return ids
-        .map(id => servers.find(s => s.id === id))
-        .filter((s): s is NonNullable<typeof s> => Boolean(s))
-        .slice(0, 5);
-    }
-    return servers.slice(0, Math.min(3, servers.length));
-  }, [appSettings.quickAccessServerIds, servers]);
-
   // One session tab's content: the SSH session view, or the remote desktop for an
   // embedded RDP tab. Used by the normal, split and hidden-tab renderings below.
   const sessionBody = (sess: Session, chromeless: boolean, active: boolean) =>
@@ -983,6 +964,9 @@ function DesktopApp() {
         onMenu={(sid, x, y) => setTabMenu({ x, y, sessionId: sid })}
         onClose={(sid) => { void closeSessionAsked(sid); }}
         onToggleGroup={sessionMeta.toggleCollapsed}
+        onTogglePin={sessionMeta.togglePin}
+        pinnedClosed={pinnedClosed(kind)}
+        onOpenPinned={openByMetaKey}
       />
     );
   };
@@ -994,6 +978,27 @@ function DesktopApp() {
     return ({ local: 'local', ssh: 'nodes', sftp: 'sftp', rdp: 'rdp' } as const)[sessionKind(sess)];
   })();
 
+  // Open a session from its meta key (`ssh:12`, `sftp:12`, `rdp:7`, `local`).
+  const openByMetaKey = (key: string) => {
+    const parsed = parseMetaKey(key);
+    if (!parsed) return;
+    if (parsed.kind === 'local') { if (!IS_MOBILE_OS) openLocalTerminal(localStorage.getItem('subterm-local-shell') || undefined); return; }
+    const server = servers.find((x) => x.id === parsed.serverId);
+    if (!server) return;
+    if (parsed.kind === 'sftp') openServer(server, 'sftp', { fullWidth: true });
+    else openServer(server);
+  };
+  // Pinned servers of one sidebar list that have no open session, shown dimmed so a click reconnects.
+  const pinnedClosed = (kind: 'ssh' | 'sftp' | 'rdp') => {
+    const open = new Set(sessions.map((x) => metaKeyOf(x)));
+    return sessionMeta.meta.pinned.flatMap((key) => {
+      const parsed = parseMetaKey(key);
+      if (!parsed || parsed.kind !== kind || open.has(key)) return [];
+      const server = servers.find((x) => x.id === parsed.serverId);
+      return server ? [{ key, name: sessionMeta.meta.names[key] || server.name }] : [];
+    });
+  };
+
   // Pinned sessions reopen once per unlock, after the server list has loaded.
   const pinnedOpenedRef = useRef(false);
   useEffect(() => {
@@ -1002,14 +1007,7 @@ function DesktopApp() {
     pinnedOpenedRef.current = true;
     const open = new Set(sessionsRef.current.map((x) => metaKeyOf(x)));
     for (const key of sessionMeta.meta.pinned) {
-      if (open.has(key)) continue;
-      const parsed = parseMetaKey(key);
-      if (!parsed) continue;
-      if (parsed.kind === 'local') { if (!IS_MOBILE_OS) openLocalTerminal(localStorage.getItem('subterm-local-shell') || undefined); continue; }
-      const server = servers.find((x) => x.id === parsed.serverId);
-      if (!server) continue;
-      if (parsed.kind === 'sftp') openServer(server, 'sftp', { fullWidth: true });
-      else openServer(server);
+      if (!open.has(key)) openByMetaKey(key);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUnlocked, servers]);
@@ -1028,7 +1026,7 @@ function DesktopApp() {
 
   // TitleBar is a module-level component (stable identity), so React keeps the tab
   // strip mounted across renders; it only needs the state it shows.
-  const titleBarProps = { confirm, activeView, appWindow, broadcast, broadcastMenuOpen, closeSession, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, openServer, pinTerminalToWall, quickAccessServersList, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setIsUnlockModalOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setTabMenu, sshKeys, tabMenu, tabNames: displayNames, renameSession, sessionMenu, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
+  const titleBarProps = { confirm, activeView, appWindow, broadcast, broadcastMenuOpen, isMaximized, isMobile, isUnlocked, mergedSessionIds, mobileSessionPickerOpen, pinTerminalToWall, sessionActiveTerm, sessionStatuses, sessions, setActiveView, setBroadcastMenuOpen, setIsCommandPaletteOpen, setMergedSessionIds, setMobileSessionPickerOpen, setSessionStatuses, setSessions, setTabMenu, sshKeys, tabMenu, tabNames: displayNames, renameSession, sessionMenu, toggleMaximize, unpinSessionFromWall, unpinTerminalFromWall, wallEnabled, wallHasTerminal, wallItems };
 
   // h-full (not h-screen) so the layout tracks --vv-h from main.tsx —
   // when the Android soft keyboard opens the visualViewport shrinks and the
@@ -1098,7 +1096,7 @@ function DesktopApp() {
 
         {sessionPanel && (
           <aside aria-label="Open sessions" className="w-56 shrink-0 h-full overflow-y-auto custom-scrollbar border-r border-white/5 bg-[#0d0d10] p-2 flex flex-col gap-3">
-            {sessions.length === 0 && <p className="text-[11px] text-zinc-600 px-1 pt-1">No open sessions.</p>}
+            {sessions.length === 0 && !sessionMeta.meta.pinned.length && <p className="text-[11px] text-zinc-600 px-1 pt-1">No open sessions.</p>}
             {localSession && localTabs.length > 0 && (
               <section>
                 <h3 className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Local</h3>
@@ -1136,7 +1134,7 @@ function DesktopApp() {
             {(['nodes', 'sftp', 'rdp'] as const).map((itemId) => {
               const kind = itemId === 'nodes' ? 'ssh' : itemId;
               const list = sessions.filter((x) => sessionKind(x) === kind);
-              if (list.length === 0) return null;
+              if (list.length === 0 && pinnedClosed(kind).length === 0) return null;
               return (
                 <section key={itemId}>
                   <h3 className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{itemId === 'nodes' ? 'Servers' : itemId === 'sftp' ? 'SFTP' : 'Remote Desktop'}</h3>
@@ -1153,6 +1151,9 @@ function DesktopApp() {
                     onMenu={(sid, x, y) => setTabMenu({ x, y, sessionId: sid })}
                     onClose={(sid) => { void closeSessionAsked(sid); }}
                     onToggleGroup={sessionMeta.toggleCollapsed}
+                    onTogglePin={sessionMeta.togglePin}
+                    pinnedClosed={pinnedClosed(kind)}
+                    onOpenPinned={openByMetaKey}
                   />
                 </section>
               );

@@ -48,12 +48,11 @@ describe("settingsDefaults", () => {
 
   it("resets every setting and re-enables every feature, leaving unrelated settings alone", () => {
     flags.setFeatureEnabled("sshDetect", false);
-    const s = as_({ ...base, rightClickAction: "menu", autoLockMin: 15, terminalTheme: "nord", quickAccessServerIds: [1, 2] });
+    const s = as_({ ...base, rightClickAction: "menu", autoLockMin: 15, terminalTheme: "nord" });
     const out = resetAllSettings(s) as unknown as Record<string, unknown>;
     expect(out.rightClickAction).toBe("smart");
     expect(out.autoLockMin).toBe(0);
     expect(out.terminalTheme).toBe("subterm-dark");
-    expect(out.quickAccessServerIds).toEqual([1, 2]);
     expect(flags.isFeatureEnabled("sshDetect")).toBe(true);
   });
 });
