@@ -267,12 +267,13 @@ pub struct ClientHandler {
     pub forwarded_targets: crate::tunnel::ForwardedTargets,
     /// Fingerprint-prompt outcome, written by `check_server_key`. The connect
     /// driver reads this after `connect_stream` returns an Err so it can
-    /// distinguish the three host-key cases from a generic transport drop:
+    /// distinguish the host-key cases from a generic transport drop:
     ///   -1 = no prompt fired (handshake never reached the check)
     ///    0 = prompt fired and the user rejected
     ///    1 = prompt fired and the user accepted (or fingerprint was trusted)
     ///    2 = prompt fired but timed out with no answer
     ///    3 = prompt is open, waiting for the user (pauses the handshake timeout)
+    ///    4 = strict host-key policy refused without prompting
     /// Without this the driver only sees russh's downstream error and can't
     /// tell "user dismissed the prompt" from "network drop", which used to
     /// surface as "Auth failed" in the UI.
@@ -415,7 +416,7 @@ impl client::Handler for ClientHandler {
                 },
                 "type": "error"
             }));
-            self.fp_outcome.store(0, std::sync::atomic::Ordering::SeqCst);
+            self.fp_outcome.store(4, std::sync::atomic::Ordering::SeqCst);
             return Ok(false);
         }
 

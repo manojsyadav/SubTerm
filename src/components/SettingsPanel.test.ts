@@ -187,12 +187,26 @@ describe("SettingsPanel layout", () => {
     expect(host.textContent).toContain("Cloud Sync & Collaboration");
   });
 
-  it("uses the same wide multi-column layout on every page", () => {
+  it("uses the same wide multi-column layout on every page, with max 2 columns for dense pages", () => {
     for (const label of ["General", "Appearance", "Terminal", "Features", "Quick Access", "Accounts & Sync", "System"]) {
       click(nav(label));
       const container = host.querySelector("main > div") as HTMLElement;
       expect(container.className, label).toContain("max-w-[2000px]");
       expect(container.querySelector(".xl\\:columns-2"), label).toBeTruthy();
+      const hasThreeCols = !!container.querySelector('[class*="columns-3"]');
+      if (["Quick Access", "Accounts & Sync", "System"].includes(label)) {
+        expect(hasThreeCols, `${label} should have max 2 columns`).toBe(false);
+      } else {
+        expect(hasThreeCols, `${label} should support 3 columns`).toBe(true);
+      }
     }
+  });
+
+  it("keeps the Known Hosts header and empty state wrapped in a single break-inside-avoid container on System page", () => {
+    click(nav("System"));
+    const knownHostsWrapper = host.querySelector("main .space-y-4.break-inside-avoid");
+    expect(knownHostsWrapper).toBeTruthy();
+    expect(knownHostsWrapper?.textContent).toContain("SSH Known Hosts & Fingerprints");
+    expect(knownHostsWrapper?.textContent).toContain("No trusted host keys recorded yet");
   });
 });
