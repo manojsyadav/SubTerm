@@ -215,6 +215,18 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(terminal)` — Local Windows tabs keep their text when a pane is resized**:
+  Splitting a local shell tab on Windows, or resizing the window, used to leave the earlier output overlapped and shifted. The panes now stay aligned. In a pane narrower than a line, the line is cut at the edge until the pane is wider again.
+
+- **`fix(ssh)` — Windows servers are recognised**:
+  A session to a Windows OpenSSH server showed the Linux OS badge and Linux quick commands. It now shows Windows and the Windows quick commands.
+
+- **`fix(files)` — Local paths no longer start with `\\?\`**:
+  On Windows, files and folders opened from the local file browser showed Windows' internal `\\?\C:\…` form in the editor header, the path bar and copied paths. They now show the ordinary `C:\…` path.
+
+- **`fix(editor)` — Underscores in Markdown no longer turn text italic by mistake**:
+  Text such as `window.__init__value` or `a__b` showed in italics, with an underscore missing, in the Markdown preview. Underscores touching a word now stay as typed; `_italic_` and `__bold__` work as before.
+
 - **`fix(editor)` — A file that could not be opened can no longer be overwritten**:
   When a file fails to open in the editor, most often because it is over 2 MB, the editor shows the error and stays read-only: Edit and Save are not available. Before, the empty editor could still be edited and saved, which replaced the whole file with what was typed (a 6 MB log became 5 bytes in testing). The editor also starts empty for each file, so the previous file's text can't be saved into the next one.
 
