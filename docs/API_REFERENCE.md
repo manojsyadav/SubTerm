@@ -495,3 +495,18 @@ Events emitted from Rust to the Webview via `app.emit(...)`:
 | `save_recording` | `{ content, filename }` | `Result<String, String>` | Writes an automatic recording into `recordings_dir` without a dialog |
 | `save_temp_file` | raw body, `x-filename` header | `Result<String, String>` | Writes a pasted image to `<temp>/subterm-paste/` and returns the path |
 | `get_synced_shortcuts` / `set_synced_shortcuts` | `{ platform: "mac" \| "pc" }` / `{ platform, map }` | `Result<Record<string,string>, String>` / `Result<(), String>` | Customised keyboard shortcuts stored in the profile vault (synced) |
+
+---
+
+## 13. AI Assistant Commands
+
+These commands are in `src-tauri/src/commands/ai.rs`. Providers live in the vault table `ai_providers`, which is not synced. `kind` is `"openai"` (any OpenAI-compatible `/chat/completions`, including Ollama at `http://localhost:11434/v1`) or `"anthropic"`. The agent loop runs in `src/ai/agentLoop.ts`.
+
+| Command | Arguments | Return Type | Description |
+|---|---|---|---|
+| `ai_list_providers` | none | `Result<{ id, name, kind, baseUrl, model, hasKey }[], String>` | Lists saved providers. The key is never returned, only `hasKey` |
+| `ai_save_provider` | `{ provider: { id?, name, kind, baseUrl, model, apiKey? } }` | `Result<number, String>` (id) | Inserts, or updates when `id` is set. `apiKey`: `null` keeps the stored key, `""` clears it |
+| `ai_delete_provider` | `{ id }` | `Result<(), String>` | Removes the provider and its key |
+| `ai_list_models` | `{ id }` | `Result<string[], String>` | `GET {baseUrl}/models`, sorted ids |
+| `ai_chat` | `{ id, system, messages: ChatMsg[], tools: { name, description, parameters }[], onText: Channel<string> }` | `Result<ChatMsg, String>` | One streamed assistant turn. Text deltas arrive on `onText`. The return value is the whole message, including `toolCalls: { id, name, arguments }[]` (`arguments` is raw JSON text). `ChatMsg` is `{ role: "user" \| "assistant" \| "tool", content, toolCalls?, toolCallId? }` |
+| `ai_exec` | `{ sessionId: string \| null, command, cwd?, timeoutSecs? }` | `Result<{ stdout, stderr, exitCode, truncated, timedOut }, String>` | Runs one approved command on a new channel of SSH session `sessionId`, or locally when it is `null` (PowerShell on Windows, `sh` elsewhere; desktop only). The default timeout is 60 s and the maximum 600 s. Each stream keeps its last 16 KB |

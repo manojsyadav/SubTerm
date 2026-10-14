@@ -64,6 +64,10 @@ export const DEFAULT_QUICK_COMMANDS: Record<string, QuickCommandEnvGroup> = {
       { id: "wps-5", label: "netstat", cmd: "netstat -ano\r", autoEnter: true },
       { id: "wps-6", label: "systeminfo", cmd: "systeminfo\r", autoEnter: true },
       { id: "wps-7", label: "Test-Port", cmd: "Test-NetConnection 8.8.8.8 -Port 53\r", autoEnter: true },
+      // Agent CLIs sign in with their own subscription, so they run as-is in a local tab.
+      { id: "wps-ai-1", label: "claude", cmd: "claude\r", autoEnter: true },
+      { id: "wps-ai-2", label: "codex", cmd: "codex\r", autoEnter: true },
+      { id: "wps-ai-3", label: "gemini", cmd: "gemini\r", autoEnter: true },
     ],
   },
   "windows-cmd": {
@@ -78,6 +82,9 @@ export const DEFAULT_QUICK_COMMANDS: Record<string, QuickCommandEnvGroup> = {
       { id: "wcmd-4", label: "dir", cmd: "dir\r", autoEnter: true },
       { id: "wcmd-5", label: "systeminfo", cmd: "systeminfo\r", autoEnter: true },
       { id: "wcmd-6", label: "ping 8.8.8.8", cmd: "ping 8.8.8.8\r", autoEnter: true },
+      { id: "wcmd-ai-1", label: "claude", cmd: "claude\r", autoEnter: true },
+      { id: "wcmd-ai-2", label: "codex", cmd: "codex\r", autoEnter: true },
+      { id: "wcmd-ai-3", label: "gemini", cmd: "gemini\r", autoEnter: true },
     ],
   },
   darwin: {
@@ -93,6 +100,9 @@ export const DEFAULT_QUICK_COMMANDS: Record<string, QuickCommandEnvGroup> = {
       { id: "mac-5", label: "brew list", cmd: "brew list\r", autoEnter: true },
       { id: "mac-6", label: "git status", cmd: "git status\r", autoEnter: true },
       { id: "mac-7", label: "netstat -nr", cmd: "netstat -nr\r", autoEnter: true },
+      { id: "mac-ai-1", label: "claude", cmd: "claude\r", autoEnter: true },
+      { id: "mac-ai-2", label: "codex", cmd: "codex\r", autoEnter: true },
+      { id: "mac-ai-3", label: "gemini", cmd: "gemini\r", autoEnter: true },
     ],
   },
 };

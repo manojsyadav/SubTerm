@@ -6,6 +6,16 @@
 
 ### 🚀 New Features
 
+- **`feat(ai)` — AI assistant with local and online models**:
+  The Copilot button and Ctrl+I now open an AI panel on the right of the terminal. It works with a local Ollama or LM Studio (no key needed) and with Anthropic, OpenAI, Google Gemini and OpenRouter, or any OpenAI-compatible endpoint. Add models under Settings > Features > AI assistant. API keys are stored in the encrypted vault and are not synced.
+
+  The panel has three modes:
+  - **Suggest** shows commands with Insert and Run buttons.
+  - **Ask** lets the assistant run commands itself, read their output and decide the next step. You approve or skip each command.
+  - **Auto** runs read-only checks such as `df`, `ps` and `systemctl status` without asking. On production servers it asks every time.
+
+  Commands run on a separate channel, so your shell is untouched. **Explain** on a failed command sends that command and its output. Before anything goes to an online model for the first time, SubTerm asks you to confirm. Local tabs also get `claude`, `codex` and `gemini` quick commands for those agent CLIs. This replaces the old built-in recipe list. Off switch: Settings > Features > AI > AI assistant.
+
 - **`feat(terminal)` — Fill the saved password at a sudo prompt**:
   When a server asks `[sudo] password for …` in a session that logged in with a saved password, a bar offers **Fill password**. Before sending, SubTerm types `x` + Backspace and refuses if anything echoes back, so the password only goes to a prompt that hides input (the right-click **Paste saved password** uses the same check). The bar closes when you type or the prompt goes away. Off switch: Settings > Features > Terminal > Offer saved password at sudo prompts.
 

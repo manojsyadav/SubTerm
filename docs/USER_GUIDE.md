@@ -216,6 +216,25 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - When adding or editing a command in Snippets, set **Scope** to a specific server instead of **Global**, and optionally add comma-separated **Tags**.
    - A server-scoped snippet only appears in that server's Command Palette (`Ctrl+K`) — global snippets (the default) still show everywhere. Library cards show a scope badge and tag chips, and the Snippets search box matches against tags too.
 
+### Workflow 6: Asking the AI Assistant
+
+*Goal*: Get help with a session from a local or online model, and optionally let it run checks for you.
+
+1. **Add a model**:
+   - Open Settings > Features > AI assistant and pick a provider from **Add provider…**.
+   - **Ollama** first needs Ollama installed and a model pulled, for example `ollama pull qwen2.5:7b`. For agent mode, use a model that supports tool calls, such as qwen2.5 or llama3.1.
+   - An Ollama on another machine works too: set the base URL to `http://<that-ip>:11434/v1`. That machine has to listen on its network address, so set `OLLAMA_HOST=0.0.0.0` there.
+   - For **Anthropic**, **OpenAI**, **Gemini** or **OpenRouter**, paste an API key from that provider's console. The key is saved in the vault and never shown again.
+   - Click the refresh button next to **Model** to list what the provider offers, pick one, then **Save**.
+2. **Open the panel** with `Ctrl+I`, the **Copilot** button, or **Explain** on the bar shown after a failed command. The panel keeps its conversation while closed. **Output** sends the last 80 lines of the terminal with your message.
+3. **Choose what it may do** (bottom left of the panel):
+   - **Suggest**: answers only. Each command gets **Insert**, which types it without running, and **Run**.
+   - **Ask**: the assistant runs commands on its own and reads the results. Every command shows up as a card with **Run** and **Skip**. Skip stops it so you can say what to do instead. It stops after 10 steps.
+   - **Auto**: like Ask, but read-only commands run without a card. These are commands like `ls`, `cat`, `df`, `ps`, `systemctl status`, `docker ps` and `journalctl` without `-f`. Anything with `sudo`, redirection, or a path that looks like a key or secret still asks. So does every command on a server marked as production.
+   - Commands run on a separate channel, so they don't appear in your terminal or history. Each one has a 60-second limit. In a local tab they run in PowerShell on Windows and `sh` elsewhere. In a container shell only Suggest is available.
+4. **Agent CLIs**: Claude Code, Codex and Gemini CLI use their own sign-in. Install one, open a Local tab, and click **claude**, **codex** or **gemini** in the quick commands.
+5. **Privacy**: with an online provider, your messages, the included output, and the output of every command you approve go to that provider. SubTerm asks once per provider before the first send. Use a local model for sessions that show secrets.
+
 ---
 
 ## 3. Configuration & Customization

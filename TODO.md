@@ -35,7 +35,7 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- 🟡 **P2 / S** — **Launch presets for agent CLIs** (`claude`, `codex`, `gemini`) in a local tab.
+- 🟢 **P3 / S** — The `claude` / `codex` / `gemini` quick commands are defaults only. Anyone who already saved local quick commands sees them only after **Reset** in Settings > Quick Commands.
 - 🔴 **P1 / S** — Try the AI panel in the app against a local Ollama (a tool-capable model such as `qwen2.5` or `llama3.1`) and an Anthropic key. Check:
   - streaming, and Explain on a failed command;
   - Ask mode: approve, then Skip;
