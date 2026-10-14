@@ -1357,6 +1357,8 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
 // Two columns on wide windows; cards never split. Narrow windows stay single-column.
 // Two columns from 1280 px, three from 1700 px (a 1920 px monitor); cards never split.
 const COLUMNS = "space-y-6 xl:space-y-0 xl:columns-2 min-[1700px]:columns-3 xl:gap-6 xl:[&>*]:mb-6";
+// Max 2 columns for pages with denser/wider cards (Quick Access, Accounts & Sync, System) where 3 columns is too compact.
+const COLUMNS_MAX_2 = "space-y-6 xl:space-y-0 xl:columns-2 xl:gap-6 xl:[&>*]:mb-6";
 const WIDE_PAGES: CategoryId[] = ["general", "appearance", "terminal", "features", "quick", "accounts", "system"];
 
 const SettingsPanel = ({ settings, setSettings, onOpenLogs, onOpenMonitor, onClose, onUnlocked, servers = [], folders = [], onSync, syncing, lastSyncLabel, activeProfile, onSwitchProfile, isUnlocked = false, onRequestUnlock }: SettingsPanelProps) => {
@@ -1406,14 +1408,14 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onOpenMonitor, onClo
       case "appearance":    return <div className={COLUMNS}><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
       case "terminal":      return <div className={COLUMNS}><PageTerminal part="terminal" settings={settings} setSettings={setSettings} /></div>;
       case "features":      return <div className={COLUMNS}><PageTerminal part="features" settings={settings} setSettings={setSettings} /></div>;
-      case "quick":         return <div className={COLUMNS}><PageQuick isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} /></div>;
+      case "quick":         return <div className={COLUMNS_MAX_2}><PageQuick isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} /></div>;
       case "accounts":      return (
-        <div className={COLUMNS}>
+        <div className={COLUMNS_MAX_2}>
           <PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />
           <PageCloud settings={settings} setSettings={setSettings} onSync={onSync} syncing={syncing} lastSyncLabel={lastSyncLabel} />
         </div>
       );
-      case "system":        return <div className={COLUMNS}><PageSystemTabs settings={settings} setSettings={setSettings} servers={servers} folders={folders} onOpenLogs={onOpenLogs} /></div>;
+      case "system":        return <div className={COLUMNS_MAX_2}><PageSystemTabs settings={settings} setSettings={setSettings} servers={servers} folders={folders} onOpenLogs={onOpenLogs} /></div>;
       default:              return null;
     }
   };
