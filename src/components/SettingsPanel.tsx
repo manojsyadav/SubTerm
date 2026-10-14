@@ -22,6 +22,7 @@ const CloudPanel = lazy(() => import("./CloudPanel"));
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
+import { SettingsAiProviders } from "./SettingsAiProviders";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
@@ -436,6 +437,7 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
   };
 
   const featureExtras: Partial<Record<FeatureKey, React.ReactNode>> = {
+    aiCopilot: <SettingsAiProviders />,
     terminalFileLinks: (
       <div data-setting="file-types" className="py-2">
         <div className="text-xs text-zinc-500 mb-2">Which file names in terminal output can be clicked to open in the editor.</div>

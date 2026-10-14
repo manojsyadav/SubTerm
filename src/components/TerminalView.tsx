@@ -18,7 +18,8 @@ import { useIsNarrow } from '../hooks/useViewport';
 import { MobileKeyBar, ModifiersState, ModKey } from './MobileKeyBar';
 import { useBroadcast } from '../ui/broadcast';
 import HistorySearchOverlay from './HistorySearchOverlay';
-const AiCopilotModal = lazy(() => import('./AiCopilotModal').then((m) => ({ default: m.AiCopilotModal })));
+import type { AiSeed } from './AiPanel';
+const AiPanel = lazy(() => import('./AiPanel').then((m) => ({ default: m.AiPanel })));
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
@@ -181,6 +182,10 @@ const TerminalView = ({
   // terminal's DOM subtree, so multi-tab windows don't fire N overlays.
   const [showHistory, setShowHistory] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
+  // Mounted on first open and then only hidden, so closing the panel keeps the conversation.
+  const [copilotMounted, setCopilotMounted] = useState(false);
+  useEffect(() => { if (showCopilot) setCopilotMounted(true); }, [showCopilot]);
+  const [copilotSeed, setCopilotSeed] = useState<AiSeed | undefined>(undefined);
   const copilotEnabled = useFeatureFlag('aiCopilot');
   const recordingEnabled = useFeatureFlag('sessionRecording');
   const [recording, setRecording] = useState(() => isRecording(terminalId));
@@ -803,6 +808,37 @@ const TerminalView = ({
   } | null>(null);
 
   const commandSettleTimerRef = useRef<number | null>(null);
+
+  const bufferLines = (from: number, to: number) => {
+    const buf = xtermRef.current?.buffer.active;
+    if (!buf) return '';
+    const lines: string[] = [];
+    for (let i = Math.max(0, from); i <= Math.min(to, buf.length - 1); i++) {
+      const l = buf.getLine(i);
+      if (l) lines.push(l.translateToString(true));
+    }
+    return lines.join('\n').replace(/\s+$/, '');
+  };
+
+  const readTerminal = (count: number) => {
+    const buf = xtermRef.current?.buffer.active;
+    if (!buf) return '';
+    const end = buf.baseY + buf.cursorY;
+    return bufferLines(end - count + 1, end);
+  };
+
+  const explainFailure = (block: { command: string; exitCode?: number; outputStartLine: number; endLine?: number }) => {
+    const buf = xtermRef.current?.buffer.active;
+    const end = block.endLine ?? (buf ? buf.baseY + buf.cursorY : block.outputStartLine);
+    // The tail is where the error usually is.
+    const output = bufferLines(Math.max(block.outputStartLine, end - 60), end);
+    setCopilotSeed({
+      text: `This command failed with exit code ${block.exitCode}:\n${block.command}\n\nOutput:\n<terminal>\n${output}\n</terminal>\n\nExplain why, and how to fix it.`,
+      nonce: Date.now(),
+    });
+    setShowCopilot(true);
+  };
+
   const commandDismissTimerRef = useRef<number | null>(null);
 
   const copyCommandOutput = (block: { outputStartLine: number; endLine?: number }) => {
@@ -2170,8 +2206,8 @@ const TerminalView = ({
           {copilotEnabled && lastCommand.exitCode !== undefined && lastCommand.exitCode !== 0 && (
             <button
               type="button"
-              onClick={() => setShowCopilot(true)}
-              title="Explain command failure with Shell AI Copilot (Ctrl+I)"
+              onClick={() => explainFailure(lastCommand)}
+              title="Ask the AI assistant why this failed (Ctrl+I opens the panel)"
               className="h-6 px-2 rounded bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 flex items-center gap-1 text-[10.5px] font-bold transition-colors"
             >
               <Sparkles size={11} />
@@ -2299,22 +2335,29 @@ const TerminalView = ({
           if (!execute) commandBufRef.current = command;
         }}
       />
-      {copilotEnabled && showCopilot && (
+      {copilotEnabled && copilotMounted && (
         <Suspense fallback={null}>
-          <AiCopilotModal
-            isOpen={showCopilot}
-            onClose={() => {
-              setShowCopilot(false);
-              xtermRef.current?.focus();
-            }}
-            onInsertCommand={(command, execute) => {
-              if (disabledRef.current) return;
-              const payload = execute ? command + "\r" : command;
-              const bytes = Array.from(new TextEncoder().encode(payload));
-              invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
-              if (!execute) commandBufRef.current = command;
-            }}
-          />
+          <div className={showCopilot ? '' : 'hidden'}>
+            <AiPanel
+              target={serverName || 'this server'}
+              isLocal={isLocal}
+              readTerminal={readTerminal}
+              seed={copilotSeed}
+              open={showCopilot}
+              onClose={() => {
+                setShowCopilot(false);
+                xtermRef.current?.focus();
+              }}
+              onInsertCommand={(command, execute) => {
+                if (disabledRef.current) return;
+                const payload = execute ? command + "\r" : command;
+                const bytes = Array.from(new TextEncoder().encode(payload));
+                invoke('write_terminal_data', { terminalId, data: bytes }).catch(console.error);
+                if (!execute) commandBufRef.current = command;
+                xtermRef.current?.focus();
+              }}
+            />
+          </div>
         </Suspense>
       )}
       {/* Disabled badge */}

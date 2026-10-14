@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod connection;
 pub mod diagnostics;
 pub mod mirror;

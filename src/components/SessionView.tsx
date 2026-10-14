@@ -1832,7 +1832,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               onClick={() => {
                 window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
               }}
-              title="Open AI Shell Copilot (Ctrl+I)"
+              title="Open the AI assistant (Ctrl+I)"
               className="h-5 px-2 rounded bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary transition-all shrink-0 flex items-center gap-1 font-semibold text-[10px]"
             >
               <Sparkles size={10} />

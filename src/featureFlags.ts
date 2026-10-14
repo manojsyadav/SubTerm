@@ -157,8 +157,8 @@ export const FEATURES = [
   {
     key: "aiCopilot",
     group: "AI",
-    label: "AI Shell Copilot",
-    desc: "Copilot button, Ctrl+I shortcut and the \"Explain\" action after a failed command. When off, the copilot code is never loaded and no data can be sent to an AI service.",
+    label: "AI assistant",
+    desc: "Copilot button, Ctrl+I shortcut and the \"Explain\" action after a failed command. When off, the assistant code is never loaded and no data can be sent to an AI service.",
   },
 ] as const satisfies readonly FeatureDef[];
 
