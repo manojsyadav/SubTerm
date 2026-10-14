@@ -136,7 +136,7 @@ export function sshTargetKey(t: SshTarget): string {
 export const SSH_ENDED_RE =
   /Connection to .+ closed|Connection closed by|Connection (?:refused|reset|timed out)|Could not resolve hostname|Permission denied|No route to host|Host key verification failed|Network is unreachable|^logout$/im;
 
-const isSshBinary = (tok: string) => /^(?:.*[\/])?(?:ssh|sftp)(?:\.exe)?$/i.test(tok);
+const isSshBinary = (tok: string) => /^(?:.*[/\\])?(?:ssh|sftp)(?:\.exe)?$/i.test(tok);
 
 /**
  * Detect ssh/sftp from the command line as the shell actually shows it, not as

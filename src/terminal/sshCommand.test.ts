@@ -60,7 +60,8 @@ describe("SSH_ENDED_RE", () => {
 
 describe("parseSshFromScreen", () => {
   it("skips the prompt and reads the command as shown", () => {
-    expect(parseSshFromScreen("PS C:\Users\me> ssh 10.0.0.11", "ssh 10.0.0.11", false)).toMatchObject({ host: "10.0.0.11" });
+    expect(parseSshFromScreen("PS C:\\Users\\me> ssh 10.0.0.11", "ssh 10.0.0.11", false)).toMatchObject({ host: "10.0.0.11" });
+    expect(parseSshFromScreen("PS C:\\> C:\\Windows\\System32\\OpenSSH\\ssh.exe me@h", "C:\\Windows\\System32\\OpenSSH\\ssh.exe me@h", false)).toMatchObject({ host: "h" });
     expect(parseSshFromScreen("me@box:~$ ssh -p 2222 bob@srv", "ssh -p 2222 bob@srv", false)).toMatchObject({ host: "srv", username: "bob", port: 2222 });
   });
 
@@ -88,13 +89,13 @@ describe("parseSshFromScreen", () => {
 
 describe("endsWithWindowsShellPrompt", () => {
   it("sees PowerShell and cmd prompts at the end of output", () => {
-    expect(endsWithWindowsShellPrompt("\r\nPS C:\Users\me> ")).toBe(true);
-    expect(endsWithWindowsShellPrompt("\x1b[32mPS D:\REPO>\x1b[0m ")).toBe(true);
-    expect(endsWithWindowsShellPrompt("Microsoft Windows\r\nC:\Windows\System32>")).toBe(true);
+    expect(endsWithWindowsShellPrompt("\r\nPS C:\\Users\\me> ")).toBe(true);
+    expect(endsWithWindowsShellPrompt("\x1b[32mPS D:\\REPO>\x1b[0m ")).toBe(true);
+    expect(endsWithWindowsShellPrompt("Microsoft Windows\r\nC:\\Windows\\System32>")).toBe(true);
   });
   it("ignores remote prompts and prompts that are not last", () => {
     expect(endsWithWindowsShellPrompt("user@host:~$ ")).toBe(false);
-    expect(endsWithWindowsShellPrompt("PS C:\> ssh box\r\nuser@box:~$ ")).toBe(false);
-    expect(endsWithWindowsShellPrompt("echo C:\a > b")).toBe(false);
+    expect(endsWithWindowsShellPrompt("PS C:\\> ssh box\r\nuser@box:~$ ")).toBe(false);
+    expect(endsWithWindowsShellPrompt("echo C:\\a > b")).toBe(false);
   });
 });
