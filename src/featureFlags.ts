@@ -53,6 +53,12 @@ export const FEATURES = [
     desc: "Track each command's output and exit status and show the floating Copy Output / Explain bar. When off, no per-command tracking runs on terminal output.",
   },
   {
+    key: "terminalGitPrompt",
+    group: "Terminal",
+    label: "Git status in prompt",
+    desc: "Show repository name, branch and change status in local PowerShell and bash prompts. When off, prompts only track command exit codes.",
+  },
+  {
     key: "commandHistory",
     group: "Terminal",
     label: "Command history capture",

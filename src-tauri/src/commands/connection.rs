@@ -1758,6 +1758,10 @@ pub(crate) async fn initiate_connection(
                 use std::sync::atomic::Ordering;
                 let fp = fp_outcome_for_driver.load(Ordering::SeqCst);
                 let (reason, kind) = match fp {
+                    4 => (
+                        "Host key was refused by strict host-key policy. Set the policy to Ask in Settings > Terminal > SSH Connection to trust it.".to_string(),
+                        ConnectErrorKind::HostKey,
+                    ),
                     2 => (
                         "Host key prompt timed out — Reconnect and approve the fingerprint within 90 seconds.".to_string(),
                         ConnectErrorKind::HostKey,

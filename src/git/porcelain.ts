@@ -20,6 +20,7 @@ export interface GitCommit {
   subject: string;
   author: string;
   refs: string[];
+  parents?: string[];
 }
 
 /** Parse `git status --porcelain=v1 -b -z`. */
@@ -54,12 +55,18 @@ export function parseStatusZ(out: string): GitStatus {
   return st;
 }
 
-export const LOG_FORMAT = "%h%x1f%s%x1f%an%x1f%D";
+export const LOG_FORMAT = "%h%x1f%s%x1f%an%x1f%D%x1f%p";
 
 /** Parse `git log --format=<LOG_FORMAT>`. */
 export function parseLog(out: string): GitCommit[] {
   return out.split("\n").filter((l) => l.includes("\x1f")).map((l) => {
-    const [hash, subject, author, refs] = l.split("\x1f");
-    return { hash, subject, author, refs: refs ? refs.split(", ").filter(Boolean) : [] };
+    const [hash, subject, author, refs, parents] = l.split("\x1f");
+    return {
+      hash,
+      subject,
+      author,
+      refs: refs ? refs.split(", ").filter(Boolean) : [],
+      parents: parents ? parents.trim().split(/\s+/).filter(Boolean) : [],
+    };
   });
 }

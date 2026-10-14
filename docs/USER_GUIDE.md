@@ -196,11 +196,13 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 *Goal*: Stage, commit and push changes in a repository on the server or on this computer.
 
-1. Click **Git** in the tool row. The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
+1. Click **Git** in the tool row. When inside a repository, the Git button itself displays your active branch pill (e.g. `Git (main)`). The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
 2. Hover a file under **Changes** and click **+** to stage it (**−** under **Staged Changes** unstages). The **+** on the section header stages everything.
-3. Type a message and press **Ctrl+Enter** or click **Commit**. If nothing is staged, all changes are committed.
-4. With a clean tree, the button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push). Pull, Push, Fetch and Stash are under **…**.
-5. Git runs without a terminal, so it can't ask for a password. Use an SSH key, a credential helper, or agent forwarding for pushes.
+3. Click **AI Generate** above the message box to automatically write a Conventional Commits message summarizing your staged diff using the configured AI provider, or type your own message. Press **Ctrl+Enter** or click **Commit**. If nothing is staged, all changes are committed.
+4. The **Graph** section below renders a multi-lane SVG commit graph showing branch forks, merges, and commit routes in color-coded lanes.
+5. With a clean tree, the button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push). Pull, Push, Fetch and Stash are under **…**.
+6. Git runs without a terminal, so it can't ask for a password. Use an SSH key, a credential helper, or agent forwarding for pushes.
+7. **Pinning Tabs**: In local sessions, right-click any terminal tab and select **Pin tab**. Pinned tabs remain at the beginning of the tab strip, display a pin icon, and are protected when running "Close other tabs".
 
 ### Workflow 5: Parameterized Snippets & Runbook Automation
 

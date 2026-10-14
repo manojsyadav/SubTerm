@@ -219,10 +219,17 @@ pub async fn close_terminal(
 /// before the prompt's closing `>` (`≡` when level with the upstream; green when
 /// clean, yellow with changes), using posh-git's symbols. Prompts that don't end
 /// in `>` (oh-my-posh, Starship) are left alone, as they draw their own.
-const PWSH_INTEGRATION: &str = r##"$global:__stPrompt = $function:prompt
-$global:__stGit = [bool](Get-Command git -CommandType Application -ErrorAction SilentlyContinue)
+pub(crate) fn pwsh_integration(osc133: bool, git_prompt: bool) -> String {
+    let mut s = String::from("$global:__stPrompt = $function:prompt\n");
+    if git_prompt {
+        s.push_str(r#"$global:__stGit = [bool](Get-Command git -CommandType Application -ErrorAction SilentlyContinue)
 function global:__stGitSegment {
-  $top = git rev-parse --show-toplevel 2>$null
+  $top = $PWD.Path
+  while ($top -and -not (Test-Path -LiteralPath "$top\.git")) {
+    $p = Split-Path -Parent $top
+    if ($p -eq $top) { $top = $null; break }
+    $top = $p
+  }
   if (-not $top) { return '' }
   $h = ''; $o = ''; $up = $false; $ahead = 0; $behind = 0; $n = 0
   foreach ($l in (git --no-optional-locks status --porcelain=v2 --branch 2>$null)) {
@@ -243,26 +250,49 @@ function global:__stGitSegment {
   $e = [char]27
   " $e[$(if ($n) { 33 } else { 32 })m[$s]$e[0m"
 }
-function global:prompt {
-  $ok = $global:?
+"#);
+    }
+    s.push_str("function global:prompt {\n");
+    if osc133 {
+        s.push_str(r#"  $ok = $global:?
   $c = if ($ok) { 0 } elseif ($global:LASTEXITCODE) { $global:LASTEXITCODE } else { 1 }
   $e = [char]27; $b = [char]7
-  $p = & $global:__stPrompt
-  if ($global:__stGit -and $p -match '>+ ?$') {
+"#);
+    }
+    s.push_str("  $p = & $global:__stPrompt\n");
+    if git_prompt {
+        s.push_str(r#"  if ($global:__stGit -and $p -match '>+ ?$') {
     # Running git would overwrite the exit code the user may check next.
     $lec = $global:LASTEXITCODE
     $g = try { __stGitSegment } catch { '' }
     $global:LASTEXITCODE = $lec
     if ($g) { $p = $p.Substring(0, $p.Length - $Matches[0].Length) + $g + $Matches[0] }
   }
-  "$e]133;D;$c$b$e]133;A;subterm=local$b" + $p
-}"##;
+"#);
+    }
+    if osc133 {
+        s.push_str("  \"$e]133;D;$c$b$e]133;A;subterm=local$b\" + $p\n");
+    } else {
+        s.push_str("  $p\n");
+    }
+    s.push_str("}\n");
+    s
+}
 
 /// bash equivalent; a PROMPT_COMMAND set in the user's .bashrc replaces it. The git
 /// segment is spliced into PS1 once, before a trailing `\$ `; a PS1 ending any other
 /// way (Git Bash's own `__git_ps1` prompt, custom themes) is not touched. The
 /// symbols are octal escapes so the value stays ASCII through WSLENV.
-const BASH_PROMPT_COMMAND: &str = r##"__st_rc=$?; printf '\033]133;D;%s\007\033]133;A;subterm=local\007' "$__st_rc"; __st_git=; if __st_top=$(git rev-parse --show-toplevel 2>/dev/null); then __st_git=$(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null | awk -v r="${__st_top##*/}" '$2=="branch.oid"{o=substr($3,1,7)} $2=="branch.head"{h=$3} $2=="branch.upstream"{u=1} $2=="branch.ab"{a=substr($3,2)+0;b=substr($4,2)+0} !/^#/{n++} END{if(h=="(detached)")h=o; s=r":"h; if(u){if(a)s=s" \342\206\221"a; if(b)s=s" \342\206\223"b; if(!a&&!b)s=s" \342\211\241"} if(n)s=s" \342\227\217"n; printf " \001\033[%sm\002[%s]\001\033[0m\002", (n?33:32), s}'); fi; case $PS1 in *__st_git*) ;; *'\$ ') PS1="${PS1%\\$ }\${__st_git}\\$ ";; esac"##;
+pub(crate) fn bash_prompt_command(osc133: bool, git_prompt: bool) -> String {
+    let mut parts = Vec::new();
+    if osc133 {
+        parts.push(r#"__st_rc=$?; printf '\033]133;D;%s\007\033]133;A;subterm=local\007' "$__st_rc""#.to_string());
+    }
+    if git_prompt {
+        parts.push(r#"__st_d=$PWD; while [ -n "$__st_d" ] && [ ! -e "$__st_d/.git" ]; do __st_p=${__st_d%/*}; [ "$__st_p" = "$__st_d" ] && __st_p=; __st_d=$__st_p; done; __st_git=; if [ -n "$__st_d" ]; then __st_git=$(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null | awk -v r="${__st_d##*/}" '$2=="branch.oid"{o=substr($3,1,7)} $2=="branch.head"{h=$3} $2=="branch.upstream"{u=1} $2=="branch.ab"{a=substr($3,2)+0;b=substr($4,2)+0} !/^#/{n++} END{if(h=="(detached)")h=o; s=r":"h; if(u){if(a)s=s" \342\206\221"a; if(b)s=s" \342\206\223"b; if(!a&&!b)s=s" \342\211\241"} if(n)s=s" \342\227\217"n; printf " \001\033[%sm\002[%s]\001\033[0m\002", (n?33:32), s}'); fi; case $PS1 in *__st_git*) ;; *'\$ ') PS1="${PS1%\\$ }\${__st_git}\\$ ";; esac"#.to_string());
+    }
+    parts.join("; ")
+}
 
 #[cfg_attr(mobile, allow(dead_code))]
 enum ShellIntegration {
@@ -275,7 +305,10 @@ enum ShellIntegration {
 /// The `subterm=local` tag on the prompt marker tells this shell's prompt apart
 /// from a remote shell's one, inside an ssh started from it.
 #[cfg_attr(mobile, allow(dead_code))]
-fn shell_integration(shell_cmd: &str) -> Option<ShellIntegration> {
+fn shell_integration(shell_cmd: &str, osc133: bool, git_prompt: bool) -> Option<ShellIntegration> {
+    if !osc133 && !git_prompt {
+        return None;
+    }
     let name = std::path::Path::new(shell_cmd)
         .file_stem()
         .map(|s| s.to_string_lossy().to_ascii_lowercase())
@@ -284,20 +317,25 @@ fn shell_integration(shell_cmd: &str) -> Option<ShellIntegration> {
         "pwsh" | "powershell" => {
             use base64::Engine as _;
             // -EncodedCommand takes base64 of UTF-16LE and sidesteps all argument quoting.
-            let utf16: Vec<u8> = PWSH_INTEGRATION.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            let script = pwsh_integration(osc133, git_prompt);
+            let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
             Some(ShellIntegration::Args(vec![
                 "-NoExit".into(),
                 "-EncodedCommand".into(),
                 base64::engine::general_purpose::STANDARD.encode(utf16),
             ]))
         }
-        "bash" => Some(ShellIntegration::Env(vec![("PROMPT_COMMAND", BASH_PROMPT_COMMAND.into())])),
+        "bash" => {
+            let script = bash_prompt_command(osc133, git_prompt);
+            Some(ShellIntegration::Env(vec![("PROMPT_COMMAND", script)]))
+        }
         "wsl" => {
+            let script = bash_prompt_command(osc133, git_prompt);
             let wslenv = match std::env::var("WSLENV") {
                 Ok(v) if !v.is_empty() => format!("{v}:PROMPT_COMMAND/u"),
                 _ => "PROMPT_COMMAND/u".into(),
             };
-            Some(ShellIntegration::Env(vec![("PROMPT_COMMAND", BASH_PROMPT_COMMAND.into()), ("WSLENV", wslenv)]))
+            Some(ShellIntegration::Env(vec![("PROMPT_COMMAND", script), ("WSLENV", wslenv)]))
         }
         _ => None,
     }
@@ -404,6 +442,7 @@ pub async fn open_local_terminal(
     shell: Option<String>,
     channel: OutputChannel,
     shell_integration_on: Option<bool>,
+    git_prompt_on: Option<bool>,
 ) -> Result<(), String> {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
     use std::io::{Read, Write};
@@ -424,8 +463,10 @@ pub async fn open_local_terminal(
     for arg in &shell_args {
         cmd.arg(arg);
     }
-    if shell_integration_on.unwrap_or(false) {
-        match shell_integration(&shell_cmd) {
+    let osc133 = shell_integration_on.unwrap_or(false);
+    let git_prompt = git_prompt_on.unwrap_or(false);
+    if osc133 || git_prompt {
+        match shell_integration(&shell_cmd, osc133, git_prompt) {
             Some(ShellIntegration::Args(args)) => args.iter().for_each(|a| cmd.arg(a)),
             Some(ShellIntegration::Env(vars)) => vars.iter().for_each(|(k, v)| cmd.env(k, v)),
             None => {}
@@ -668,6 +709,7 @@ pub async fn open_local_terminal(
     _shell: Option<String>,
     _channel: OutputChannel,
     _shell_integration_on: Option<bool>,
+    _git_prompt_on: Option<bool>,
 ) -> Result<(), String> {
     Err("Local terminal is not supported on Android".to_string())
 }
@@ -705,19 +747,36 @@ mod shell_integration_tests {
     #[test]
     fn hooks_powershell_bash_and_wsl() {
         use base64::Engine as _;
-        let Some(ShellIntegration::Args(args)) = shell_integration("/usr/bin/pwsh") else { panic!("pwsh") };
+        let Some(ShellIntegration::Args(args)) = shell_integration("/usr/bin/pwsh", true, true) else { panic!("pwsh") };
         assert_eq!(&args[..2], ["-NoExit", "-EncodedCommand"]);
         let raw = base64::engine::general_purpose::STANDARD.decode(&args[2]).unwrap();
         let units: Vec<u16> = raw.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-        assert_eq!(String::from_utf16(&units).unwrap(), PWSH_INTEGRATION);
-        assert!(matches!(shell_integration("powershell.exe"), Some(ShellIntegration::Args(_))));
-        let Some(ShellIntegration::Env(vars)) = shell_integration("/bin/bash") else { panic!("bash") };
+        assert_eq!(String::from_utf16(&units).unwrap(), pwsh_integration(true, true));
+        assert!(matches!(shell_integration("powershell.exe", true, true), Some(ShellIntegration::Args(_))));
+        let Some(ShellIntegration::Env(vars)) = shell_integration("/bin/bash", true, true) else { panic!("bash") };
         assert_eq!(vars[0].0, "PROMPT_COMMAND");
         assert!(vars[0].1.contains("133;A;subterm=local"));
-        let Some(ShellIntegration::Env(vars)) = shell_integration("wsl.exe") else { panic!("wsl") };
+        assert!(vars[0].1.contains("__st_git"));
+        let Some(ShellIntegration::Env(vars)) = shell_integration("wsl.exe", true, true) else { panic!("wsl") };
         assert!(vars.iter().any(|(k, v)| *k == "WSLENV" && v.ends_with("PROMPT_COMMAND/u")));
-        assert!(shell_integration("cmd.exe").is_none());
-        assert!(shell_integration("/usr/bin/zsh").is_none());
+        assert!(shell_integration("cmd.exe", true, true).is_none());
+        assert!(shell_integration("/usr/bin/zsh", true, true).is_none());
+
+        // When git prompt is disabled, no git segment in pwsh or bash:
+        let Some(ShellIntegration::Args(args_no_git)) = shell_integration("/usr/bin/pwsh", true, false) else { panic!("pwsh") };
+        let raw = base64::engine::general_purpose::STANDARD.decode(&args_no_git[2]).unwrap();
+        let units: Vec<u16> = raw.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let pwsh_no_git = String::from_utf16(&units).unwrap();
+        assert!(pwsh_no_git.contains("133;A;subterm=local"));
+        assert!(!pwsh_no_git.contains("__stGitSegment"));
+
+        let Some(ShellIntegration::Env(bash_no_git)) = shell_integration("/bin/bash", true, false) else { panic!("bash") };
+        assert!(bash_no_git[0].1.contains("133;A;subterm=local"));
+        assert!(!bash_no_git[0].1.contains("__st_git"));
+
+        // When both are off, no integration:
+        assert!(shell_integration("/usr/bin/pwsh", false, false).is_none());
+        assert!(shell_integration("/bin/bash", false, false).is_none());
     }
 
     /// Runs the real PROMPT_COMMAND in a scratch repository (where bash and git exist).
@@ -732,7 +791,7 @@ mod shell_integration_tests {
         if !init.map(|o| o.status.success()).unwrap_or(false) { return; }
         std::fs::write(dir.join("a.txt"), "x").unwrap();
         let script = r#"PS1='\w\$ '; eval "$PROMPT_COMMAND" >/dev/null; printf '%s' "${PS1@P}""#;
-        let Ok(out) = Command::new("bash").args(["--norc", "-c", script]).env("PROMPT_COMMAND", BASH_PROMPT_COMMAND).current_dir(&dir).output() else { return };
+        let Ok(out) = Command::new("bash").args(["--norc", "-c", script]).env("PROMPT_COMMAND", bash_prompt_command(true, true)).current_dir(&dir).output() else { return };
         let ps1 = String::from_utf8_lossy(&out.stdout);
         let name = dir.file_name().unwrap().to_string_lossy();
         assert!(ps1.contains(&format!("[{name}:main \u{25CF}1]")), "{ps1}");

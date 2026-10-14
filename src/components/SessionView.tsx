@@ -3,9 +3,10 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio, Pin } from "lucide-react";
 import { useBroadcast } from "../ui/broadcast";
 import { localShellEvent, type Session } from "../hooks/useSessionManager";
+import { getTerminalGitBranch, onTerminalGitBranchChange } from "../terminal/cwd";
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
@@ -193,7 +194,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   const [isAuthError, setIsAuthError] = useState(false);
   const [customPassword, setCustomPassword] = useState("");
   const sessionStartTimeRef = useRef<number>(Date.now());
-  const [sessionEndedAudit, setSessionEndedAudit] = useState<AuditLogEntry | null>(null);
+  const [endedAudits, setEndedAudits] = useState<Record<string, AuditLogEntry>>({});
+  const endedAuditsRef = useRef(endedAudits);
+  endedAuditsRef.current = endedAudits;
 
   const textPrompt = useTextPrompt();
   const [editorFile, setEditorFile] = useState<{ path: string; name: string } | null>(null);
@@ -206,19 +209,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     setFilePickerPath(initial || "");
     setFilePickerOpen(true);
   };
-
-  useEffect(() => {
-    if (!sessionEndedAudit) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || e.key === "Enter") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKey, true);
-    return () => window.removeEventListener("keydown", handleKey, true);
-  }, [sessionEndedAudit, onClose]);
   // The connect-time log box mirrors the terminal font-size setting, so the
   // user's chosen size applies to the startup logs too — not just the shell.
   // `submarine-settings-changed` (dispatched by Settings on save) keeps it live.
@@ -445,7 +435,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // panel). Container slots stay otherwise identical — same xterm, same
   // events — they just point the backend at `open_container_terminal`.
   // `shell` (local sessions only): the shell this sub-tab runs, when it differs from the session's.
-  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string, color?: string, renamed?: boolean}[]>(() => {
+  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string, color?: string, renamed?: boolean, pinned?: boolean}[]>(() => {
     return [{ id: `${session.id}-term-0`, title: '1' }];
   });
   // Bumped on every successful reconnect. TerminalView watches this prop
@@ -466,6 +456,13 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   };
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
+  const [gitBranch, setGitBranch] = useState<string>(() => getTerminalGitBranch(`${session.id}-term-0`) ?? "");
+  useEffect(() => {
+    setGitBranch(getTerminalGitBranch(activeTab) ?? "");
+    return onTerminalGitBranchChange((termId, branch) => {
+      if (termId === activeTab) setGitBranch(branch);
+    });
+  }, [activeTab]);
 
   // Local tab: another shell opened from the sidebar, the top-bar shell menu or "New tab"
   // becomes a sub-tab here instead of a separate session tab.
@@ -496,13 +493,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
     const currentTerms = terminalsRef.current;
     const remaining = currentTerms.filter(t => t.id !== termId);
-    if (remaining.length > 0) {
-      setTerminals(remaining);
-      if (activeTab === termId) {
-        setActiveTab(remaining[0].id);
-      }
-      return;
-    }
+    const otherLiveTerms = remaining.filter(t => !endedAuditsRef.current[t.id]);
 
     const autoClose = localStorage.getItem('subterm-auto-close-on-exit') === 'true';
     const autoCopy = localStorage.getItem('subterm-auto-copy-output') === 'true';
@@ -524,11 +515,38 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       }
     }
 
+    if (otherLiveTerms.length > 0) {
+      setTerminals(remaining);
+      setEndedAudits(prev => {
+        const next = { ...prev };
+        delete next[termId];
+        return next;
+      });
+      if (activeTab === termId) {
+        setActiveTab(otherLiveTerms[0].id);
+      }
+      return;
+    }
+
+    if (remaining.length > 0) {
+      setTerminals(remaining);
+      setEndedAudits(prev => {
+        const next = { ...prev };
+        delete next[termId];
+        return next;
+      });
+      if (activeTab === termId) {
+        setActiveTab(remaining[0].id);
+      }
+      addLog(`Session "${session.serverName}" live shell closed. Ended tab output preserved.`, "info");
+      return;
+    }
+
     if (autoClose && details.cleanExit) {
       addLog(`Session "${session.serverName}" ended cleanly.`, "info");
       onClose();
     } else {
-      setSessionEndedAudit(auditEntry);
+      setEndedAudits(prev => ({ ...prev, [termId]: auditEntry }));
       addLog(`Session "${session.serverName}" ended. Audit log recorded.`, "info");
     }
   };
@@ -632,6 +650,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     const keep = terminals.filter(x => !ids.includes(x.id));
     if (keep.length === 0 || keep.length === terminals.length) return;
     setTerminals(keep);
+    setEndedAudits(prev => {
+      const next = { ...prev };
+      for (const id of ids) delete next[id];
+      return next;
+    });
     if (ids.includes(activeTab)) setActiveTab(keep[0].id);
     // A closed pane has to leave splitTerminals AND splitRatios or the flex layout renders a torn-down partner.
     const nextTerms = splitTerminals.filter(x => !ids.includes(x));
@@ -653,6 +676,25 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     return () => window.removeEventListener(`subterm-close-terminal-${session.id}`, onClose);
   }, [session.id]);
 
+  const activeAudit = endedAudits[activeTab] ?? null;
+
+  useEffect(() => {
+    if (!activeAudit) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (terminalsRef.current.length > 1) {
+          closeTerminalTabRef.current(activeTab);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey, true);
+    return () => window.removeEventListener("keydown", handleKey, true);
+  }, [activeAudit, activeTab, onClose]);
+
   const tabAction = (id: string, a: TabMenuAction) => {
     const idx = terminals.findIndex(t => t.id === id);
     const t = terminals[idx];
@@ -663,6 +705,26 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       return next;
     });
     switch (a) {
+      case "pin": {
+        setTerminals(prev => {
+          const target = prev.find(x => x.id === id);
+          if (!target) return prev;
+          const nextPinned = !target.pinned;
+          const updated = prev.map(x => x.id === id ? { ...x, pinned: nextPinned } : x);
+          if (nextPinned) {
+            const item = updated.find(x => x.id === id)!;
+            const without = updated.filter(x => x.id !== id);
+            let lastPinned = -1;
+            for (let i = 0; i < without.length; i++) {
+              if (without[i].pinned) lastPinned = i;
+            }
+            without.splice(lastPinned + 1, 0, item);
+            return without;
+          }
+          return updated;
+        });
+        break;
+      }
       case "duplicate": {
         const newId = `${session.id}-term-${Date.now()}`;
         setTerminals(prev => [...prev.slice(0, idx + 1), { ...t, id: newId }, ...prev.slice(idx + 1)]);
@@ -679,8 +741,8 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         // TerminalView owns the buffer and the search box.
         window.dispatchEvent(new CustomEvent(`subterm-terminal-action-${id}`, { detail: a }));
         break;
-      case "closeOthers": closeTerminalTabs(terminals.filter(x => x.id !== id).map(x => x.id)); setActiveTab(id); break;
-      case "closeRight": closeTerminalTabs(terminals.slice(idx + 1).map(x => x.id)); break;
+      case "closeOthers": closeTerminalTabs(terminals.filter(x => x.id !== id && !x.pinned).map(x => x.id)); setActiveTab(id); break;
+      case "closeRight": closeTerminalTabs(terminals.slice(idx + 1).filter(x => !x.pinned).map(x => x.id)); break;
       case "close": closeTerminalTab(id); break;
     }
   };
@@ -1656,7 +1718,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               }}
               style={t.color ? { boxShadow: `inset 0 -2px 0 ${t.color}` } : undefined}
               title={t.container ? `Container: ${t.container.name}` : undefined}
-              className={`h-8 px-3 sm:px-4 ${terminals.length > 1 ? 'pr-8' : ''} rounded-lg flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all ${
+              className={`h-8 px-3 sm:px-4 ${terminals.length > 1 && !t.pinned ? 'pr-8' : ''} rounded-lg flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all ${
                 isFocusedHalf
                   ? 'bg-primary/10 text-primary border border-primary/20 shadow-inner'
                   : isSplitPartner
@@ -1667,12 +1729,15 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               {t.container
                 ? <Container size={14} className="text-sky-300" />
                 : <TerminalSquare size={14} />}
+              {t.pinned && (
+                <Pin size={11} className="text-primary fill-primary/30 shrink-0" />
+              )}
               {t.title}
               {isSplitPartner && (
                 <SplitSquareHorizontal size={10} className="text-primary/60" />
               )}
             </button>
-            {terminals.length > 1 && (
+            {terminals.length > 1 && !t.pinned && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1880,6 +1945,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               >
                 <Icon size={14} className="shrink-0" />
                 <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{label}</span>
+                {id === 'git' && gitBranch && (
+                  <span className="hidden lg:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/15 text-primary truncate max-w-[90px]" title={`Branch: ${gitBranch}`}>
+                    {gitBranch}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1888,7 +1958,9 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               onClick={() => {
                 // The assistant docks beside the terminal, so a full tool panel has to make way for it.
                 setActiveTool(null);
-                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
+                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`, {
+                  detail: { terminalId: activeTab },
+                }));
               }}
               title="AI assistant (Ctrl+I)"
               aria-label="AI assistant (Ctrl+I)"
@@ -2016,6 +2088,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             y={termMenu.y}
             title={t.title}
             color={t.color}
+            isPinned={!!t.pinned}
             canMoveLeft={idx > 0}
             canMoveRight={idx < terminals.length - 1}
             canClose={terminals.length > 1}
@@ -2075,22 +2148,22 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       )}
 
       {/* Session Ended Audit Banner */}
-      {sessionEndedAudit && (
+      {activeAudit && (
         <div className="bg-zinc-900/95 border-b border-white/10 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-30 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${sessionEndedAudit.cleanExit ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+            <span className={`w-2 h-2 rounded-full ${activeAudit.cleanExit ? 'bg-emerald-400' : 'bg-amber-400'}`} />
             <span className="font-semibold text-zinc-100">
-              Session Ended ({sessionEndedAudit.cleanExit ? "Clean Exit" : "Disconnected"})
+              Session Ended ({activeAudit.cleanExit ? "Clean Exit" : "Disconnected"})
             </span>
             <span className="text-zinc-500 font-mono text-[11px]">
-              [{new Date(sessionEndedAudit.endTime).toLocaleTimeString()}]
+              [{new Date(activeAudit.endTime).toLocaleTimeString()}]
             </span>
           </div>
           <div className="flex items-center gap-2">
             {localStorage.getItem('subterm-show-audit-copy') !== 'false' && (
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(sessionEndedAudit.transcript);
+                  navigator.clipboard.writeText(activeAudit.transcript);
                   addLog("Session transcript copied to clipboard.", "success");
                 }}
                 className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white rounded-md text-[11px] font-medium transition-colors flex items-center gap-1.5"
@@ -2102,7 +2175,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             {localStorage.getItem('subterm-show-audit-download') !== 'false' && (
               <button
                 onClick={async () => {
-                  const savedPath = await downloadAuditLog(sessionEndedAudit);
+                  const savedPath = await downloadAuditLog(activeAudit);
                   if (savedPath) {
                     addLog(`Audit log saved: ${savedPath}`, "success");
                   } else {
@@ -2117,15 +2190,26 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             )}
             <button
               onClick={() => {
-                setSessionEndedAudit(null);
-                reconnect();
+                setEndedAudits(prev => {
+                  const next = { ...prev };
+                  delete next[activeTab];
+                  return next;
+                });
+                setConnectionEpoch(e => e + 1);
+                if (!session.isLocal) reconnect();
               }}
               className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-md text-[11px] font-bold uppercase transition-colors"
             >
               Reconnect
             </button>
             <button
-              onClick={onClose}
+              onClick={() => {
+                if (terminals.length > 1) {
+                  closeTerminalTab(activeTab);
+                } else {
+                  onClose();
+                }
+              }}
               className="px-3 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 rounded-md text-[11px] font-bold uppercase transition-colors"
             >
               Close (Esc)
@@ -2201,7 +2285,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                       <TerminalView
                         sessionId={session.id}
                         terminalId={t.id}
-                        disabled={status !== 'connected' || !!sessionEndedAudit}
+                        disabled={status !== 'connected' || !!endedAudits[t.id]}
                         isActive={isSessionActive && isFocused && !(activeTool && fullTool) && (!inSplit || inTile)}
                         containerExec={t.container ? { container: t.container.name, useSudo: t.container.useSudo } : undefined}
                         connectionEpoch={connectionEpoch}

@@ -1,4 +1,4 @@
-import { parseOsc7, parsePromptCwd, setTerminalCwd, forgetTerminalCwd } from "../terminal/cwd";
+import { parseOsc7, parsePromptCwd, parsePromptGitBranch, setTerminalCwd, setTerminalGitBranch, forgetTerminalCwd } from "../terminal/cwd";
 import { isFeatureEnabled, useFeatureFlag } from "../featureFlags";
 import { getFileLinkRegex } from "../terminal/fileLinkTypes";
 import { saveTextFile } from "../terminal/saveFile";
@@ -339,6 +339,7 @@ const TerminalView = ({
         shell: localShell || null,
         channel: outputChannelRef.current,
         shellIntegrationOn: isFeatureEnabled('terminalCommandBlocks'),
+        gitPromptOn: isFeatureEnabled('terminalGitPrompt'),
       }).catch(e => {
         term.writeln(`\x1b[31mRestart local terminal failed: ${e}\x1b[0m`);
       });
@@ -1248,6 +1249,7 @@ const TerminalView = ({
             shell: localShell || null,
             channel: outputChannelRef.current,
             shellIntegrationOn: isFeatureEnabled('terminalCommandBlocks'),
+            gitPromptOn: isFeatureEnabled('terminalGitPrompt'),
           }).catch(e => {
             term.writeln(`\x1b[31mFailed to open local terminal: ${e}\x1b[0m`);
           });
@@ -1703,8 +1705,10 @@ const TerminalView = ({
       }
     };
 
-    const handleOpenCopilot = () => {
+    const handleOpenCopilot = (e?: Event) => {
       if (!isFeatureEnabled('aiCopilot')) return;
+      const targetTerminalId = (e as CustomEvent<{ terminalId?: string } | undefined>)?.detail?.terminalId;
+      if (targetTerminalId ? targetTerminalId !== terminalId : !isActiveRef.current) return;
       setShowCopilot(true);
     };
 
@@ -1786,6 +1790,11 @@ const TerminalView = ({
         if (promptCwd) {
           currentCwdRef.current = promptCwd;
           setTerminalCwd(terminalId, promptCwd);
+        }
+
+        const promptBranch = parsePromptGitBranch(txt);
+        if (promptBranch) {
+          setTerminalGitBranch(terminalId, promptBranch);
         }
 
         // Terminal Triggers & Alert Keywords — scanned against just this
