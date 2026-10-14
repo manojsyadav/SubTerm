@@ -196,7 +196,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 
 *Goal*: Stage, commit and push changes in a repository on the server or on this computer.
 
-1. Click **Git** in the tool row (or the branch pill). The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
+1. Click **Git** in the tool row. The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
 2. Hover a file under **Changes** and click **+** to stage it (**−** under **Staged Changes** unstages). The **+** on the section header stages everything.
 3. Type a message and press **Ctrl+Enter** or click **Commit**. If nothing is staged, all changes are committed.
 4. With a clean tree, the button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push). Pull, Push, Fetch and Stash are under **…**.
@@ -236,7 +236,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - An Ollama on another machine works too: set the base URL to `http://<that-ip>:11434/v1`. That machine has to listen on its network address, so set `OLLAMA_HOST=0.0.0.0` there.
    - For **Anthropic**, **OpenAI**, **Gemini** or **OpenRouter**, paste an API key from that provider's console. The key is saved in the vault and never shown again.
    - Click the refresh button next to **Model** to list what the provider offers, pick one, then **Save**.
-2. **Open the panel** with `Ctrl+I`, the **AI** button in the tool row, the **Copilot** pill, or **Explain** on the bar shown after a failed command. The panel keeps its conversation while closed. While it works, the send button turns into **Stop**. Stop keeps the text written so far and ends any remaining steps. A command that is already running finishes first, within its 60-second limit. **Output** sends the last 80 lines of the terminal with your message.
+2. **Open the panel** with `Ctrl+I`, the **AI** button in the tool row, or **Explain** on the bar shown after a failed command. The panel keeps its conversation while closed. While it works, the send button turns into **Stop**. Stop keeps the text written so far and ends any remaining steps. A command that is already running finishes first, within its 60-second limit. **Output** sends the last 80 lines of the terminal with your message.
 3. **Choose what it may do** (bottom left of the panel):
    - **Suggest**: answers only. Each command gets **Insert**, which types it without running, and **Run**. It also gets **Run & send**, which runs the command on a separate channel and sends the result back so the assistant can pick the next step. Use it with models that can't run commands themselves, such as small local models.
    - **Ask**: the assistant runs commands on its own and reads the results. Every command shows up as a card with **Run** and **Skip**. Skip stops it so you can say what to do instead. It stops after 10 steps.

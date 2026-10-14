@@ -4,7 +4,7 @@
  * The cwd is learned from (a) OSC 7 reports and (b) the shell prompt text. The
  * prompt path is needed on stock Debian/Ubuntu shells, which colour the prompt
  * and don't emit OSC 7. Several features depend on it: opening a clicked
- * relative path, and the Git pill (whose check runs on a separate SSH channel
+ * relative path, and the Git panel (whose commands run on a separate SSH channel
  * that starts in $HOME, not in the shell's folder).
  */
 

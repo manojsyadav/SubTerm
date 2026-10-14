@@ -11,8 +11,6 @@ interface GitPanelProps {
   isLocal?: boolean;
   disabled?: boolean;
   visible: boolean;
-  /** Called after anything that changes the repo, so the branch pill can refresh. */
-  onChanged?: () => void;
 }
 
 // Local tabs on Windows run git through Windows PowerShell (always present); everything else is POSIX sh.
@@ -22,7 +20,7 @@ const psQuote = (v: string) => `'${v.replace(/'/g, "''")}'`;
 // Paths from `git status` are relative to the repo root, not the folder git runs in.
 const top = (path: string) => `:(top,literal)${path}`;
 
-export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLocal, disabled, visible, onChanged }) => {
+export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLocal, disabled, visible }) => {
   const usePs = !!isLocal && PS;
   const [dir, setDir] = useState(() => getTerminalCwd(terminalId) ?? "");
   const [status, setStatus] = useState<GitStatus | null>(null);
@@ -94,7 +92,6 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
     } finally {
       setBusy(false);
       await refresh();
-      onChanged?.();
     }
   };
 
@@ -118,8 +115,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
       } finally {
         setBusy(false);
         await refresh();
-        onChanged?.();
-      }
+        }
       return;
     }
     if (await run([...cmds, ["commit", "-m", msg.trim()]])) setMsg("");

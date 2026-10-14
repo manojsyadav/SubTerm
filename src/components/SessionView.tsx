@@ -17,18 +17,12 @@ const TunnelsPanel = lazy(() => import("./TunnelsPanel"));
 const InfoPanel = lazy(() => import("./InfoPanel"));
 const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.CmdsPanel })));
 const GitPanel = lazy(() => import("./GitPanel"));
-// Probes the git repo in the folder passed as $1 (supports "~" and "~/x"); prints nothing outside a repo.
-const GIT_PROBE_SCRIPT =
-  'D="$1"; case "$D" in "~") D="$HOME";; "~/"*) D="$HOME/${D#\\~/}";; esac; [ -n "$D" ] && cd "$D" 2>/dev/null; ' +
-  'b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); ' +
-  'if [ -n "$b" ]; then d=$(git status --porcelain 2>/dev/null | wc -l); echo "SUBTERM_GIT:$b:$d"; git status -s 2>/dev/null; fi';
 const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
 import { PathChoiceModal } from "./PathChoiceModal";
 import {
   loadSplitOrientation, saveSplitOrientation, loadSplitRatios, saveSplitRatios, initialSplitRatios, cyclePaneId,
 } from "../splitLayoutPrefs";
-import { getTerminalCwd, onTerminalCwdChange, shellQuote } from "../terminal/cwd";
 import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
@@ -108,7 +102,6 @@ interface SessionDisconnectedPayload {
 }
 
 type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'git' | 'mirrors' | 'cmds' | 'info';
-interface GitRepoInfo { branch: string; isDirty: boolean; dirtyCount: number; statusText: string }
 
 interface SessionViewProps {
   session: Session;
@@ -254,40 +247,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // reconnected terminal appeared frozen while SFTP/tunnels worked fine.
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
-
-  const [gitInfo, setGitInfo] = useState<GitRepoInfo | null>(null);
-
-  const activeTabRef = useRef<string>("");
-
-  const refreshGitInfo = async () => {
-    if (!isFeatureEnabled('panelGit')) return;
-    if (statusRef.current !== 'connected' || !session?.id) return;
-    try {
-      const out = await invoke<string>("sftp_exec_command", {
-        sessionId: session.id,
-        // This runs on its own exec channel, which starts in $HOME, so cd into the shell's folder first
-        // (passed as $1 so it needs no escaping inside the script).
-        command: `sh -c ${shellQuote(GIT_PROBE_SCRIPT)} sh ${shellQuote(getTerminalCwd(activeTabRef.current) ?? "")}`,
-      });
-      if (out.includes("SUBTERM_GIT:")) {
-        const line = out.split("\n").find(l => l.startsWith("SUBTERM_GIT:")) || "";
-        const parts = line.replace("SUBTERM_GIT:", "").split(":");
-        const branch = parts[0]?.trim() || "";
-        const dirtyCount = parseInt(parts[1] || "0", 10);
-        const statusText = out.split("\n").filter(l => !l.startsWith("SUBTERM_GIT:")).join("\n").trim();
-        setGitInfo({
-          branch,
-          isDirty: dirtyCount > 0,
-          dirtyCount,
-          statusText,
-        });
-      } else {
-        setGitInfo(null);
-      }
-    } catch {
-      // not in a git repo
-    }
-  };
 
   // ---- Dedicated SSH connections for SFTP / port-forwarding -----------------
   // Two INDEPENDENT, per-tab toggles (the controls live in the SFTP and
@@ -507,7 +466,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   };
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
-  activeTabRef.current = activeTab;
 
   // Local tab: another shell opened from the sidebar, the top-bar shell menu or "New tab"
   // becomes a sub-tab here instead of a separate session tab.
@@ -606,22 +564,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     cmds: useFeatureFlag('panelLibrary'),
     mirrors: true,
   };
-  const gitEnabled = toolEnabled.git;
-  // Keep the Git pill in step with the shell: refresh when you cd (prompt/OSC 7 report) or switch panes.
-  useEffect(() => {
-    if (!gitEnabled) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const schedule = (ms: number) => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { refreshGitInfo(); }, ms);
-    };
-    schedule(300);
-    const off = onTerminalCwdChange((terminalId) => {
-      if (terminalId === activeTabRef.current) schedule(600);
-    });
-    return () => { off(); if (timer) clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, gitEnabled]);
   const copilotEnabled = useFeatureFlag('aiCopilot');
   // A tool panel is mounted the first time it is opened and then kept mounted (its state and
   // polling are preserved across tab switches); panels never opened cost nothing.
@@ -1146,7 +1088,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       // survives an app restart — otherwise the prompt would reappear every
       // session, which was especially painful for SOCKS-proxied connections.
       invoke("persist_vault").catch(console.error);
-      setTimeout(() => { refreshGitInfo(); }, 1200);
       // Separate-sessions: now that the primary is up (and the host key is
       // saved, so no double fingerprint prompt), spin up the dedicated SFTP /
       // forwarding connections. No-op when the setting is off. Fires on
@@ -1833,45 +1774,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             narrow viewports (below md) so the terminal tab strip keeps its
             horizontal real estate when space is tight; the full description
             stays in the tooltip either way. */}
-        {/* Quick actions (Git, Copilot, detected OS, quick commands), in the same row as the
+        {/* Quick actions (detected OS, quick commands), in the same row as the
             tools. On a local tab the shells are in the sidebar, so these get the space. */}
         {!activeTool && (
         <div className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 mr-1 text-[10.5px] font-mono text-zinc-400 ${localTabsInSidebar ? 'flex-1' : 'max-w-[45%]'}`}>
-          {/* Git Branch & Status Pill */}
-          {gitEnabled && (
-            <button
-              onClick={() => {
-                refreshGitInfo();
-                setActiveTool('git');
-              }}
-              title={gitInfo ? `Git: ${gitInfo.branch} (${gitInfo.isDirty ? `${gitInfo.dirtyCount} modified` : "clean"})` : "Inspect Git Status"}
-              className={`h-5 px-2 rounded border flex items-center gap-1.5 shrink-0 transition-all font-mono text-[10px] ${
-                gitInfo?.branch
-                  ? gitInfo.isDirty
-                    ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
-                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
-                  : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <GitBranch size={10} className={gitInfo?.branch ? (gitInfo.isDirty ? "text-amber-400" : "text-emerald-400") : "text-zinc-500"} />
-              <span>{gitInfo?.branch || "Git"}</span>
-              {gitInfo?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
-            </button>
-          )}
-          {copilotEnabled && (
-            <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
-              }}
-              title="Open the AI assistant (Ctrl+I)"
-              className="h-5 px-2 rounded bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary transition-all shrink-0 flex items-center gap-1 font-semibold text-[10px]"
-            >
-              <Sparkles size={10} />
-              <span>Copilot</span>
-            </button>
-          )}
-          <div className="h-3 w-px bg-white/10 shrink-0" />
-
           {/* Detected OS Badge Pill */}
           {detectedOs && (
             <div
@@ -2563,7 +2469,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               isLocal={session.isLocal}
               disabled={status !== 'connected'}
               visible={activeTool === 'git'}
-              onChanged={refreshGitInfo}
             />
             </Suspense>
           </div>

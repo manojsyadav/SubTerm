@@ -151,8 +151,8 @@ export const FEATURES = [
   {
     key: "panelGit",
     group: "Panels",
-    label: "Git pill and Source Control panel",
-    desc: "Git branch pill and the Git tab (stage, commit, push, history). When off, no git status command is run on the server after connecting.",
+    label: "Git panel",
+    desc: "Git tab in the session toolbar: stage, commit, push and history. Git only runs while the tab is open.",
   },
   {
     key: "aiCopilot",
