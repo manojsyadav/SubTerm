@@ -10,7 +10,7 @@
   The Copilot button and Ctrl+I now open an AI panel on the right of the terminal. It works with a local Ollama or LM Studio (no key needed) and with Anthropic, OpenAI, Google Gemini and OpenRouter, or any OpenAI-compatible endpoint. Add models under Settings > Features > AI assistant. API keys are stored in the encrypted vault and are not synced.
 
   The panel has three modes:
-  - **Suggest** shows commands with Insert and Run buttons.
+  - **Suggest** shows commands with Insert and Run buttons, and a **Run & send** button that hands the result back to the assistant. That makes step-by-step work possible with models that can't run commands themselves.
   - **Ask** lets the assistant run commands itself, read their output and decide the next step. You approve or skip each command.
   - **Auto** runs read-only checks such as `df`, `ps` and `systemctl status` without asking. On production servers it asks every time.
 

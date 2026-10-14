@@ -228,7 +228,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Click the refresh button next to **Model** to list what the provider offers, pick one, then **Save**.
 2. **Open the panel** with `Ctrl+I`, the **Copilot** button, or **Explain** on the bar shown after a failed command. The panel keeps its conversation while closed. **Output** sends the last 80 lines of the terminal with your message.
 3. **Choose what it may do** (bottom left of the panel):
-   - **Suggest**: answers only. Each command gets **Insert**, which types it without running, and **Run**.
+   - **Suggest**: answers only. Each command gets **Insert**, which types it without running, and **Run**. It also gets **Run & send**, which runs the command on a separate channel and sends the result back so the assistant can pick the next step. Use it with models that can't run commands themselves, such as small local models.
    - **Ask**: the assistant runs commands on its own and reads the results. Every command shows up as a card with **Run** and **Skip**. Skip stops it so you can say what to do instead. It stops after 10 steps.
    - **Auto**: like Ask, but read-only commands run without a card. These are commands like `ls`, `cat`, `df`, `ps`, `systemctl status`, `docker ps` and `journalctl` without `-f`. Anything with `sudo`, redirection, or a path that looks like a key or secret still asks. So does every command on a server marked as production.
    - Commands run on a separate channel, so they don't appear in your terminal or history. Each one has a 60-second limit. In a local tab they run in PowerShell on Windows and `sh` elsewhere. In a container shell only Suggest is available.

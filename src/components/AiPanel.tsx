@@ -104,7 +104,17 @@ export function AiPanel(props: Props) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [entries, streaming, pending]);
 
-  const send = useCallback(async (text: string, withTerminal: boolean) => {
+  const execCommand = useCallback(async (command: string) => {
+    const r = await invoke<ExecResult>("ai_exec", {
+      sessionId: isLocal ? null : sessionId,
+      command,
+      cwd: isLocal ? localCwd ?? null : null,
+      timeoutSecs: EXEC_TIMEOUT,
+    });
+    return formatExec(r, EXEC_TIMEOUT);
+  }, [isLocal, sessionId, localCwd]);
+
+  const send = useCallback(async (text: string, withTerminal: boolean, display = text) => {
     if (!provider || busy || !text.trim()) return;
     const ackKey = `subterm-ai-ack-${provider.id}`;
     if (!isLocalEndpoint(provider.baseUrl) && !localStorage.getItem(ackKey)) {
@@ -120,7 +130,7 @@ export function AiPanel(props: Props) {
     const user: Entry = {
       role: "user",
       content: tail ? `${text}\n\n<terminal>\n${tail}\n</terminal>` : text,
-      display: text,
+      display,
     };
     const history = [...entries, user];
     const agent = effectiveMode !== "suggest";
@@ -145,15 +155,7 @@ export function AiPanel(props: Props) {
           setStreaming("");
           return new Promise<boolean>((resolve) => setPending({ command, resolve }));
         },
-        runCommand: async (command) => {
-          const r = await invoke<ExecResult>("ai_exec", {
-            sessionId: isLocal ? null : sessionId,
-            command,
-            cwd: isLocal ? localCwd ?? null : null,
-            timeoutSecs: EXEC_TIMEOUT,
-          });
-          return formatExec(r, EXEC_TIMEOUT);
-        },
+        runCommand: execCommand,
         readTerminal,
         onUpdate: setEntries,
       }, MAX_STEPS);
@@ -166,7 +168,24 @@ export function AiPanel(props: Props) {
       setStreaming("");
       setPending(null);
     }
-  }, [provider, busy, entries, confirm, readTerminal, target, isLocal, effectiveMode, isProd, sessionId, localCwd]);
+  }, [provider, busy, entries, confirm, readTerminal, target, isLocal, effectiveMode, isProd, execCommand]);
+
+  // For models that write commands as text instead of calling tools: the click is the
+  // approval, and the result goes back so the model can pick the next step.
+  const runAndSend = async (command: string) => {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
+    let result: string;
+    try {
+      result = await execCommand(command);
+    } catch (e) {
+      result = `Error: ${e}`;
+    } finally {
+      setBusy(false);
+    }
+    await send(`I ran this command:\n${command}\n\nResult:\n<terminal>\n${result}\n</terminal>\n\nWhat next?`, false, `Ran: ${command}  (${result.split("\n")[0]})`);
+  };
 
   const answer = (ok: boolean) => {
     pending?.resolve(ok);
@@ -213,7 +232,9 @@ export function AiPanel(props: Props) {
             No model set up yet. Add one under Settings → Features → AI assistant. A local Ollama works without an API key.
           </p>
         )}
-        {entries.map((m, i) => <Message key={i} entry={m} onInsertCommand={onInsertCommand} />)}
+        {entries.map((m, i) => (
+          <Message key={i} entry={m} onInsertCommand={onInsertCommand} onRunAndSend={canRun && !busy ? runAndSend : undefined} />
+        ))}
         {busy && !pending && (streaming
           ? <Message entry={{ role: "assistant", content: streaming }} onInsertCommand={onInsertCommand} />
           : <div className="flex items-center gap-2 text-zinc-500"><Loader2 size={12} className="animate-spin" /> Working…</div>)}
@@ -281,7 +302,11 @@ export function AiPanel(props: Props) {
   );
 }
 
-function Message({ entry, onInsertCommand }: { entry: Entry; onInsertCommand: Props["onInsertCommand"] }) {
+function Message({ entry, onInsertCommand, onRunAndSend }: {
+  entry: Entry;
+  onInsertCommand: Props["onInsertCommand"];
+  onRunAndSend?: (command: string) => void;
+}) {
   if (entry.role === "user") {
     return <div className="ml-8 px-2.5 py-1.5 rounded-lg bg-primary/10 text-zinc-100 whitespace-pre-wrap break-words">{entry.display ?? entry.content}</div>;
   }
@@ -308,6 +333,11 @@ function Message({ entry, onInsertCommand }: { entry: Entry; onInsertCommand: Pr
               <button type="button" onClick={() => onInsertCommand(part.code!, true)} title="Run in the terminal" className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] text-emerald-300 hover:bg-emerald-500/15">
                 <Play size={11} /> Run
               </button>
+              {onRunAndSend && (
+                <button type="button" onClick={() => onRunAndSend(part.code!)} title="Run it for the assistant and send it the result, so it can decide the next step" className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] text-primary hover:bg-primary/15">
+                  <Send size={11} /> Run &amp; send
+                </button>
+              )}
             </div>
           </div>
         ),
