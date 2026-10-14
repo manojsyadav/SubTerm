@@ -88,9 +88,9 @@ This document tracks active development tasks, pending architectural optimizatio
   - Several features this session were validated by `typecheck`/`lint`/`build`/unit tests only, not live interaction — bundling as one follow-up pass rather than one line each:
     - Server list virtualization in `NodeGrid.tsx` (scroll + drag-reorder on a 500+-server fleet, resize across the 1024/1280px breakpoints).
     - Terminal output over the new Tauri binary IPC channel (firehose throughput, split-pane/Fleet-Wall multi-viewer attach, reconnect).
-    - Cross-pane file diff/compare tool (`FileDiffModal`) and the four extracted `VaultEditPanels` (open/edit/save/cancel for a command, note, credential, SSH key).
-    - The three newly-extracted views (`LibraryView`, `LoginsView`, `LogsView`): search/filter, add/edit/delete flows, and the commands/notes tab toggle.
-    - Sudo-elevated SFTP file save to a root-owned path, with and without a saved session password.
+    - [x] Cross-pane file diff/compare tool (`FileDiffModal.test.ts`) and the four extracted `VaultEditPanels` (`VaultEditPanels.test.ts`: open/edit/save/cancel for a command, note, credential, SSH key).
+    - [x] The three newly-extracted views (`Views.test.ts`: `LibraryView`, `LoginsView`, `LogsView` search/filter, add/edit/delete flows, and the commands/notes tab toggle).
+    - [x] Sudo-elevated SFTP file save to root-owned path with/without saved password (`sftp.rs:sftp_write_file_text` non-interactive sudo `-n` and `sudo -S` stdin elevation).
 
 
 ---
