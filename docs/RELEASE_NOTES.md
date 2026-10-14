@@ -188,6 +188,9 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(sessions)` — Opening a server from the SFTP page no longer disturbs its SSH session**:
+  The SFTP page's file browser now gets its own session for a server, instead of sharing the SSH session's id and taking it over. Its connection also leaves the server's saved port forwards alone — the SSH session still owns them, so the two no longer collide on the same local ports.
+
 - **`fix(build)` — Desktop bundle identifier no longer ends in `.app`**:
   The desktop identifier is now `com.subterm.desktop` (macOS treats folders ending in `.app` as app bundles, and Tauri warned about it). On first start SubTerm copies profiles, sync and cloud settings, recordings and saved preferences from the old `com.subterm.app` folders; nothing in the new folder is overwritten. Android keeps `com.subterm.app`, so phone updates are unaffected. On Windows the new installer installs alongside the old one once: uninstall the old "SubTerm" entry after checking your data came across. On macOS and Linux saved preferences (not profiles) may not carry over, because the webview keeps them elsewhere; export them with Settings > General > Backup & Restore before upgrading.
 
