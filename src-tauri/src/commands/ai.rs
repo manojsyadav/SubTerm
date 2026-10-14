@@ -330,7 +330,13 @@ fn anthropic_body(model: &str, system: &str, messages: &[ChatMsg], tools: &[Tool
                 }
                 msgs.push(json!({"role": "assistant", "content": blocks}));
             }
-            _ => msgs.push(json!({"role": "user", "content": m.content})),
+            // A user message right after tool results joins their turn: roles must alternate.
+            _ => match msgs.last_mut() {
+                Some(last) if last["role"] == "user" && last["content"].is_array() => {
+                    last["content"].as_array_mut().unwrap().push(json!({"type": "text", "text": m.content}))
+                }
+                _ => msgs.push(json!({"role": "user", "content": m.content})),
+            },
         }
     }
     let mut body = json!({"model": model, "max_tokens": 4096, "system": system, "messages": msgs, "stream": true});
@@ -341,6 +347,123 @@ fn anthropic_body(model: &str, system: &str, messages: &[ChatMsg], tools: &[Tool
             .collect();
     }
     body
+}
+
+// What the model gets back from one command. The tail is kept because that is
+// where errors and summaries are.
+const OUTPUT_CAP: usize = 16 * 1024;
+const RAW_CAP: usize = 4 * 1024 * 1024;
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecResult {
+    stdout: String,
+    stderr: String,
+    exit_code: Option<i32>,
+    truncated: bool,
+    timed_out: bool,
+}
+
+fn tail(buf: &[u8]) -> (String, bool) {
+    let cut = buf.len().saturating_sub(OUTPUT_CAP);
+    (String::from_utf8_lossy(&buf[cut..]).into_owned(), cut > 0)
+}
+
+fn finish(out: &[u8], err: &[u8], exit_code: Option<i32>, timed_out: bool) -> ExecResult {
+    let (stdout, t1) = tail(out);
+    let (stderr, t2) = tail(err);
+    ExecResult { stdout, stderr, exit_code, truncated: t1 || t2, timed_out }
+}
+
+fn push_capped(buf: &mut Vec<u8>, data: &[u8]) {
+    if buf.len() < RAW_CAP {
+        buf.extend_from_slice(data);
+    }
+}
+
+/// Run one command the user approved in the AI panel, on a new channel of the
+/// session (so the visible terminal is untouched), or locally when
+/// `session_id` is `None`. Unlike `exec_ssh_cmd` it returns the exit code and
+/// separate stderr, and enforces an overall deadline rather than an idle gap.
+#[tauri::command]
+pub async fn ai_exec(
+    state: tauri::State<'_, crate::ssh_manager::SshState>,
+    session_id: Option<String>,
+    command: String,
+    cwd: Option<String>,
+    timeout_secs: Option<u64>,
+) -> Result<ExecResult, String> {
+    let timeout = Duration::from_secs(timeout_secs.unwrap_or(60).clamp(1, 600));
+    match session_id {
+        Some(id) => exec_ssh(&state, &id, &command, timeout).await,
+        None => exec_local(&command, cwd, timeout).await,
+    }
+}
+
+async fn exec_ssh(
+    state: &crate::ssh_manager::SshState,
+    session_id: &str,
+    command: &str,
+    timeout: Duration,
+) -> Result<ExecResult, String> {
+    use russh::ChannelMsg;
+    let session = state
+        .connections
+        .lock()
+        .await
+        .get(session_id)
+        .cloned()
+        .ok_or("Session not found — reconnect and try again")?;
+    let mut ch = session.lock().await.channel_open_session().await.map_err(|e| e.to_string())?;
+    ch.exec(true, command.as_bytes()).await.map_err(|e| e.to_string())?;
+    let deadline = tokio::time::Instant::now() + timeout;
+    let (mut out, mut err, mut code) = (Vec::new(), Vec::new(), None);
+    loop {
+        match tokio::time::timeout_at(deadline, ch.wait()).await {
+            Err(_) => {
+                let _ = ch.close().await;
+                return Ok(finish(&out, &err, code, true));
+            }
+            Ok(None) | Ok(Some(ChannelMsg::Close)) => break,
+            Ok(Some(ChannelMsg::Data { data })) => push_capped(&mut out, &data),
+            Ok(Some(ChannelMsg::ExtendedData { data, .. })) => push_capped(&mut err, &data),
+            Ok(Some(ChannelMsg::ExitStatus { exit_status })) => code = Some(exit_status as i32),
+            Ok(Some(_)) => {}
+        }
+    }
+    Ok(finish(&out, &err, code, false))
+}
+
+#[cfg(desktop)]
+async fn exec_local(command: &str, cwd: Option<String>, timeout: Duration) -> Result<ExecResult, String> {
+    // shortcut: always the platform's default shell, not the tab's own (WSL, Git Bash); pass the shell through if that matters.
+    let mut cmd = if cfg!(windows) {
+        let mut c = tokio::process::Command::new("powershell.exe");
+        c.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+        c
+    } else {
+        let mut c = tokio::process::Command::new("sh");
+        c.args(["-c", command]);
+        c
+    };
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    if let Some(dir) = cwd.filter(|d| std::path::Path::new(d).is_dir()) {
+        cmd.current_dir(dir);
+    }
+    cmd.stdin(std::process::Stdio::null()).kill_on_drop(true);
+    match tokio::time::timeout(timeout, cmd.output()).await {
+        Err(_) => Ok(finish(b"", b"", None, true)),
+        Ok(r) => {
+            let o = r.map_err(|e| format!("Could not start the shell: {e}"))?;
+            Ok(finish(&o.stdout, &o.stderr, o.status.code(), false))
+        }
+    }
+}
+
+#[cfg(not(desktop))]
+async fn exec_local(_: &str, _: Option<String>, _: Duration) -> Result<ExecResult, String> {
+    Err("Local commands are not available on this platform".into())
 }
 
 #[derive(Default)]
@@ -470,6 +593,27 @@ data: {"type":"message_stop"}"#;
         assert_eq!(acc.text, "Checking disk.");
         assert_eq!(acc.calls[0].id, "toolu_1");
         assert_eq!(acc.calls[0].arguments, r#"{"command":"df -h"}"#);
+    }
+
+    #[test]
+    fn exec_output_keeps_the_tail() {
+        let mut big = vec![b'a'; OUTPUT_CAP];
+        big.extend_from_slice(b"ERROR at the end");
+        let r = finish(&big, b"", Some(1), false);
+        assert!(r.truncated);
+        assert!(r.stdout.ends_with("ERROR at the end"));
+        assert_eq!(r.stdout.len(), OUTPUT_CAP);
+        assert!(!finish(b"ok", b"", Some(0), false).truncated);
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn local_exec_reports_exit_code_and_stderr() {
+        let cmd = if cfg!(windows) { "Write-Output hi; [Console]::Error.WriteLine('bad'); exit 3" } else { "echo hi; echo bad >&2; exit 3" };
+        let r = exec_local(cmd, None, Duration::from_secs(30)).await.unwrap();
+        assert_eq!(r.exit_code, Some(3));
+        assert_eq!(r.stdout.trim(), "hi");
+        assert_eq!(r.stderr.trim(), "bad");
     }
 
     #[test]

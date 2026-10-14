@@ -2339,8 +2339,12 @@ const TerminalView = ({
         <Suspense fallback={null}>
           <div className={showCopilot ? '' : 'hidden'}>
             <AiPanel
+              sessionId={sessionId}
               target={serverName || 'this server'}
               isLocal={isLocal}
+              localCwd={localCwd}
+              canRun={!containerExec}
+              isProd={isProdServer}
               readTerminal={readTerminal}
               seed={copilotSeed}
               open={showCopilot}

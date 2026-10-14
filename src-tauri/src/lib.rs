@@ -394,6 +394,7 @@ pub fn run() {
             commands::ai::ai_delete_provider,
             commands::ai::ai_list_models,
             commands::ai::ai_chat,
+            commands::ai::ai_exec,
             commands::monitor_settings::monitor_list,
             commands::monitor_settings::monitor_add,
             commands::monitor_settings::monitor_remove,

@@ -35,9 +35,17 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- 🔴 **P1 / M** — **AI assistant agent mode.** The panel (Ctrl+I) can chat and suggest commands; next it gets `run_command` / `read_terminal` tools, an `ai_exec` backend command with exit code and timeout, and Suggest / Ask / Auto modes, where Auto runs only read-only commands without asking.
 - 🟡 **P2 / S** — **Launch presets for agent CLIs** (`claude`, `codex`, `gemini`) in a local tab.
-- 🟡 **P2 / S** — Try the AI panel in the app against a local Ollama and an Anthropic key: streaming, Explain on a failed command, the online-provider warning, and that no API key appears in the IPC traffic. So far only the stream parsers have tests.
+- 🔴 **P1 / S** — Try the AI panel in the app against a local Ollama (a tool-capable model such as `qwen2.5` or `llama3.1`) and an Anthropic key. Check:
+  - streaming, and Explain on a failed command;
+  - Ask mode: approve, then Skip;
+  - Auto on a production server, which should still ask;
+  - agent mode in a local PowerShell tab and on SSH;
+  - the online-provider warning;
+  - that no API key appears in the IPC traffic.
+
+  So far only the stream parsers, the agent loop and local `ai_exec` have tests.
+- 🟢 **P3 / S** — `ai_exec` in a local tab always uses PowerShell on Windows and `sh` elsewhere, not the tab's own shell (WSL, Git Bash, cmd).
 - 🟢 **P3 / S** — A Stop button for a reply that is still streaming. It needs an abort path in `ai_chat`.
 - 🟢 **P3 / L** — A SubTerm MCP server that exposes sessions, so Claude Code or Codex can drive SSH sessions open in SubTerm.
 
