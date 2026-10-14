@@ -203,12 +203,13 @@ pub(crate) async fn detect_session_os(
     let probe = r#"if [ -f /etc/os-release ]; then echo "OSTYPE:linux"; grep -E '^(ID|VERSION_ID|PRETTY_NAME)=' /etc/os-release; uname -r 2>/dev/null; elif command -v uname >/dev/null 2>&1; then echo "OSTYPE:$(uname -s)"; uname -r 2>/dev/null; [ -f /etc/version ] && cat /etc/version; else echo "OSTYPE:windows"; cmd.exe /c "ver" 2>/dev/null; fi"#;
     let out = run_exec_capture(&state, &session_id, probe, 8).await.unwrap_or_default();
     // Windows OpenSSH runs cmd or PowerShell, where the sh probe above is a syntax error and
-    // prints no OSTYPE line; `cmd /c ver` works from both.
+    // prints no OSTYPE line. cmd expands %OS% and PowerShell $env:OS, both to "Windows_NT"; sh
+    // prints neither. (`cmd /c ver` breaks: sshd wraps it as cmd /c "cmd /c ver".)
     let out = if out.contains("OSTYPE:") {
         out
     } else {
-        let ver = run_exec_capture(&state, &session_id, "cmd /c ver", 8).await.unwrap_or_default();
-        if ver.contains("Microsoft Windows") { format!("OSTYPE:windows\n{ver}") } else { out }
+        let os = run_exec_capture(&state, &session_id, "echo %OS% $env:OS", 8).await.unwrap_or_default();
+        if os.contains("Windows_NT") { "OSTYPE:windows".to_string() } else { out }
     };
     Ok(parse_os_probe(&out))
 }
@@ -245,9 +246,6 @@ fn parse_os_probe(out: &str) -> serde_json::Value {
             distro_id = line.trim_start_matches("ID=").trim_matches('"').trim_matches('\'').to_lowercase();
         } else if line.starts_with("VERSION_ID=") {
             version = line.trim_start_matches("VERSION_ID=").trim_matches('"').trim_matches('\'').to_string();
-        } else if let Some(v) = line.strip_prefix("Microsoft Windows [Version ").and_then(|r| r.strip_suffix(']')) {
-            version = v.to_string();
-            kernel = line.to_string();
         } else if !line.is_empty() && !line.contains('=') && kernel.is_empty() && !line.starts_with("OSTYPE") {
             kernel = line.to_string();
         }
@@ -608,7 +606,7 @@ mod os_probe_tests {
     fn reads_linux_and_windows_hosts() {
         let linux = parse_os_probe("OSTYPE:linux\nID=ubuntu\nVERSION_ID=\"24.04\"\nPRETTY_NAME=\"Ubuntu 24.04 LTS\"\n6.8.0-45-generic\n");
         assert_eq!((linux["os_type"].as_str(), linux["distro_id"].as_str(), linux["version"].as_str()), (Some("linux"), Some("ubuntu"), Some("24.04")));
-        let win = parse_os_probe("OSTYPE:windows\n\r\nMicrosoft Windows [Version 10.0.26300.9550]\r\n");
-        assert_eq!((win["os_type"].as_str(), win["distro"].as_str(), win["version"].as_str()), (Some("windows"), Some("Windows"), Some("10.0.26300.9550")));
+        let win = parse_os_probe("OSTYPE:windows");
+        assert_eq!((win["os_type"].as_str(), win["distro"].as_str(), win["distro_id"].as_str()), (Some("windows"), Some("Windows"), Some("windows")));
     }
 }
