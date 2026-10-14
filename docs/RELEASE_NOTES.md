@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(editor)` — Files open in a viewer; Markdown is rendered**:
+  Opening a file (from SFTP, the local file browser, Edit File or a clicked path) now shows it read-only first: you can scroll, select, copy and search (Ctrl+F) but not type. Markdown files (`.md`, `.markdown`) open rendered, with headings, lists and task lists, tables, code blocks, quotes and links; links to web pages open in your browser. **Edit** in the editor's toolbar switches to the editor (for Markdown, the source), and **Preview** / **View** switches back; Save and Diff appear in Edit mode or once there are unsaved changes. HTML inside a Markdown file is shown as text and images are not loaded, so a file from a server can't run anything or contact other hosts.
+
 - **`feat(ui)` — Pin servers from the sidebar list; the title-bar server buttons are gone**:
   Hovering a session in the sidebar list (Servers, SFTP or Remote Desktop, in the rail and the wide panel) shows a pin button. A pinned server stays at the top of its list and now stays listed after you close it, dimmed with a dashed border; one click connects again. It still reopens after unlock, as before. The quick-connect buttons in the title bar and the **Pinned Servers** card under Settings > Quick Access have been removed, and the servers you had picked there are not carried over: pin them from the sidebar instead.
 

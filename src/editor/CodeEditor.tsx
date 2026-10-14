@@ -50,13 +50,16 @@ interface CodeEditorProps {
   filePath?: string;
   /** View-only: collapse comment lines into a marker. The document is never changed. */
   hideComments?: boolean;
+  /** Viewer mode: cursor, selection and search still work; typing does not. */
+  readOnly?: boolean;
 }
 
 /** Thin CodeMirror 6 wrapper. The doc is owned by CM; `value` only seeds it (and re-syncs on external changes such as a reload). */
-export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileName, filePath, hideComments = false }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileName, filePath, hideComments = false, readOnly = false }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langRef = useRef(new Compartment());
+  const roRef = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -70,7 +73,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileNam
         extensions: [
           lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(),
           history(), indentOnInput(), bracketMatching(), highlightSelectionMatches(),
-          syntaxHighlighting(highlight), theme, langRef.current.of([]), hideCommentsExtension,
+          syntaxHighlighting(highlight), theme, langRef.current.of([]), roRef.current.of(EditorState.readOnly.of(readOnly)), hideCommentsExtension,
           EditorState.tabSize.of(prefs.tabSize),
           EditorView.theme({ "&": { fontSize: `${prefs.fontSize}px` }, ".cm-scroller": { lineHeight: `${Math.round(prefs.fontSize * 1.65)}px` } }),
           ...(prefs.wordWrap ? [EditorView.lineWrapping] : []),
@@ -96,6 +99,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, fileNam
   useEffect(() => {
     viewRef.current?.dispatch({ effects: setHideComments.of({ hide: hideComments, lang: detectLanguage(fileName, filePath) }) });
   }, [hideComments, fileName, filePath]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: roRef.current.reconfigure(EditorState.readOnly.of(readOnly)) });
+  }, [readOnly]);
 
   useEffect(() => {
     let cancelled = false;

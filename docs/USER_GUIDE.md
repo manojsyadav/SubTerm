@@ -134,8 +134,8 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - **Compare with Other Pane**: Right-click a file and choose **Compare with Other Pane** to open a unified diff against the same-named file in the opposite pane's current directory — works local-vs-remote or across two different sessions. **Use Left →** / **← Use Right** copies one file's contents over the other.
 3. **Editing Remote Files**:
    - Double-click any text configuration file (e.g. `nginx.conf` or `.env`).
-   - The in-app code editor opens with syntax highlighting.
-   - Press `Ctrl+S` to save modifications directly back to the remote server over SFTP.
+   - The file opens read-only in the viewer, with syntax highlighting (Markdown files are shown rendered). You can select, copy and search with `Ctrl+F`.
+   - Click **Edit** in the toolbar to change it, then press `Ctrl+S` to save back to the server over SFTP. **View** (or **Preview** for Markdown) goes back to the viewer.
 4. **File Transfers**:
    - Drag and drop files from your local file explorer into the SubTerm SFTP panel to start transfers.
    - Monitor real-time transfer progress and transfer speed in the progress widget.
