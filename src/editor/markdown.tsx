@@ -106,9 +106,9 @@ const RULES: Rule[] = [
   { re: /\[([^\]]+)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)/g, render: (m, k) => link(m[2], inline(m[1]), k) },
   { re: /<((?:https?:\/\/|mailto:)[^>\s]+)>/g, render: (m, k) => link(m[1], m[1], k) },
   { re: /\*\*(?=\S)([\s\S]*?\S)\*\*/g, render: (m, k) => <strong key={k} className="font-bold text-zinc-50">{inline(m[1])}</strong> },
-  { re: /__(?=\S)([\s\S]*?\S)__(?![A-Za-z0-9])/g, render: (m, k) => <strong key={k} className="font-bold text-zinc-50">{inline(m[1])}</strong>, wordBound: true },
+  { re: /__(?=\S)([\s\S]*?\S)__(?![A-Za-z0-9_])/g, render: (m, k) => <strong key={k} className="font-bold text-zinc-50">{inline(m[1])}</strong>, wordBound: true },
   { re: /\*(?=\S)([\s\S]*?\S)\*/g, render: (m, k) => <em key={k}>{inline(m[1])}</em> },
-  { re: /_(?=\S)([\s\S]*?\S)_(?![A-Za-z0-9])/g, render: (m, k) => <em key={k}>{inline(m[1])}</em>, wordBound: true },
+  { re: /_(?=[^\s_])([\s\S]*?[^\s_])_(?![A-Za-z0-9_])/g, render: (m, k) => <em key={k}>{inline(m[1])}</em>, wordBound: true },
   { re: /~~(?=\S)([\s\S]*?\S)~~/g, render: (m, k) => <del key={k}>{inline(m[1])}</del> },
 ];
 
@@ -130,8 +130,8 @@ export function inline(text: string): React.ReactNode[] {
     for (const rule of RULES) {
       rule.re.lastIndex = 0;
       let m: RegExpExecArray | null;
-      // `_` emphasis only counts at a word start, so snake_case names stay as they are.
-      while ((m = rule.re.exec(rest)) && rule.wordBound && m.index > 0 && /[A-Za-z0-9]/.test(rest[m.index - 1])) rule.re.lastIndex = m.index + 1;
+      // `_` emphasis only counts at a word start, so snake_case names and `__init` stay as they are.
+      while ((m = rule.re.exec(rest)) && rule.wordBound && m.index > 0 && /[A-Za-z0-9_]/.test(rest[m.index - 1])) rule.re.lastIndex = m.index + 1;
       if (m && (!best || m.index < best.m.index)) best = { m, rule };
     }
     if (!best) { out.push(rest); break; }

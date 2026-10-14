@@ -3041,7 +3041,21 @@ fn guard_local_path(path: &str, allow_nonexistent: bool) -> Result<std::path::Pa
         }
     }
 
-    Ok(canonical)
+    Ok(without_verbatim_prefix(canonical))
+}
+
+/// `C:\x` for canonicalize()'s `\\?\C:\x`, and `\\server\share` for `\\?\UNC\server\share`, so
+/// listings and the paths built from them show what the user typed. std adds the prefix back by
+/// itself when a path is too long without it. Other verbatim forms are left alone.
+fn without_verbatim_prefix(p: std::path::PathBuf) -> std::path::PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        return std::path::PathBuf::from(format!(r"\\{rest}"));
+    }
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') && rest.as_bytes()[0].is_ascii_alphabetic() => std::path::PathBuf::from(rest),
+        _ => p,
+    }
 }
 
 #[tauri::command]
@@ -3321,6 +3335,19 @@ mod path_safety_tests {
         let dir = unique_scratch_dir("reject-nonexistent");
         let missing = dir.join("nope.txt");
         assert!(guard_local_path(missing.to_str().unwrap(), false).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn verbatim_prefix_is_dropped_from_drive_and_unc_paths_only() {
+        use std::path::PathBuf;
+        assert_eq!(without_verbatim_prefix(PathBuf::from(r"\\?\C:\Users\me")), PathBuf::from(r"C:\Users\me"));
+        assert_eq!(without_verbatim_prefix(PathBuf::from(r"\\?\UNC\nas\share\x")), PathBuf::from(r"\\nas\share\x"));
+        assert_eq!(without_verbatim_prefix(PathBuf::from(r"\\?\Volume{abc}\x")), PathBuf::from(r"\\?\Volume{abc}\x"));
+        assert_eq!(without_verbatim_prefix(PathBuf::from("/home/me")), PathBuf::from("/home/me"));
+        let dir = unique_scratch_dir("verbatim");
+        let guarded = guard_local_path(dir.to_str().unwrap(), false).unwrap();
+        assert!(!guarded.to_string_lossy().starts_with(r"\\?\"), "{}", guarded.display());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
