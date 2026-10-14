@@ -40,9 +40,9 @@ This document tracks active development tasks, pending architectural optimizatio
   - First macOS/Linux release build with the helper binary (configured in `tauri.macos.conf.json` / `tauri.linux.conf.json`).
   - *Context:* Helper program isolates IronRDP's pinned pre-release `picky`/`curve25519-dalek` dependencies from `russh` in the main process.
 
-- 🟢 **P3 · L** — **iOS / iPadOS: first Mac build**
+- 🟢 **P3 · L** — **[DEFERRED] iOS / iPadOS: first Mac build** *(Deferred: requires macOS hardware with Xcode)*
   - Prepared architecture: desktop-only crates excluded for iOS, platform checks use `desktop` / `mobile`, iOS detection and Documents-folder sandbox handling exist, build scripts `ios:init` / `ios:dev` / `ios:build` configured in `package.json`, and instructions documented in [`docs/IOS.md`](docs/IOS.md).
-  - Requires a Mac with Xcode: run `npm run ios:init`, resolve any native crate build issues (`notify`, `if-watch`, C builds of `ring` / `zstd`), and validate SSH terminal, SFTP, and app suspend/resume.
+  - When Apple hardware is available: run `npm run ios:init`, resolve any native crate build issues (`notify`, `if-watch`, C builds of `ring` / `zstd`), and validate SSH terminal, SFTP, and app suspend/resume.
 
 ---
 
