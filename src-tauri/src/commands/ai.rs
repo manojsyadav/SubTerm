@@ -404,12 +404,13 @@ pub async fn ai_exec(
     session_id: Option<String>,
     command: String,
     cwd: Option<String>,
+    shell: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<ExecResult, String> {
     let timeout = Duration::from_secs(timeout_secs.unwrap_or(60).clamp(1, 600));
     match session_id {
         Some(id) => exec_ssh(&state, &id, &command, timeout).await,
-        None => exec_local(&command, cwd, timeout).await,
+        None => exec_local(&command, cwd, shell.as_deref(), timeout).await,
     }
 }
 
@@ -448,17 +449,30 @@ async fn exec_ssh(
 }
 
 #[cfg(desktop)]
-async fn exec_local(command: &str, cwd: Option<String>, timeout: Duration) -> Result<ExecResult, String> {
-    // shortcut: always the platform's default shell, not the tab's own (WSL, Git Bash); pass the shell through if that matters.
-    let mut cmd = if cfg!(windows) {
-        let mut c = tokio::process::Command::new("powershell.exe");
-        c.args(["-NoProfile", "-NonInteractive", "-Command", command]);
-        c
-    } else {
-        let mut c = tokio::process::Command::new("sh");
-        c.args(["-c", command]);
-        c
-    };
+async fn exec_local(command: &str, cwd: Option<String>, shell: Option<&str>, timeout: Duration) -> Result<ExecResult, String> {
+    // The same shell the tab runs, so the model's commands mean what they would typed there.
+    let (program, _) = crate::commands::terminal::resolve_local_shell(shell);
+    let kind = std::path::Path::new(&program)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let mut cmd = tokio::process::Command::new(&program);
+    match kind.as_str() {
+        "pwsh" | "powershell" => {
+            cmd.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+        }
+        // cmd parses its own command line, so it gets it raw rather than MSVC-quoted.
+        #[cfg(windows)]
+        "cmd" => {
+            cmd.raw_arg(format!("/D /S /C \"{command}\""));
+        }
+        "wsl" => {
+            cmd.args(["-e", "sh", "-c", command]);
+        }
+        _ => {
+            cmd.args(["-c", command]);
+        }
+    }
     #[cfg(windows)]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     if let Some(dir) = cwd.filter(|d| std::path::Path::new(d).is_dir()) {
@@ -475,7 +489,7 @@ async fn exec_local(command: &str, cwd: Option<String>, timeout: Duration) -> Re
 }
 
 #[cfg(not(desktop))]
-async fn exec_local(_: &str, _: Option<String>, _: Duration) -> Result<ExecResult, String> {
+async fn exec_local(_: &str, _: Option<String>, _: Option<&str>, _: Duration) -> Result<ExecResult, String> {
     Err("Local commands are not available on this platform".into())
 }
 
@@ -669,10 +683,19 @@ data: {"type":"message_stop"}"#;
     #[tokio::test]
     async fn local_exec_reports_exit_code_and_stderr() {
         let cmd = if cfg!(windows) { "Write-Output hi; [Console]::Error.WriteLine('bad'); exit 3" } else { "echo hi; echo bad >&2; exit 3" };
-        let r = exec_local(cmd, None, Duration::from_secs(30)).await.unwrap();
+        let r = exec_local(cmd, None, None, Duration::from_secs(30)).await.unwrap();
         assert_eq!(r.exit_code, Some(3));
         assert_eq!(r.stdout.trim(), "hi");
         assert_eq!(r.stderr.trim(), "bad");
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn local_exec_uses_the_tabs_shell() {
+        let r = exec_local(r#"echo "a b"& exit /b 4"#, None, Some("cmd"), Duration::from_secs(30)).await.unwrap();
+        assert_eq!((r.exit_code, r.stdout.trim()), (Some(4), r#""a b""#));
+        let r = exec_local("$PSVersionTable.PSEdition", None, Some("powershell"), Duration::from_secs(30)).await.unwrap();
+        assert_eq!(r.stdout.trim(), "Desktop");
     }
 
     #[test]

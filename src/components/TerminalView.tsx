@@ -2345,6 +2345,7 @@ const TerminalView = ({
               target={serverName || 'this server'}
               isLocal={isLocal}
               localCwd={localCwd}
+              localShell={localShell}
               canRun={!containerExec}
               isProd={isProdServer}
               readTerminal={readTerminal}

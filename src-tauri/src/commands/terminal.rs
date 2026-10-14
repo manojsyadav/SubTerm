@@ -264,33 +264,9 @@ fn shell_integration(shell_cmd: &str) -> Option<ShellIntegration> {
     }
 }
 
-#[cfg(desktop)]
-#[tauri::command]
-pub async fn open_local_terminal(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, SshState>,
-    terminal_id: String,
-    cols: u32,
-    rows: u32,
-    cwd: Option<String>,
-    shell: Option<String>,
-    channel: OutputChannel,
-    shell_integration_on: Option<bool>,
-) -> Result<(), String> {
-    use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
-    use std::io::{Read, Write};
-
-    let pty_system = native_pty_system();
-    let pair = pty_system
-        .openpty(PortablePtySize {
-            rows: rows.max(1) as u16,
-            cols: cols.max(1) as u16,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| format!("Failed to create local PTY: {e}"))?;
-
-fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
+/// The program for a local shell name from the picker ("" means the default).
+#[cfg_attr(mobile, allow(dead_code))]
+pub(crate) fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
     #[cfg(windows)]
     {
         let raw = input.unwrap_or("").trim();
@@ -376,6 +352,32 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
         (cmd, vec![])
     }
 }
+
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn open_local_terminal(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SshState>,
+    terminal_id: String,
+    cols: u32,
+    rows: u32,
+    cwd: Option<String>,
+    shell: Option<String>,
+    channel: OutputChannel,
+    shell_integration_on: Option<bool>,
+) -> Result<(), String> {
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
+    use std::io::{Read, Write};
+
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PortablePtySize {
+            rows: rows.max(1) as u16,
+            cols: cols.max(1) as u16,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("Failed to create local PTY: {e}"))?;
 
     let (shell_cmd, shell_args) = resolve_local_shell(shell.as_deref());
 

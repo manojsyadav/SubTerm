@@ -28,6 +28,8 @@ interface Props {
   target: string;
   isLocal: boolean;
   localCwd?: string;
+  /** The local tab's shell, so commands run where they would if typed. */
+  localShell?: string;
   /** False where a command would run somewhere other than this terminal (a container shell). */
   canRun: boolean;
   /** Production servers: Auto mode still asks before every command. */
@@ -73,7 +75,7 @@ const argCommand = (args: string) => {
 };
 
 export function AiPanel(props: Props) {
-  const { sessionId, target, isLocal, localCwd, canRun, isProd, readTerminal, onInsertCommand, onClose, seed, open } = props;
+  const { sessionId, target, isLocal, localCwd, localShell, canRun, isProd, readTerminal, onInsertCommand, onClose, seed, open } = props;
   const confirm = useConfirm();
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [providerId, setProviderId] = useState<number | null>(getLastProvider());
@@ -109,10 +111,11 @@ export function AiPanel(props: Props) {
       sessionId: isLocal ? null : sessionId,
       command,
       cwd: isLocal ? localCwd ?? null : null,
+      shell: isLocal ? localShell ?? null : null,
       timeoutSecs: EXEC_TIMEOUT,
     });
     return formatExec(r, EXEC_TIMEOUT);
-  }, [isLocal, sessionId, localCwd]);
+  }, [isLocal, sessionId, localCwd, localShell]);
 
   const send = useCallback(async (text: string, withTerminal: boolean, display = text) => {
     if (!provider || busy || !text.trim()) return;
