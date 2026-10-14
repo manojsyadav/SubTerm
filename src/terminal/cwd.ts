@@ -36,9 +36,21 @@ export function parseOsc7(data: string): string | null {
   return p || null;
 }
 
-// ---- tiny shared store so features outside TerminalView can read the cwd ----
+// ---- tiny shared store so features outside TerminalView can read the cwd and git branch ----
 const cwdByTerminal = new Map<string, string>();
 const listeners = new Set<(terminalId: string, cwd: string) => void>();
+
+const branchByTerminal = new Map<string, string>();
+const branchListeners = new Set<(terminalId: string, branch: string) => void>();
+
+const GIT_BRANCH_RE = /(?:^|[\s\x1b])\[[^\]\r\n:]+:([A-Za-z0-9_./-]+)/;
+
+/** The git branch shown by the shell prompt in `chunk`, or null. */
+export function parsePromptGitBranch(chunk: string): string | null {
+  const text = stripAnsi(chunk);
+  const m = text.match(GIT_BRANCH_RE);
+  return m ? m[1] : null;
+}
 
 /** Record a terminal's cwd; listeners fire only when it actually changed. */
 export function setTerminalCwd(terminalId: string, cwd: string): void {
@@ -51,8 +63,35 @@ export function getTerminalCwd(terminalId: string): string | undefined {
   return cwdByTerminal.get(terminalId);
 }
 
+export function setTerminalGitBranch(terminalId: string, branch: string): void {
+  const val = branch.trim();
+  if (branchByTerminal.get(terminalId) === val) return;
+  if (!val) {
+    branchByTerminal.delete(terminalId);
+  } else {
+    branchByTerminal.set(terminalId, val);
+  }
+  branchListeners.forEach((fn) => fn(terminalId, val));
+}
+
+export function getTerminalGitBranch(terminalId: string): string | undefined {
+  return branchByTerminal.get(terminalId);
+}
+
+export function forgetTerminalGitBranch(terminalId: string): void {
+  if (branchByTerminal.delete(terminalId)) {
+    branchListeners.forEach((fn) => fn(terminalId, ""));
+  }
+}
+
+export function onTerminalGitBranchChange(fn: (terminalId: string, branch: string) => void): () => void {
+  branchListeners.add(fn);
+  return () => { branchListeners.delete(fn); };
+}
+
 export function forgetTerminalCwd(terminalId: string): void {
   cwdByTerminal.delete(terminalId);
+  forgetTerminalGitBranch(terminalId);
 }
 
 export function onTerminalCwdChange(fn: (terminalId: string, cwd: string) => void): () => void {

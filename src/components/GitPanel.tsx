@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, RefreshCw, MoreHorizontal, Plus, Minus, UploadCloud, ArrowDownUp, ChevronDown, ChevronRight, FolderGit2 } from "lucide-react";
+import { Check, RefreshCw, MoreHorizontal, Plus, Minus, UploadCloud, ArrowDownUp, ChevronDown, ChevronRight, FolderGit2, Sparkles } from "lucide-react";
 import type { ExecResult } from "../ai/agentLoop";
-import { getTerminalCwd, onTerminalCwdChange, shellQuote } from "../terminal/cwd";
+import { getTerminalCwd, onTerminalCwdChange, setTerminalGitBranch, shellQuote } from "../terminal/cwd";
 import { parseStatusZ, parseLog, LOG_FORMAT, type GitStatus, type GitCommit, type GitFile } from "../git/porcelain";
+import { buildCommitGraph, ROW_HEIGHT, LANE_WIDTH, LANE_OFFSET } from "../git/graph";
+import { listProviders, getLastProvider, chat, type ChatMsg } from "../ai/providers";
 
 interface GitPanelProps {
   sessionId: string;
@@ -30,6 +32,10 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
   const [msg, setMsg] = useState("");
   const [menu, setMenu] = useState(false);
   const [open, setOpen] = useState({ staged: true, changes: true, graph: true });
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  const graphNodes = useMemo(() => buildCommitGraph(log), [log]);
+  const maxLanes = useMemo(() => Math.max(1, ...graphNodes.map((n) => n.maxLanes)), [graphNodes]);
 
   useEffect(() => {
     const cwd = getTerminalCwd(terminalId);
@@ -64,14 +70,79 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
         exec([["status", "--porcelain=v1", "-b", "-z"]]),
         exec([["log", "-n", "50", `--format=${LOG_FORMAT}`]]),
       ]);
-      if (s.exitCode !== 0) { setStatus(null); setLog([]); setError(s.stderr.trim() || "Not a git repository"); return; }
-      setStatus(parseStatusZ(s.stdout));
+      if (s.exitCode !== 0) {
+        setStatus(null);
+        setLog([]);
+        setError(s.stderr.trim() || "Not a git repository");
+        setTerminalGitBranch(terminalId, "");
+        return;
+      }
+      const parsedStatus = parseStatusZ(s.stdout);
+      setStatus(parsedStatus);
+      setTerminalGitBranch(terminalId, parsedStatus.branch || "");
       setLog(l.exitCode === 0 ? parseLog(l.stdout) : []);
       setError("");
     } catch (e) {
       setError(String(e));
     }
-  }, [exec, disabled]);
+  }, [exec, disabled, terminalId]);
+
+  const generateAiCommit = async () => {
+    if (busy || aiGenerating) return;
+    setError("");
+    try {
+      const providers = await listProviders();
+      if (!providers || providers.length === 0) {
+        setError("No AI providers configured. Configure one in Settings → AI.");
+        return;
+      }
+      const lastId = getLastProvider();
+      const provider = providers.find((p) => p.id === lastId) ?? providers[0];
+
+      let diffRes = await exec([status?.staged.length ? ["diff", "--cached"] : ["diff", "HEAD"]]);
+      let diff = diffRes.stdout.trim();
+      if (!diff && !status?.staged.length) {
+        const unstaged = await exec([["diff"]]);
+        diff = unstaged.stdout.trim();
+      }
+      if (!diff) {
+        const stRes = await exec([["status", "-s"]]);
+        diff = stRes.stdout.trim();
+      }
+      if (!diff) {
+        setError("No changes found to generate a commit message for.");
+        return;
+      }
+
+      if (diff.length > 8000) {
+        diff = diff.slice(0, 8000) + "\n... [diff truncated]";
+      }
+
+      setAiGenerating(true);
+      let generated = "";
+      const system =
+        "You are an expert developer. Generate a concise Conventional Commits message summarizing the provided git diff. Output ONLY the raw commit message (imperative mood, e.g. 'feat: add user auth' or 'fix: resolve tab crash', optionally followed by brief bullet points if needed). Do NOT include markdown code fences, quotes, or any conversational preamble.";
+      const userMsg: ChatMsg = {
+        role: "user",
+        content: `Generate a commit message for the following changes:\n\n${diff}`,
+      };
+
+      await chat(
+        provider.id,
+        system,
+        [userMsg],
+        [],
+        (chunk) => {
+          generated += chunk;
+          setMsg(generated.trim());
+        }
+      );
+    } catch (e) {
+      setError(`AI generation failed: ${e}`);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   useEffect(() => { if (visible) refresh(); }, [visible, refresh]);
 
@@ -222,6 +293,20 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
         ) : (
           <>
             <div className="p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10.5px] font-medium text-zinc-400">Commit Message</label>
+                <button
+                  type="button"
+                  onClick={generateAiCommit}
+                  disabled={busy || aiGenerating || (!status?.staged.length && !status?.changes.length)}
+                  className="flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded text-primary hover:text-white hover:bg-primary/20 disabled:opacity-40 transition-colors"
+                  title="Generate commit message with AI"
+                  aria-label="Generate commit message with AI"
+                >
+                  <Sparkles size={11} className={aiGenerating ? "animate-spin text-amber-400" : ""} />
+                  <span>{aiGenerating ? "Generating…" : "AI Generate"}</span>
+                </button>
+              </div>
               <textarea
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
@@ -233,7 +318,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
               {primary && (
                 <button
                   onClick={primary.onClick}
-                  disabled={primary.disabled || busy}
+                  disabled={primary.disabled || busy || aiGenerating}
                   className="h-7 rounded bg-primary/80 hover:bg-primary text-white font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:hover:bg-primary/80"
                 >
                   <primary.icon size={13} />
@@ -253,21 +338,64 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
             {section("graph", "Graph", null, (
               <div className="pb-2">
                 {log.length === 0 && <p className="px-6 py-1 text-zinc-500">No commits yet.</p>}
-                {log.map((c, i) => (
-                  <div key={c.hash} className="flex items-center gap-2 px-3 h-[22px] hover:bg-white/[0.05]" title={`${c.hash} · ${c.author}\n${c.subject}`}>
-                    <span className="relative w-3 self-stretch flex justify-center shrink-0">
-                      <span className={`absolute w-px bg-primary/60 ${i === 0 ? "top-1/2" : "top-0"} ${i === log.length - 1 ? "bottom-1/2" : "bottom-0"}`} />
-                      <span className={`relative self-center w-2 h-2 rounded-full ${i === 0 ? "border border-primary bg-[#0e0e13]" : "bg-primary"}`} />
-                    </span>
-                    <span className={`truncate ${i === 0 ? "font-bold text-zinc-100" : "text-zinc-300"}`}>{c.subject}</span>
-                    <span className="text-zinc-500 text-[10px] truncate shrink-0 max-w-[30%]">{c.author}</span>
-                    {c.refs.map((r) => (
-                      <span key={r} className="px-1.5 rounded-full border border-primary/40 bg-primary/10 text-primary text-[9.5px] truncate max-w-[40%] shrink-0">
-                        {r.replace(/^HEAD -> /, "")}
-                      </span>
-                    ))}
-                  </div>
-                ))}
+                {log.map((c, i) => {
+                  const node = graphNodes[i];
+                  const svgWidth = Math.max(20, LANE_OFFSET * 2 + (maxLanes - 1) * LANE_WIDTH);
+                  return (
+                    <div key={c.hash} className="flex items-center gap-2 px-3 h-[22px] hover:bg-white/[0.05]" title={`${c.hash} · ${c.author}\n${c.subject}`}>
+                      <svg width={svgWidth} height={ROW_HEIGHT} className="shrink-0 overflow-visible">
+                        {node?.lines.map((l, lineIdx) => {
+                          if (l.isCurve) {
+                            return (
+                              <path
+                                key={lineIdx}
+                                d={`M ${l.x1} ${l.y1} C ${l.x1} ${l.y1 + 7}, ${l.x2} ${l.y2 - 7}, ${l.x2} ${l.y2}`}
+                                stroke={l.color}
+                                strokeWidth={1.5}
+                                fill="none"
+                                strokeLinecap="round"
+                              />
+                            );
+                          }
+                          return (
+                            <line
+                              key={lineIdx}
+                              x1={l.x1}
+                              y1={l.y1}
+                              x2={l.x2}
+                              y2={l.y2}
+                              stroke={l.color}
+                              strokeWidth={1.5}
+                              strokeLinecap="round"
+                            />
+                          );
+                        })}
+                        {node && (
+                          <>
+                            <circle
+                              cx={node.x}
+                              cy={node.y}
+                              r={3.5}
+                              fill={node.color}
+                              stroke="#0e0e13"
+                              strokeWidth={1.5}
+                            />
+                            {i === 0 && (
+                              <circle cx={node.x} cy={node.y} r={1.5} fill="#ffffff" />
+                            )}
+                          </>
+                        )}
+                      </svg>
+                      <span className={`truncate ${i === 0 ? "font-bold text-zinc-100" : "text-zinc-300"}`}>{c.subject}</span>
+                      <span className="text-zinc-500 text-[10px] truncate shrink-0 max-w-[30%]">{c.author}</span>
+                      {c.refs.map((r) => (
+                        <span key={r} className="px-1.5 rounded-full border border-primary/40 bg-primary/10 text-primary text-[9.5px] truncate max-w-[40%] shrink-0">
+                          {r.replace(/^HEAD -> /, "")}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </>

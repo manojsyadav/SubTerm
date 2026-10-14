@@ -33,11 +33,11 @@ describe("parseStatusZ", () => {
 });
 
 describe("parseLog", () => {
-  it("splits fields and refs", () => {
-    const out = "abc1234\x1ffeat: x\x1fManoj\x1fHEAD -> main, origin/main\nd00d000\x1ffix: y\x1fManoj\x1f\n";
+  it("splits fields, refs and parents", () => {
+    const out = "abc1234\x1ffeat: x\x1fManoj\x1fHEAD -> main, origin/main\x1fd00d000 111aaaa\nd00d000\x1ffix: y\x1fManoj\x1f\x1f\n";
     expect(parseLog(out)).toEqual([
-      { hash: "abc1234", subject: "feat: x", author: "Manoj", refs: ["HEAD -> main", "origin/main"] },
-      { hash: "d00d000", subject: "fix: y", author: "Manoj", refs: [] },
+      { hash: "abc1234", subject: "feat: x", author: "Manoj", refs: ["HEAD -> main", "origin/main"], parents: ["d00d000", "111aaaa"] },
+      { hash: "d00d000", subject: "fix: y", author: "Manoj", refs: [], parents: [] },
     ]);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  stripAnsi, parsePromptCwd, parseOsc7, setTerminalCwd, getTerminalCwd, onTerminalCwdChange, shellQuote,
+  stripAnsi, parsePromptCwd, parsePromptGitBranch, parseOsc7, setTerminalCwd, getTerminalCwd, onTerminalCwdChange,
+  setTerminalGitBranch, getTerminalGitBranch, onTerminalGitBranchChange, forgetTerminalCwd, shellQuote,
 } from "./cwd";
 
 // The exact prompt a stock Debian 12 bash prints: title OSC, coloured user@host, coloured path.
@@ -65,3 +66,24 @@ describe("cwd store", () => {
     expect(getTerminalCwd("nope")).toBeUndefined();
   });
 });
+
+describe("git branch store and prompt parsing", () => {
+  it("parses git branch from prompt segment", () => {
+    expect(parsePromptGitBranch("manoj@pc:~/repo/src \x1b[33m[repo:main ↑1 ●2]\x1b[0m$ ")).toBe("main");
+    expect(parsePromptGitBranch("user@host:~ [my-repo:feat/login-flow]\n$ ")).toBe("feat/login-flow");
+    expect(parsePromptGitBranch("user@host:~$ ")).toBeNull();
+  });
+
+  it("stores branch per terminal and cleans up on forget", () => {
+    const fn = vi.fn();
+    const off = onTerminalGitBranchChange(fn);
+    setTerminalGitBranch("t1", "main");
+    setTerminalGitBranch("t1", "main"); // no dup
+    setTerminalGitBranch("t1", "feat/ai");
+    expect(getTerminalGitBranch("t1")).toBe("feat/ai");
+    off();
+    forgetTerminalCwd("t1");
+    expect(getTerminalGitBranch("t1")).toBeUndefined();
+  });
+});
+
