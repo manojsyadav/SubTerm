@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(terminal)` — Git status in local shell prompts**:
+  In a local PowerShell, bash or WSL tab, the prompt shows the repository and branch when the current folder is inside a git repository, for example `PS C:\REPO\subTerm [subTerm:main ↑2 ↓1 ●5]>`. `↑` and `↓` count commits ahead of and behind the upstream branch as of your last fetch (no network is used), `≡` means level with it, `●` counts uncommitted and untracked files, and a detached HEAD shows its short hash. It is green when clean and yellow with changes. Running git for the prompt does not change `$LASTEXITCODE`. Prompts from oh-my-posh, Starship or Git Bash, which show git themselves, are left as they are, as are SSH sessions. It is part of the built-in shell integration, so it turns off with Command blocks.
+
 - **`feat(editor)` — Files open in a viewer; Markdown is rendered**:
   Opening a file (from SFTP, the local file browser, Edit File or a clicked path) now shows it read-only first: you can scroll, select, copy and search (Ctrl+F) but not type. Markdown files (`.md`, `.markdown`) open rendered, with headings, lists and task lists, tables, code blocks, quotes and links; links to web pages open in your browser. **Edit** in the editor's toolbar switches to the editor (for Markdown, the source), and **Preview** / **View** switches back; Save and Diff appear in Edit mode or once there are unsaved changes. HTML inside a Markdown file is shown as text and images are not loaded, so a file from a server can't run anything or contact other hosts.
 

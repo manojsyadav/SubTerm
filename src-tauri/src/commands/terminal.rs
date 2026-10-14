@@ -214,16 +214,55 @@ pub async fn close_terminal(
 /// exit code) and the prompt start (OSC 133;A), so long-command notifications and
 /// command blocks work without the user installing shell integration. `$global:?`
 /// must be read first, before anything else in the function resets it.
-const PWSH_INTEGRATION: &str = r#"$global:__stPrompt = $function:prompt
+///
+/// Inside a git repository it also puts `[repo:branch ↑ahead ↓behind ●changes]`
+/// before the prompt's closing `>` (`≡` when level with the upstream; green when
+/// clean, yellow with changes), using posh-git's symbols. Prompts that don't end
+/// in `>` (oh-my-posh, Starship) are left alone, as they draw their own.
+const PWSH_INTEGRATION: &str = r##"$global:__stPrompt = $function:prompt
+$global:__stGit = [bool](Get-Command git -CommandType Application -ErrorAction SilentlyContinue)
+function global:__stGitSegment {
+  $top = git rev-parse --show-toplevel 2>$null
+  if (-not $top) { return '' }
+  $h = ''; $o = ''; $up = $false; $ahead = 0; $behind = 0; $n = 0
+  foreach ($l in (git --no-optional-locks status --porcelain=v2 --branch 2>$null)) {
+    if ($l.StartsWith('# branch.oid ')) { $o = $l.Substring(13) }
+    elseif ($l.StartsWith('# branch.head ')) { $h = $l.Substring(14) }
+    elseif ($l.StartsWith('# branch.upstream ')) { $up = $true }
+    elseif ($l.StartsWith('# branch.ab ')) { $p = $l.Split(' '); $ahead = [int]$p[2].Substring(1); $behind = [int]$p[3].Substring(1) }
+    elseif (-not $l.StartsWith('#')) { $n++ }
+  }
+  if ($h -eq '(detached)') { $h = $o.Substring(0, [Math]::Min(7, $o.Length)) }
+  $s = (Split-Path -Leaf $top) + ':' + $h
+  if ($up) {
+    if ($ahead) { $s += ' ' + [char]0x2191 + $ahead }
+    if ($behind) { $s += ' ' + [char]0x2193 + $behind }
+    if (-not ($ahead -or $behind)) { $s += ' ' + [char]0x2261 }
+  }
+  if ($n) { $s += ' ' + [char]0x25CF + $n }
+  $e = [char]27
+  " $e[$(if ($n) { 33 } else { 32 })m[$s]$e[0m"
+}
 function global:prompt {
   $ok = $global:?
   $c = if ($ok) { 0 } elseif ($global:LASTEXITCODE) { $global:LASTEXITCODE } else { 1 }
   $e = [char]27; $b = [char]7
-  "$e]133;D;$c$b$e]133;A;subterm=local$b" + (& $global:__stPrompt)
-}"#;
+  $p = & $global:__stPrompt
+  if ($global:__stGit -and $p -match '>+ ?$') {
+    # Running git would overwrite the exit code the user may check next.
+    $lec = $global:LASTEXITCODE
+    $g = try { __stGitSegment } catch { '' }
+    $global:LASTEXITCODE = $lec
+    if ($g) { $p = $p.Substring(0, $p.Length - $Matches[0].Length) + $g + $Matches[0] }
+  }
+  "$e]133;D;$c$b$e]133;A;subterm=local$b" + $p
+}"##;
 
-/// bash equivalent; a PROMPT_COMMAND set in the user's .bashrc replaces it.
-const BASH_PROMPT_COMMAND: &str = r#"printf '\033]133;D;%s\007\033]133;A;subterm=local\007' "$?""#;
+/// bash equivalent; a PROMPT_COMMAND set in the user's .bashrc replaces it. The git
+/// segment is spliced into PS1 once, before a trailing `\$ `; a PS1 ending any other
+/// way (Git Bash's own `__git_ps1` prompt, custom themes) is not touched. The
+/// symbols are octal escapes so the value stays ASCII through WSLENV.
+const BASH_PROMPT_COMMAND: &str = r##"__st_rc=$?; printf '\033]133;D;%s\007\033]133;A;subterm=local\007' "$__st_rc"; __st_git=; if __st_top=$(git rev-parse --show-toplevel 2>/dev/null); then __st_git=$(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null | awk -v r="${__st_top##*/}" '$2=="branch.oid"{o=substr($3,1,7)} $2=="branch.head"{h=$3} $2=="branch.upstream"{u=1} $2=="branch.ab"{a=substr($3,2)+0;b=substr($4,2)+0} !/^#/{n++} END{if(h=="(detached)")h=o; s=r":"h; if(u){if(a)s=s" \342\206\221"a; if(b)s=s" \342\206\223"b; if(!a&&!b)s=s" \342\211\241"} if(n)s=s" \342\227\217"n; printf " \001\033[%sm\002[%s]\001\033[0m\002", (n?33:32), s}'); fi; case $PS1 in *__st_git*) ;; *'\$ ') PS1="${PS1%\\$ }\${__st_git}\\$ ";; esac"##;
 
 #[cfg_attr(mobile, allow(dead_code))]
 enum ShellIntegration {
@@ -679,5 +718,25 @@ mod shell_integration_tests {
         assert!(vars.iter().any(|(k, v)| *k == "WSLENV" && v.ends_with("PROMPT_COMMAND/u")));
         assert!(shell_integration("cmd.exe").is_none());
         assert!(shell_integration("/usr/bin/zsh").is_none());
+    }
+
+    /// Runs the real PROMPT_COMMAND in a scratch repository (where bash and git exist).
+    #[cfg(unix)]
+    #[test]
+    fn bash_prompt_shows_the_git_segment() {
+        use std::process::Command;
+        let dir = std::env::temp_dir().join(format!("subterm-ps1-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let init = Command::new("git").args(["init", "-q", "-b", "main"]).current_dir(&dir).output();
+        if !init.map(|o| o.status.success()).unwrap_or(false) { return; }
+        std::fs::write(dir.join("a.txt"), "x").unwrap();
+        let script = r#"PS1='\w\$ '; eval "$PROMPT_COMMAND" >/dev/null; printf '%s' "${PS1@P}""#;
+        let Ok(out) = Command::new("bash").args(["--norc", "-c", script]).env("PROMPT_COMMAND", BASH_PROMPT_COMMAND).current_dir(&dir).output() else { return };
+        let ps1 = String::from_utf8_lossy(&out.stdout);
+        let name = dir.file_name().unwrap().to_string_lossy();
+        assert!(ps1.contains(&format!("[{name}:main \u{25CF}1]")), "{ps1}");
+        assert!(ps1.ends_with("$ "), "{ps1}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

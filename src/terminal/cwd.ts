@@ -15,8 +15,9 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, "");
 }
 
-// `user@host:path$` / `#`, optionally preceded by a venv/conda marker like `(venv) `.
-const PROMPT_RE = /(?:^|[\r\n])(?:\([^)\r\n]*\)\s*)?[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:([/~][^$#\s)]*)[$#]/g;
+// `user@host:path$` / `#`, optionally preceded by a venv/conda marker like `(venv) ` and
+// followed by the git segment SubTerm's local bash integration adds (` [repo:main ●2]`).
+const PROMPT_RE = /(?:^|[\r\n])(?:\([^)\r\n]*\)\s*)?[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:([/~][^$#\s)]*)(?: \[[^\]\r\n]*\])?[$#]/g;
 
 /** The cwd shown by the LAST shell prompt in `chunk` (raw terminal output), or null. */
 export function parsePromptCwd(chunk: string): string | null {
