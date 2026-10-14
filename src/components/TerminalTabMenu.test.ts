@@ -64,6 +64,37 @@ describe("TerminalTabMenu", () => {
     expect(button("Close tab").disabled).toBe(true);
   });
 
+  it("handles split, export text, and find actions", () => {
+    const p = render();
+    act(() => button("Split tab").click());
+    expect(p.onAction).toHaveBeenCalledWith("split");
+
+    act(() => button("Export text").click());
+    expect(p.onAction).toHaveBeenCalledWith("export");
+
+    act(() => button("Find").click());
+    expect(p.onAction).toHaveBeenCalledWith("find");
+  });
+
+  it("handles close submenus for other tabs and tabs below/right", () => {
+    const p = render({ canClose: true, canCloseRight: true });
+    act(() => button("Close").click());
+    expect(button("Close other tabs").disabled).toBe(false);
+    expect(button("Close tabs below / right").disabled).toBe(false);
+
+    act(() => button("Close tabs below / right").click());
+    expect(p.onAction).toHaveBeenCalledWith("closeRight");
+  });
+
+  it("disables close tabs below/right when canCloseRight is false", () => {
+    const p = render({ canClose: true, canCloseRight: false });
+    act(() => button("Close").click());
+    expect(button("Close tabs below / right").disabled).toBe(true);
+
+    act(() => button("Close other tabs").click());
+    expect(p.onAction).toHaveBeenCalledWith("closeOthers");
+  });
+
   it("handles pinning and unpinning", () => {
     const p1 = render({ isPinned: false });
     act(() => button("Pin tab").click());
@@ -74,3 +105,4 @@ describe("TerminalTabMenu", () => {
     expect(p2.onAction).toHaveBeenCalledWith("pin");
   });
 });
+

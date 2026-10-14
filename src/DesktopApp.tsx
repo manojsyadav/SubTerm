@@ -986,6 +986,7 @@ function DesktopApp() {
     const server = servers.find((x) => x.id === parsed.serverId);
     if (!server) return;
     if (parsed.kind === 'sftp') openServer(server, 'sftp', { fullWidth: true });
+    else if (parsed.kind === 'rdp') openServer(server.protocol === 'rdp' ? server : { ...server, protocol: 'rdp' });
     else openServer(server);
   };
   // Pinned servers of one sidebar list that have no open session, shown dimmed so a click reconnects.

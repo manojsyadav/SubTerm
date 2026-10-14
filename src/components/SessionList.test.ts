@@ -77,8 +77,49 @@ describe("SessionList", () => {
     expect(host.querySelector('[aria-label="Unpin backup"]')).not.toBeNull();
   });
 
+  it("renders rail variant with truncated names and handles Cmd/Meta-click split", () => {
+    const p = render({ variant: "rail" });
+    const list = host.querySelector('[role="list"]');
+    expect(list?.className).toContain("flex-col gap-1");
+    // "cache" -> "cache", "db-1" -> "db-1", "web-1" -> "web-1" (sliced to 5)
+    expect(item("cache")).not.toBeNull();
+    // Test Meta/Cmd+click split
+    act(() => { item("web-1").dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })); });
+    expect(p.onSelect).toHaveBeenLastCalledWith("session-1", true);
+  });
+
+  it("handles pinned SFTP and RDP entries in both open and closed states", () => {
+    const sftpSession: Session = { id: "session-sftp-4", serverId: 4, serverName: "sftp-storage", initialTool: "sftp", toolFull: true };
+    const rdpSession: Session = { id: "session-rdp-2", serverId: 2, serverName: "win-workstation", protocol: "rdp" };
+    const onOpenPinned = vi.fn();
+    const onTogglePin = vi.fn();
+
+    render({
+      sessions: [sftpSession, rdpSession],
+      label: "Open SFTP sessions",
+      meta: { names: { "sftp:4": "Storage Box" }, pinned: ["sftp:4"], groups: {}, collapsed: [] },
+      nameOf: (s: Session) => (s.id === "session-sftp-4" ? "Storage Box" : s.serverName),
+      pinnedClosed: [{ key: "rdp:8", name: "rdp-dc01" }],
+      onOpenPinned,
+      onTogglePin,
+    });
+
+    expect(host.textContent).toContain("Storage Box");
+    expect(host.textContent).toContain("win-workstation");
+    expect(host.textContent).toContain("rdp-dc01");
+
+    // Click on closed pinned RDP
+    act(() => item("rdp-dc01").click());
+    expect(onOpenPinned).toHaveBeenCalledWith("rdp:8");
+
+    // Pin/unpin open SFTP session
+    act(() => (host.querySelector('[aria-label="Unpin Storage Box"]') as HTMLButtonElement).click());
+    expect(onTogglePin).toHaveBeenCalledWith("sftp:4");
+  });
+
   it("renders nothing with no sessions and no pinned servers", () => {
     render({ sessions: [] });
     expect(host.querySelector('[role="list"]')).toBeNull();
   });
 });
+
