@@ -46,6 +46,7 @@ Components that matter for layout and behaviour are rendered with `react-dom` un
 - `src/components/SettingsPanel.test.ts`: the seven pages and their order, that every page uses the same wide column container, the nested feature options, search jumping to a setting, changed-from-default dots and resets, lock gating, and a check that every rendered `data-setting` id is in the search index.
 - `src/components/NodeGrid.test.ts`: the Servers header (split Add server menu, lightning button) and the Enter behaviour of the search box (open the single match, connect to an address, ignore a bare word).
 - `src/components/Sidebar.test.ts` and `src/components/ServerPickerView.test.ts`: sidebar entries and order, and the SFTP/RDP server picker.
+- `src/components/AiPanel.test.ts`: the AI panel with a mocked backend. Ask waits for approval and then continues, Skip runs nothing, Auto asks on production servers, the online-provider warning shows once, Explain sends on its own, Run & send returns the result, and container shells offer only Suggest. `src/ai/agentLoop.test.ts` covers the loop and the Auto allowlist.
 
 ### 2.2 TypeScript Typecheck & Linting
 ```bash
@@ -82,6 +83,8 @@ Key test suites:
 - `commands::servers::saved_server_lookup_tests`: matching a typed `ssh` target to saved servers (host, optional user, alias, port, RDP and deleted rows excluded).
 - `commands::servers::history_prune_tests`: command-history size and age limits against an in-memory table.
 - `ssh_manager::host_key_policy_tests`: the strict host-key policy decision (refuse only untrusted keys).
+- `commands::ai::tests`: OpenAI-style and Anthropic stream parsing (text, split tool-call arguments, Ollama calls without index), tool results grouped into one Anthropic turn, keeping the tail of long output, and a real local `ai_exec` with exit code and stderr.
+- `commands::ai::tests::live_tool_call_round_trip` (ignored by default) talks to a real model. Run it with `SUBTERM_AI_LIVE_URL=http://localhost:11434/v1 SUBTERM_AI_LIVE_MODEL=qwen3.5:4b cargo test live_ -- --ignored --nocapture`. For Claude, set `SUBTERM_AI_LIVE_KIND=anthropic` and `SUBTERM_AI_LIVE_KEY` as well.
 
 ### 3.2 Compilation & Clippy Checks
 ```bash

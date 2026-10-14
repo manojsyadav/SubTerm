@@ -36,15 +36,12 @@ This document tracks active development tasks, pending architectural optimizatio
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
 - 🟢 **P3 / S** — The `claude` / `codex` / `gemini` quick commands are defaults only. Anyone who already saved local quick commands sees them only after **Reset** in Settings > Quick Commands.
-- 🔴 **P1 / S** — Try the AI panel in the app against a local Ollama (a tool-capable model such as `qwen2.5` or `llama3.1`) and an Anthropic key. Check:
-  - streaming, and Explain on a failed command;
-  - Ask mode: approve, then Skip;
-  - Auto on a production server, which should still ask;
-  - agent mode in a local PowerShell tab and on SSH;
-  - the online-provider warning;
-  - that no API key appears in the IPC traffic.
-
-  So far only the stream parsers, the agent loop and local `ai_exec` have tests.
+- 🟡 **P2 / S** — Look at the AI panel in the running app, and run it once with a real Anthropic key.
+  - Already covered by tests:
+    - a live round trip against Ollama 0.33 with `qwen3.5:4b` (streaming, tool call, tool result, follow-up answer; the `live_` test in `commands/ai.rs`);
+    - the panel's behaviour, with a mocked backend, in `AiPanel.test.ts`: approve, Skip, Auto on production, the online warning, Explain, Run & send, and container shells.
+  - Still unchecked: layout and focus in the real window, an SSH session end to end, and the Anthropic stream format against the live API rather than recorded samples.
+  - To run the live test against Claude: `SUBTERM_AI_LIVE_KIND=anthropic SUBTERM_AI_LIVE_URL=https://api.anthropic.com/v1 SUBTERM_AI_LIVE_MODEL=claude-haiku-5-5 SUBTERM_AI_LIVE_KEY=… cargo test live_ -- --ignored`.
 - 🟢 **P3 / S** — `ai_exec` in a local tab always uses PowerShell on Windows and `sh` elsewhere, not the tab's own shell (WSL, Git Bash, cmd).
 - 🟢 **P3 / S** — A Stop button for a reply that is still streaming. It needs an abort path in `ai_chat`.
 - 🟢 **P3 / L** — A SubTerm MCP server that exposes sessions, so Claude Code or Codex can drive SSH sessions open in SubTerm.

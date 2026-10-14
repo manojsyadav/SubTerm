@@ -225,16 +225,29 @@ pub async fn ai_chat(
     on_text: Channel<String>,
 ) -> Result<ChatMsg, String> {
     let p = load_provider(&state, id)?;
+    stream_chat(&p, &system, &messages, &tools, |t| {
+        let _ = on_text.send(t);
+    })
+    .await
+}
+
+async fn stream_chat(
+    p: &Provider,
+    system: &str,
+    messages: &[ChatMsg],
+    tools: &[ToolDef],
+    mut on_text: impl FnMut(String),
+) -> Result<ChatMsg, String> {
     if p.model.trim().is_empty() {
         return Err("Pick a model for this provider in Settings → AI".into());
     }
     let anthropic = p.kind == "anthropic";
     let (path, body) = if anthropic {
-        ("messages", anthropic_body(&p.model, &system, &messages, &tools))
+        ("messages", anthropic_body(&p.model, system, messages, tools))
     } else {
-        ("chat/completions", openai_body(&p.model, &system, &messages, &tools))
+        ("chat/completions", openai_body(&p.model, system, messages, tools))
     };
-    let resp = authed(&p, http().post(url(&p, path)))
+    let resp = authed(p, http().post(url(p, path)))
         .json(&body)
         .send()
         .await
@@ -261,7 +274,7 @@ pub async fn ai_chat(
             let Ok(v) = serde_json::from_str::<Value>(data) else { continue };
             let delta = if anthropic { acc.feed_anthropic(&v)? } else { acc.feed_openai(&v)? };
             if let Some(t) = delta {
-                let _ = on_text.send(t);
+                on_text(t);
             }
         }
     }
@@ -593,6 +606,52 @@ data: {"type":"message_stop"}"#;
         assert_eq!(acc.text, "Checking disk.");
         assert_eq!(acc.calls[0].id, "toolu_1");
         assert_eq!(acc.calls[0].arguments, r#"{"command":"df -h"}"#);
+    }
+
+    /// Talks to a real model. Run with
+    /// `SUBTERM_AI_LIVE_URL=http://localhost:11434/v1 SUBTERM_AI_LIVE_MODEL=qwen3.5:4b cargo test live_ -- --ignored --nocapture`
+    /// (add `SUBTERM_AI_LIVE_KIND=anthropic` and `SUBTERM_AI_LIVE_KEY` for Claude).
+    #[tokio::test]
+    #[ignore]
+    async fn live_tool_call_round_trip() {
+        let p = Provider {
+            kind: std::env::var("SUBTERM_AI_LIVE_KIND").unwrap_or_else(|_| "openai".into()),
+            base_url: std::env::var("SUBTERM_AI_LIVE_URL").expect("SUBTERM_AI_LIVE_URL"),
+            model: std::env::var("SUBTERM_AI_LIVE_MODEL").expect("SUBTERM_AI_LIVE_MODEL"),
+            key: Zeroizing::new(std::env::var("SUBTERM_AI_LIVE_KEY").unwrap_or_default()),
+        };
+        let tools = vec![ToolDef {
+            name: "run_command".into(),
+            description: "Run one shell command and get its output.".into(),
+            parameters: json!({"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}),
+        }];
+        let system = "You are a shell assistant. Use run_command to check things instead of guessing.";
+        let mut msgs = vec![ChatMsg {
+            role: "user".into(),
+            content: "How much free disk space is there? Check it.".into(),
+            tool_calls: vec![],
+            tool_call_id: None,
+        }];
+        let mut streamed = 0usize;
+        let first = stream_chat(&p, system, &msgs, &tools, |t| streamed += t.len()).await.unwrap();
+        println!("first turn: {first:?}");
+        let call = first.tool_calls.first().expect("model should call run_command").clone();
+        assert_eq!(call.name, "run_command");
+        let args: Value = serde_json::from_str(&call.arguments).expect("arguments are JSON");
+        assert!(args["command"].as_str().is_some_and(|c| !c.is_empty()));
+
+        msgs.push(first);
+        msgs.push(ChatMsg {
+            role: "tool".into(),
+            content: "Exit code: 0\nstdout:\nFilesystem Size Used Avail Use% Mounted on\n/dev/sda1 100G 91G 9G 91% /".into(),
+            tool_calls: vec![],
+            tool_call_id: Some(call.id),
+        });
+        let mut text = String::new();
+        let second = stream_chat(&p, system, &msgs, &tools, |t| text.push_str(&t)).await.unwrap();
+        println!("second turn: {second:?}");
+        assert_eq!(text, second.content, "streamed text matches the final message");
+        assert!(second.content.contains('9') || !second.tool_calls.is_empty());
     }
 
     #[test]
