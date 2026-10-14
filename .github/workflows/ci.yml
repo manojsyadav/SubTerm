@@ -41,13 +41,21 @@ jobs:
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            src-tauri/rdp-helper
+
+      - name: Build RDP helper
+        run: cargo build --release --manifest-path rdp-helper/Cargo.toml
 
       - name: cargo check
         run: cargo check --all-targets
 
       - name: cargo test
         run: cargo test
+
+      - name: rdp-helper test
+        run: cargo test --manifest-path rdp-helper/Cargo.toml
 
       # Advisory only, not gating: the codebase currently carries ~62
       # pre-existing clippy warnings (complex types, too-many-arguments,
@@ -66,7 +74,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install npm deps

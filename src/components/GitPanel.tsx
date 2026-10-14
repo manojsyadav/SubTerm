@@ -99,7 +99,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
       const lastId = getLastProvider();
       const provider = providers.find((p) => p.id === lastId) ?? providers[0];
 
-      let diffRes = await exec([status?.staged.length ? ["diff", "--cached"] : ["diff", "HEAD"]]);
+      const diffRes = await exec([status?.staged.length ? ["diff", "--cached"] : ["diff", "HEAD"]]);
       let diff = diffRes.stdout.trim();
       if (!diff && !status?.staged.length) {
         const unstaged = await exec([["diff"]]);

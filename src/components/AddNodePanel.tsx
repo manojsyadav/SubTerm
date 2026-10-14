@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useFeatureFlag } from "../featureFlags";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Cpu, X, Link2, ArrowLeftRight, Shield, ShieldAlert, Key, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal, Plus } from "lucide-react";
+import { Cpu, X, ArrowLeftRight, Shield, ShieldAlert, User, FolderPlus, Download, CheckSquare, Square, History, Zap, Radio, Server, HardDrive, Box, Database, Cloud, Wifi, Monitor, Terminal, Plus } from "lucide-react";
 import PasswordField from "./PasswordField";
 import { useTextPrompt } from "../ui/confirm";
 import type { Server as ServerRecord, Folder, Credential, SshKey } from "../types";

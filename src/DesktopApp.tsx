@@ -306,14 +306,14 @@ function DesktopApp() {
   });
 
   const {
-    loading, isUnlocked, setIsUnlocked, activeProfile, setActiveProfile,
+    loading, isUnlocked, setIsUnlocked, activeProfile,
     cloudSyncing, lastSyncLabel,
     servers, setServers, credentials, setCredentials,
     sshKeys, setSshKeys, folders, setFolders,
     commands, setCommands, notes, setNotes,
     logs, setLogs, addLog,
     refreshServers, refreshCredentials, refreshSshKeys,
-    refreshFolders, refreshCommands, refreshNotes, refreshAll,
+    refreshFolders, refreshCommands, refreshNotes,
     handleCloudSync, bumpSync,
     removeServer, removeFolder, renameFolder,
     handleProfileUnlocked, handleLogout: vaultLogout,
@@ -400,7 +400,7 @@ function DesktopApp() {
   }, [sessions, sessionStatuses]);
 
   // Leave the Wall if it gets switched off in Settings while open.
-  useEffect(() => { if (!wallEnabled && activeView === 'wall') setActiveView('nodes'); }, [wallEnabled, activeView]);
+  useEffect(() => { if (!wallEnabled && activeView === 'wall') setActiveView('nodes'); }, [wallEnabled, activeView, setActiveView]);
 
   const handleLogout = () => vaultLogout(sessions, confirm, () => {
     setSessions([]);
@@ -459,7 +459,7 @@ function DesktopApp() {
     invoke('cmd_history_prune', { maxEntries: appSettings.historyMaxEntries || 1000, maxAgeDays: appSettings.historyRetentionDays || 0 }).catch(() => {});
   }, [isUnlocked, appSettings.historyMaxEntries, appSettings.historyRetentionDays]);
 
-  const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
+  const [_availableProfiles, setAvailableProfiles] = useState<string[]>([]);
 
   const reloadAvailableProfiles = useCallback(async () => {
     try {
@@ -509,18 +509,18 @@ function DesktopApp() {
     }
   };
 
-  const handleSwitchProfile = () => {
+  const _handleSwitchProfile = () => {
     setIsWorkspaceSwitcherOpen(true);
   };
 
-  const handleSignOut = () => {
+  const _handleSignOut = () => {
     vaultLogout(sessions, confirm, () => {
       setSessions([]);
       setActiveView("nodes");
     });
   };
 
-  const handleOpenMultipleServers = (serversToOpen: Server[]) => {
+  const _handleOpenMultipleServers = (serversToOpen: Server[]) => {
     openMultipleServers(serversToOpen, (newIds) => {
       broadcast.selectAll(newIds);
       addLog(`Fleet: Launched ${newIds.length} sessions with broadcast enabled`, "success");
@@ -766,7 +766,7 @@ function DesktopApp() {
     // users have to close+reopen every terminal to see a size change.
     window.dispatchEvent(new CustomEvent('subterm-settings-changed'));
     window.dispatchEvent(new CustomEvent('submarine-settings-changed'));
-  }, [appSettings]);
+  }, [appSettings, activeView, setActiveView]);
 
   useGlobalShortcuts({
     enabled: isUnlocked,
