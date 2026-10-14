@@ -1018,7 +1018,9 @@ function DesktopApp() {
     ? (sessionTerminals[localSession.id] ?? []).map((t, i) => {
         const shell = t.shell ?? localSession.localShell;
         const label = !shell ? "SHELL" : ({ powershell: "PS", "git-bash": "BASH" } as Record<string, string>)[shell] ?? shell.slice(0, 5).toUpperCase();
-        return { id: t.id, label, title: `${shell || "Default shell"} (tab ${i + 1})` };
+        return t.renamed
+          ? { id: t.id, label: t.title.slice(0, 5).toUpperCase(), title: t.title, color: t.color }
+          : { id: t.id, label, title: `${shell || "Default shell"} (tab ${i + 1})`, color: t.color };
       })
     : [];
 
@@ -1080,6 +1082,7 @@ function DesktopApp() {
           onNewLocalTab={() => openLocalTerminal(undefined, true)}
           onOpenLocalShell={(id) => openLocalTerminal(id ?? (localStorage.getItem('subterm-local-shell') || undefined), true)}
           isMobile={isMobile}
+          onLocalTabMenu={(id, x, y) => { if (!localSession) return; setActiveView(localSession.id); window.dispatchEvent(new CustomEvent(`subterm-terminal-menu-${localSession.id}`, { detail: { id, x, y } })); }}
           isUnlocked={isUnlocked}
           onUnlock={() => setIsUnlockModalOpen(true)}
           onLogout={handleLogout}
@@ -1111,6 +1114,9 @@ function DesktopApp() {
                           className={`w-full h-7 px-2 rounded-lg border text-left text-[12px] truncate ${active ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border-transparent'}`}
                         >{t.title}</button>
                         {localTabs.length > 1 && (
+                          onContextMenu={(e) => { e.preventDefault(); setActiveView(localSession.id); window.dispatchEvent(new CustomEvent(`subterm-terminal-menu-${localSession.id}`, { detail: { id: t.id, x: e.clientX, y: e.clientY } })); }}
+                          title="Right-click for options"
+                          style={t.color ? { boxShadow: `inset 3px 0 0 ${t.color}` } : undefined}
                           <button
                             type="button"
                             aria-label={`Close ${t.title}`}

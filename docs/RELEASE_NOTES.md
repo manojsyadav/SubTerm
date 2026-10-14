@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(terminal)` — Right-click menu for terminal tabs and local shells**:
+  Right-clicking a local shell in the sidebar (or in the wide sessions panel), or a terminal tab inside a session, now opens a menu like Windows Terminal's: **Change tab color**, **Rename tab**, **Duplicate tab** (same shell), **Split tab** (opens the same shell beside it), **Move tab** up or down, **Export text** (saves the scrollback as a `.log`), **Find**, **Close** other tabs or tabs below, and **Close tab**. A renamed local shell shows its new name in the sidebar; a coloured tab gets a stripe in that colour. Before, local shells in the sidebar had no right-click menu, and a session's tab strip only offered rename.
+
 - **`feat(git)` — Git tab with a Source Control panel**:
   The tool row has a **Git** button next to Docker and Services, on SSH and local tabs. It opens a panel laid out like VS Code's Source Control: a message box (Ctrl+Enter commits), **Staged Changes** and **Changes** with a +/− per file and for all files, a **Commit** button that becomes **Publish Branch** for a branch with no upstream and **Sync Changes** when you are ahead or behind, a **…** menu with Pull, Push, Fetch, Stash and Pop Stash, and the last 50 commits with their branches and tags. With nothing staged, Commit commits every change. The panel follows the terminal's folder; you can also type a repository path at the top. Git runs on a separate channel, so it never prompts in your shell: a push that needs a password fails with git's message instead. The branch pill now opens this panel; the old Git drawer is gone. Off switch: Settings > Features > Panels > Git pill and Source Control panel.
 

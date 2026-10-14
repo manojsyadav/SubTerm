@@ -786,6 +786,18 @@ const TerminalView = ({
       .catch((e) => notify(`Could not export buffer: ${e}`, 'err'));
   };
 
+  // "Find" and "Export text" from the tab menu, which lives in SessionView.
+  const tabActionRef = useRef({ find: handleContextFind, export: handleContextExport });
+  tabActionRef.current = { find: handleContextFind, export: handleContextExport };
+  useEffect(() => {
+    const onAction = (e: Event) => {
+      const a = (e as CustomEvent<string>).detail;
+      if (a === 'find' || a === 'export') tabActionRef.current[a]();
+    };
+    window.addEventListener(`subterm-terminal-action-${terminalId}`, onAction);
+    return () => window.removeEventListener(`subterm-terminal-action-${terminalId}`, onAction);
+  }, [terminalId]);
+
   // Command block separation and output capture (OSC 133 + buffer parsing)
   const lastCommandRef = useRef<{
     command: string;

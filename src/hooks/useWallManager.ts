@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 
 export type WallItem = { id: string; sessionId: string; terminalId: string };
-export type SessionTerm = { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string };
+export type SessionTerm = { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string; color?: string; renamed?: boolean };
 
 export function useWallManager() {
   // "Wall" pinboard — a permanent tab at the end of the session strip
@@ -22,7 +22,7 @@ export function useWallManager() {
   const handleTerminalsChange = useCallback((sid: string, terms: SessionTerm[], activeTermId: string) => {
     setSessionTerminals((prev) => {
       const cur = prev[sid];
-      if (cur && cur.length === terms.length && cur.every((t, i) => t.id === terms[i].id && t.title === terms[i].title)) {
+      if (cur && cur.length === terms.length && cur.every((t, i) => t.id === terms[i].id && t.title === terms[i].title && t.color === terms[i].color)) {
         return prev;
       }
       return { ...prev, [sid]: terms };

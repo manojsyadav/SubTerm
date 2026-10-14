@@ -35,7 +35,7 @@ import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/audi
 import { useTextPrompt } from "../ui/confirm";
 import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
 import DistroLogo from "./DistroLogo";
-import { RenameInput } from "../ui/renameInput";
+import { TerminalTabMenu, type TabMenuAction } from "./TerminalTabMenu";
 import { reconnectDelayMs, readReconnectSettings, shouldGiveUp } from "../ssh/reconnectPolicy";
 import { notifyDesktop } from "../util/desktopNotify";
 
@@ -117,7 +117,7 @@ interface SessionViewProps {
   addLog: (msg: string, type?: string) => void;
   onStatusChange?: (sessionId: string, status: string) => void;
   chromeless?: boolean;
-  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string }[], activeTab: string) => void;
+  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string; color?: string; renamed?: boolean }[], activeTab: string) => void;
   isSessionActive?: boolean;
   onOpenSettings?: () => void;
 }
@@ -486,7 +486,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // panel). Container slots stay otherwise identical — same xterm, same
   // events — they just point the backend at `open_container_terminal`.
   // `shell` (local sessions only): the shell this sub-tab runs, when it differs from the session's.
-  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string}[]>(() => {
+  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string, color?: string, renamed?: boolean}[]>(() => {
     return [{ id: `${session.id}-term-0`, title: '1' }];
   });
   // Bumped on every successful reconnect. TerminalView watches this prop
@@ -524,7 +524,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     return () => window.removeEventListener(localShellEvent(session.id), onNewShell);
   }, [session.id, session.isLocal]);
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; termId: string } | null>(null);
-  const [termRename, setTermRename] = useState<{ termId: string; value: string } | null>(null);
   const terminalsRef = useRef(terminals);
   terminalsRef.current = terminals;
 
@@ -667,11 +666,15 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // Remember pane sizes (per pane count) so the next split of that size starts the way the user left it.
   useEffect(() => { saveSplitRatios(splitRatios); }, [splitRatios]);
 
-  const splitWithNewPane = (orientation?: "h" | "v") => {
+  const splitWithNewPane = (orientation?: "h" | "v", from?: string) => {
     if (orientation) setSplitOrientation(orientation);
     const newId = `${session.id}-term-${Date.now()}`;
-    setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
-    if (splitTerminals.length >= 2) {
+    const src = from ? terminals.find(t => t.id === from) : undefined;
+    setTerminals(prev => [...prev, { id: newId, title: src?.shell ?? `${prev.length + 1}`, ...(src?.shell ? { shell: src.shell } : {}), ...(src?.container ? { container: src.container } : {}) }]);
+    if (from && from !== activeTab && !splitTerminals.includes(from)) {
+      setSplitTerminals([from, newId]);
+      setSplitRatios(initialSplitRatios(2));
+    } else if (splitTerminals.length >= 2) {
       setSplitTerminals(prev => [...prev, newId]);
       // Prefer the sizes last used for this many panes; otherwise keep existing sizes and give the newcomer an equal share.
       setSplitRatios(prev => loadSplitRatios(prev.length + 1) ?? [...prev, 1]);
@@ -682,29 +685,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     setActiveTab(newId);
   };
 
-  // Close one terminal sub-tab (the strip's x, or the sidebar's Local list).
-  const closeTerminalTab = (id: string) => {
-    if (terminals.length <= 1) return;
-    setTerminals(prev => prev.filter(x => x.id !== id));
-    if (activeTab === id) setActiveTab(terminals.find(x => x.id !== id)!.id);
-    // Closing a terminal that's participating in the split
-    // has to drop it from splitTerminals AND splitRatios or
-    // the flex layout renders a torn-down partner.
-    if (splitTerminals.includes(id)) {
-      const idx = splitTerminals.indexOf(id);
-      const nextTerms = splitTerminals.filter(x => x !== id);
-      const nextRatios = splitRatios.filter((_, i) => i !== idx);
-      // Falling below 2 members collapses back to the plain
-      // absolute-overlap layout.
-      if (nextTerms.length < 2) {
-        setSplitTerminals([]);
-        setSplitRatios([]);
-      } else {
-        setSplitTerminals(nextTerms);
-        setSplitRatios(nextRatios);
-      }
+  // Close terminal sub-tabs (the strip's x, the tab menu, or the sidebar's Local list); one always stays.
+  const closeTerminalTabs = (ids: string[]) => {
+    const keep = terminals.filter(x => !ids.includes(x.id));
+    if (keep.length === 0 || keep.length === terminals.length) return;
+    setTerminals(keep);
+    if (ids.includes(activeTab)) setActiveTab(keep[0].id);
+    // A closed pane has to leave splitTerminals AND splitRatios or the flex layout renders a torn-down partner.
+    const nextTerms = splitTerminals.filter(x => !ids.includes(x));
+    if (nextTerms.length !== splitTerminals.length) {
+      // Falling below 2 members collapses back to the plain absolute-overlap layout.
+      setSplitTerminals(nextTerms.length < 2 ? [] : nextTerms);
+      setSplitRatios(nextTerms.length < 2 ? [] : splitRatios.filter((_, i) => !ids.includes(splitTerminals[i])));
     }
   };
+  const closeTerminalTab = (id: string) => closeTerminalTabs([id]);
   const closeTerminalTabRef = useRef(closeTerminalTab);
   closeTerminalTabRef.current = closeTerminalTab;
   useEffect(() => {
@@ -714,6 +709,47 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     };
     window.addEventListener(`subterm-close-terminal-${session.id}`, onClose);
     return () => window.removeEventListener(`subterm-close-terminal-${session.id}`, onClose);
+  }, [session.id]);
+
+  const tabAction = (id: string, a: TabMenuAction) => {
+    const idx = terminals.findIndex(t => t.id === id);
+    const t = terminals[idx];
+    if (!t) return;
+    const move = (to: number) => setTerminals(prev => {
+      const next = [...prev];
+      next.splice(to, 0, ...next.splice(idx, 1));
+      return next;
+    });
+    switch (a) {
+      case "duplicate": {
+        const newId = `${session.id}-term-${Date.now()}`;
+        setTerminals(prev => [...prev.slice(0, idx + 1), { ...t, id: newId }, ...prev.slice(idx + 1)]);
+        setActiveTab(newId);
+        break;
+      }
+      case "split": splitWithNewPane(undefined, id); break;
+      case "moveLeft": if (idx > 0) move(idx - 1); break;
+      case "moveRight": if (idx < terminals.length - 1) move(idx + 1); break;
+      case "export":
+      case "find":
+        setActiveTab(id);
+        setActiveTool(null);
+        // TerminalView owns the buffer and the search box.
+        window.dispatchEvent(new CustomEvent(`subterm-terminal-action-${id}`, { detail: a }));
+        break;
+      case "closeOthers": closeTerminalTabs(terminals.filter(x => x.id !== id).map(x => x.id)); setActiveTab(id); break;
+      case "closeRight": closeTerminalTabs(terminals.slice(idx + 1).map(x => x.id)); break;
+      case "close": closeTerminalTab(id); break;
+    }
+  };
+  useEffect(() => {
+    // The sidebar's Local shell list opens this tab's menu through an event.
+    const onMenu = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; x: number; y: number }>).detail;
+      if (d?.id) setTermMenu({ x: d.x, y: d.y, termId: d.id });
+    };
+    window.addEventListener(`subterm-terminal-menu-${session.id}`, onMenu);
+    return () => window.removeEventListener(`subterm-terminal-menu-${session.id}`, onMenu);
   }, [session.id]);
 
   const addNewTerminal = () => {
@@ -1670,16 +1706,14 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setTermMenu({ x: rect.left, y: rect.bottom + 4, termId: t.id });
-                setTermRename({ termId: t.id, value: t.title });
+                setTermMenu({ x: e.clientX, y: e.clientY, termId: t.id });
               }}
               onDoubleClick={(e) => {
                 e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
                 setTermMenu({ x: rect.left, y: rect.bottom + 4, termId: t.id });
-                setTermRename({ termId: t.id, value: t.title });
               }}
+              style={t.color ? { boxShadow: `inset 0 -2px 0 ${t.color}` } : undefined}
               title={t.container ? `Container: ${t.container.name}` : undefined}
               className={`h-8 px-3 sm:px-4 ${terminals.length > 1 ? 'pr-8' : ''} rounded-lg flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all ${
                 isFocusedHalf
@@ -2050,40 +2084,28 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         document.body
       )}
 
-      {termMenu && createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-[9998]"
-            onClick={() => { setTermMenu(null); setTermRename(null); }}
-            onContextMenu={(e) => { e.preventDefault(); setTermMenu(null); setTermRename(null); }}
+      {termMenu && (() => {
+        const idx = terminals.findIndex(t => t.id === termMenu.termId);
+        const t = terminals[idx];
+        if (!t) return null;
+        const patch = (p: Partial<typeof t>) => setTerminals(prev => prev.map(x => x.id === t.id ? { ...x, ...p } : x));
+        return (
+          <TerminalTabMenu
+            x={termMenu.x}
+            y={termMenu.y}
+            title={t.title}
+            color={t.color}
+            canMoveLeft={idx > 0}
+            canMoveRight={idx < terminals.length - 1}
+            canClose={terminals.length > 1}
+            canCloseRight={idx < terminals.length - 1}
+            onAction={(a) => tabAction(t.id, a)}
+            onRename={(title) => patch({ title, renamed: true })}
+            onColor={(color) => patch({ color })}
+            onDismiss={() => setTermMenu(null)}
           />
-          <div
-            style={{ left: Math.min(termMenu.x, window.innerWidth - 200), top: Math.min(termMenu.y, window.innerHeight - 100) }}
-            className="fixed z-[9999] w-[180px] bg-[#15151a] border border-white/10 rounded-lg shadow-2xl p-1.5 text-[11.5px]"
-          >
-            <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-              Rename Tab
-            </div>
-            <RenameInput
-              initialValue={termRename?.value ?? ""}
-              placeholder="Tab title…"
-              onCommit={(newTitle) => {
-                const trimmed = newTitle.trim();
-                if (trimmed) {
-                  setTerminals(prev => prev.map(item => item.id === termMenu.termId ? { ...item, title: trimmed } : item));
-                }
-                setTermMenu(null);
-                setTermRename(null);
-              }}
-              onCancel={() => {
-                setTermMenu(null);
-                setTermRename(null);
-              }}
-            />
-          </div>
-        </>,
-        document.body
-      )}
+        );
+      })()}
 
       {/* Disconnection / auto-reconnect banner. Pinned to the top so it's
           visible whether the terminal or SFTP is in focus. The disabled
