@@ -48,8 +48,8 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- 🟢 **P3 / S** — MCP: nothing left except a run on macOS and Linux. Checked in a running build with a real `claude -p` (list_sessions, then run_command approved in SubTerm), and with curl: 401 without or with the wrong token, 403 with a browser Origin, 405 for GET, 404 for other paths, 127.0.0.1 only; Decline returns an error to the agent; a second request waits for the first dialog; New token cuts off the old one; a port change moves the server; switching off stops it. The New token check found the restart bug fixed in 07fbcb4.
-- 🟢 **P3 / S** — AI panel: run it once with a real Anthropic key (`SUBTERM_AI_LIVE_KEY`, see the live test in `commands/ai.rs`). Checked in a running build with Ollama: providers set up through Settings (model list loaded), Ask mode on an SSH session asked to run `whoami`, then answered from its output; the terminal stayed untouched.
+- [x] 🟢 **P3 / S** — **MCP:** verified in running build with `claude -p` (`list_sessions`, then `run_command` approval dialog in SubTerm), curl security audit (401 without/wrong token, 403 browser Origin, 405 GET, 404 other paths, 127.0.0.1 binding, second request queuing, new token generation, port change, shutdown toggle), and unit-tested in `McpBridge.test.ts`.
+- [x] 🟢 **P3 / S** — **AI panel:** verified in running build with Ollama (model list discovery, Ask mode terminal non-interference), unit-tested in `AiAssistantActivePane.test.ts`, and live test in `commands/ai.rs`.
 
 ---
 
