@@ -20,6 +20,8 @@
   - **Ask** lets the assistant run commands itself, read their output and decide the next step. You approve or skip each command.
   - **Auto** runs read-only checks such as `df`, `ps` and `systemctl status` without asking. On production servers it asks every time.
 
+  Agent CLIs can also use SubTerm's SSH sessions: Settings > Features > AI assistant > **Let agent CLIs use open SSH sessions (MCP)** shows a `claude mcp add` command. Claude Code can then list your open sessions and ask to run commands on them, and SubTerm asks you before each one. It is off by default and listens on 127.0.0.1 only.
+
   Commands run on a separate channel, so your shell is untouched. **Explain** on a failed command sends that command and its output. **Stop** ends a reply or a run of steps and keeps what was written. Before anything goes to an online model for the first time, SubTerm asks you to confirm. Local tabs also get `claude`, `codex` and `gemini` quick commands for those agent CLIs. They are added once to quick-command lists you saved earlier, and a quick command you delete stays deleted. This replaces the old built-in recipe list. Off switch: Settings > Features > AI > AI assistant.
 
 - **`feat(terminal)` — Fill the saved password at a sudo prompt**:

@@ -16,6 +16,7 @@ import AddNodePanel, { type NodeFormState } from "./components/AddNodePanel";
 import type { Server } from "./types";
 import SettingsPanel from "./components/SettingsPanel";
 import { useFeatureFlag } from "./featureFlags";
+import { McpBridge } from "./components/McpBridge";
 const RecordingPlayerModal = lazy(() => import("./components/RecordingPlayerModal").then((m) => ({ default: m.RecordingPlayerModal })));
 const NetworkToolsModal = lazy(() => import("./components/NetworkToolsModal").then((m) => ({ default: m.NetworkToolsModal })));
 import { SessionView } from "./components/SessionView";
@@ -92,6 +93,7 @@ function DesktopApp() {
   const networkToolsEnabled = useFeatureFlag('networkTools');
   const recordingEnabled = useFeatureFlag('sessionRecording');
   const autoReconnectEnabled = useFeatureFlag('autoReconnect');
+  const aiEnabled = useFeatureFlag('aiCopilot');
   // Tell the backend so it stops emitting resume / network-change events while the feature is off.
   useEffect(() => { invoke('set_auto_reconnect_events', { enabled: autoReconnectEnabled }).catch(() => {}); }, [autoReconnectEnabled]);
   const [broadcastMenuOpen, setBroadcastMenuOpen] = useState(false);
@@ -1036,6 +1038,7 @@ function DesktopApp() {
 
   return (
     <div className="h-full w-full bg-background flex flex-col overflow-hidden text-zinc-200 select-none">
+      {aiEnabled && <McpBridge sessions={sessions} onError={(m) => addLog(m, "error")} />}
       <TitleBar {...titleBarProps} />
       {updateBanner && (
         <div role="status" className="fixed bottom-4 right-4 z-[80] flex items-center gap-2 px-3 py-2 rounded-lg bg-[#121217]/95 border border-amber-500/30 shadow-xl text-[11px] text-zinc-200">

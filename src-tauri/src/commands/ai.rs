@@ -412,6 +412,30 @@ pub struct ExecResult {
     timed_out: bool,
 }
 
+impl ExecResult {
+    /// The result as the model reads it; mirrors `formatExec` in src/ai/agentLoop.ts.
+    pub(crate) fn to_text(&self, timeout_secs: u64) -> String {
+        let mut parts = vec![if self.timed_out {
+            format!("Timed out after {timeout_secs} s and was stopped.")
+        } else {
+            format!("Exit code: {}", self.exit_code.map_or("unknown".into(), |c| c.to_string()))
+        }];
+        if self.truncated {
+            parts.push("(Output cut to its last 16 KB.)".into());
+        }
+        if !self.stdout.trim().is_empty() {
+            parts.push(format!("stdout:\n{}", self.stdout.trim_end()));
+        }
+        if !self.stderr.trim().is_empty() {
+            parts.push(format!("stderr:\n{}", self.stderr.trim_end()));
+        }
+        if self.stdout.trim().is_empty() && self.stderr.trim().is_empty() {
+            parts.push("(no output)".into());
+        }
+        parts.join("\n")
+    }
+}
+
 fn tail(buf: &[u8]) -> (String, bool) {
     let cut = buf.len().saturating_sub(OUTPUT_CAP);
     (String::from_utf8_lossy(&buf[cut..]).into_owned(), cut > 0)
@@ -449,7 +473,7 @@ pub async fn ai_exec(
     }
 }
 
-async fn exec_ssh(
+pub(crate) async fn exec_ssh(
     state: &crate::ssh_manager::SshState,
     session_id: &str,
     command: &str,

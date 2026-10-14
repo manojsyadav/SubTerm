@@ -477,6 +477,7 @@ Events emitted from Rust to the Webview via `app.emit(...)`:
 | `fingerprint-request` | `{ sessionId: string, fingerprint: string, keyType: string }` | Host key verification prompt |
 | `kbi-request` | `{ sessionId: string, prompts: string[] }` | Keyboard-interactive 2FA prompt |
 | `system-resume` | *(none)* | App-wide, not session-scoped. Fired when the resume detector notices a sleep/resume cycle (see `docs/ARCHITECTURE.md` §4.9). Every open session reacts independently based on its own reconnect state. |
+| `mcp-approval` | `{ requestId, session, production, command, client }` | An agent asked to run `command` on `session` through MCP. `client` is its User-Agent. Answer with `mcp_answer` within 120 s, or it is declined |
 | `network-changed` | *(none)* | App-wide, not session-scoped. Fired on a detected network interface change (Wi-Fi roam, VPN toggle), debounced to 1/sec. Same consumption pattern as `system-resume`. |
 
 ---
@@ -510,4 +511,8 @@ These commands are in `src-tauri/src/commands/ai.rs`. Providers live in the vaul
 | `ai_list_models` | `{ id }` | `Result<string[], String>` | `GET {baseUrl}/models`, sorted ids |
 | `ai_chat` | `{ id, system, messages: ChatMsg[], tools: { name, description, parameters }[], onText: Channel<string>, requestId? }` | `Result<ChatMsg, String>` | One streamed assistant turn. Text deltas arrive on `onText`. The return value is the whole message, including `toolCalls: { id, name, arguments }[]` (`arguments` is raw JSON text). `ChatMsg` is `{ role: "user" \| "assistant" \| "tool", content, toolCalls?, toolCallId? }`. Rejects with `[AI] STOPPED` when cancelled |
 | `ai_cancel` | `{ requestId }` | `()` | Stops the `ai_chat` started with that `requestId` and closes its HTTP request. Unknown ids are ignored |
+| `mcp_start` | `{ port, token }` | `Result<(), String>` | Starts the MCP server on `127.0.0.1:port`, restarting it if it runs. `token` must be at least 32 characters. Serves Streamable HTTP with JSON responses (no SSE) at `POST /mcp`. Refuses requests with an `Origin` header (403) or the wrong `Authorization: Bearer` token (401). Tools: `list_sessions` and `run_command { session, command }` |
+| `mcp_stop` | none | `()` | Stops the server and declines pending approvals |
+| `mcp_set_sessions` | `{ sessions: { id, name, production }[] }` | `()` | The sessions agents may see. Only those with a live SSH connection are listed |
+| `mcp_answer` | `{ requestId, approved }` | `()` | Answers an `mcp-approval` event |
 | `ai_exec` | `{ sessionId: string \| null, command, cwd?, shell?, timeoutSecs? }` | `Result<{ stdout, stderr, exitCode, truncated, timedOut }, String>` | Runs one approved command on a new channel of SSH session `sessionId`, or locally when it is `null`, in `shell` (a local shell name as for `open_local_terminal`, or the default; desktop only). PowerShell gets `-NoProfile -NonInteractive -Command`, cmd gets `/D /S /C` raw, WSL gets `-e sh -c`, anything else gets `-c`. The default timeout is 60 s and the maximum 600 s. Each stream keeps its last 16 KB |

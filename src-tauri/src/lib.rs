@@ -14,6 +14,7 @@ mod cloud_config;
 mod about;
 mod mirror;
 mod docker;
+mod mcp;
 mod hlc;
 mod identity;
 mod vault;
@@ -396,6 +397,10 @@ pub fn run() {
             commands::ai::ai_chat,
             commands::ai::ai_exec,
             commands::ai::ai_cancel,
+            commands::mcp::mcp_start,
+            commands::mcp::mcp_stop,
+            commands::mcp::mcp_set_sessions,
+            commands::mcp::mcp_answer,
             commands::monitor_settings::monitor_list,
             commands::monitor_settings::monitor_add,
             commands::monitor_settings::monitor_remove,

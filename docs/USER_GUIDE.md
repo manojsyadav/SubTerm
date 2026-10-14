@@ -243,6 +243,12 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - **Auto**: like Ask, but read-only commands run without a card. These are commands like `ls`, `cat`, `df`, `ps`, `systemctl status`, `docker ps` and `journalctl` without `-f`. Anything with `sudo`, redirection, or a path that looks like a key or secret still asks. So does every command on a server marked as production.
    - Commands run on a separate channel, so they don't appear in your terminal or history. Each one has a 60-second limit. In a local tab they run in that tab's shell (PowerShell, cmd, Git Bash or WSL), without its profile. In a container shell only Suggest is available.
 4. **Agent CLIs**: Claude Code, Codex and Gemini CLI use their own sign-in. Install one, open a Local tab, and click **claude**, **codex** or **gemini** in the quick commands.
+   - **Let an agent CLI use your SSH sessions (MCP)**:
+     1. Turn on Settings > Features > AI assistant > **Let agent CLIs use open SSH sessions (MCP)**.
+     2. Copy the `claude mcp add …` command shown there and run it once in a terminal. Other MCP clients need the URL and the `Authorization` header from that command.
+     3. Claude Code can then list the SSH sessions open in SubTerm and ask to run commands on them. Every command opens a SubTerm dialog with **Run** and **Decline**; on a production server the dialog is red. A request nobody answers is declined after 2 minutes.
+     4. Commands run on a separate channel with a 60-second limit, the same way as the AI panel's. Local shells, RDP and the SFTP page's connections are not offered.
+     5. **New token** (the refresh button) cuts off agents set up with the old one. Turning the switch off stops the server.
 5. **Privacy**: with an online provider, your messages, the included output, and the output of every command you approve go to that provider. SubTerm asks once per provider before the first send. Use a local model for sessions that show secrets.
 
 ---

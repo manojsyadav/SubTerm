@@ -23,6 +23,7 @@ import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
 import { SettingsAiProviders } from "./SettingsAiProviders";
+import { SettingsMcp } from "./SettingsMcp";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
@@ -437,7 +438,7 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
   };
 
   const featureExtras: Partial<Record<FeatureKey, React.ReactNode>> = {
-    aiCopilot: <SettingsAiProviders />,
+    aiCopilot: (<><SettingsAiProviders /><SettingsMcp /></>),
     terminalFileLinks: (
       <div data-setting="file-types" className="py-2">
         <div className="text-xs text-zinc-500 mb-2">Which file names in terminal output can be clicked to open in the editor.</div>
@@ -1408,6 +1409,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "features-terminal", page: "features", label: "Terminal features", keywords: "features optional enable disable switch terminal" },
   { id: "features-panels", page: "features", label: "Panels features", keywords: "features optional enable disable switch panels sftp docker" },
   { id: "features-ai", page: "features", label: "AI features", keywords: "features optional enable disable switch ai copilot" },
+  { id: "mcp", page: "features", label: "Let agent CLIs use open SSH sessions (MCP)", keywords: "mcp claude code codex gemini agent server port token" },
   { id: "ssh-mode", page: "features", label: "When you type ssh / sftp", keywords: "local terminal saved server auto ask quick connect" },
   { id: "file-types", page: "features", label: "Clickable file types", keywords: "extensions editor open file click" },
 ];

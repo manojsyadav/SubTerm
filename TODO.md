@@ -42,7 +42,6 @@ This document tracks active development tasks, pending architectural optimizatio
     - the panel's behaviour, with a mocked backend, in `AiPanel.test.ts`: approve, Skip, Auto on production, the online warning, Explain, Run & send, and container shells.
   - Still unchecked: layout and focus in the real window, an SSH session end to end, and the Anthropic stream format against the live API rather than recorded samples.
   - To run the live test against Claude: `SUBTERM_AI_LIVE_KIND=anthropic SUBTERM_AI_LIVE_URL=https://api.anthropic.com/v1 SUBTERM_AI_LIVE_MODEL=claude-haiku-5-5 SUBTERM_AI_LIVE_KEY=… cargo test live_ -- --ignored`.
-- 🟢 **P3 / L** — A SubTerm MCP server that exposes sessions, so Claude Code or Codex can drive SSH sessions open in SubTerm.
 
 ---
 

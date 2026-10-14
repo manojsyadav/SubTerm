@@ -153,6 +153,13 @@ SubTerm does not ship or trust any CA or fixed host-key list — every server's 
   - they match the read-only allowlist in `src/ai/agentLoop.ts` (Auto). That list refuses redirection, command substitution, backgrounding, `sudo`/`su`, follow flags and secret-looking paths.
 
   Auto never skips the prompt on a production server. The model's output and tool results are labelled as data in the system prompt, but prompt injection from text on the server is still possible. The approval step is the control, not the prompt. `ai_exec` grants no new capability to the webview, which can already type into any open terminal.
+- **MCP server for agent CLIs**: off by default (`src-tauri/src/mcp.rs`, `commands/mcp.rs`). When on, it binds `127.0.0.1` only. It has these defences:
+  - It requires a random 192-bit bearer token, compared in constant time.
+  - It refuses any request with an `Origin` header, so a web page can't reach it even by guessing the port.
+  - It caps the request head at 16 KB and the body at 1 MB, and drops a request that takes over 30 s to arrive.
+  - It can only list sessions and run commands. Every command waits for the user to press Run in a SubTerm dialog. A declined, closed or unanswered (120 s) request returns an error to the agent.
+
+  There is no read-file, write-file or Auto mode. The token is kept in the webview's local storage, not the vault: it opens nothing on its own, because every action still needs approval. Local shells are not offered.
 
 ## 9. Vault Format & KDF Rotation Strategy
 

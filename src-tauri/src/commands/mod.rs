@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod connection;
+pub mod mcp;
 pub mod diagnostics;
 pub mod mirror;
 pub mod monitor_settings;

@@ -80,6 +80,7 @@ graph TD
 | `tunnel.rs` | Local/remote/dynamic (SOCKS5) port-forward implementation. |
 | `monitor.rs` | Background per-host polling loops (`MonitorMap`, `SharedSettings`) — the engine; DB bridging lives in `commands/monitor_settings.rs`. |
 | `mirror.rs` | Bidirectional local↔remote folder sync engine (`MirrorMap`) using the `notify` crate — the engine; thin command wrappers live in `commands/mirror.rs`. |
+| `mcp.rs` | MCP server for agent CLIs: HTTP request parsing with limits, token and Origin checks, and the JSON-RPC handler, which returns a reply or a `Run` action. The engine; `commands/mcp.rs` holds start/stop, the session list and the approval round trip. |
 | `cloud.rs` / `cloud_config.rs` | Cloud account auth, bearer token persistence, encrypted blob upload/download, self-hosted endpoint config. |
 | `identity.rs` / `hlc.rs` | Per-member sealed-box key wrapping for profile sharing, and the Hybrid Logical Clock used to order synced row versions. |
 | `docker.rs` | `DockerStreams` — live container log streaming handles over SSH exec. |
@@ -90,6 +91,8 @@ graph TD
 | `commands/diagnostics.rs` | Info-panel read-only probes, OS detection, iptables/nft inspection, systemctl/kill-process actions. |
 | `commands/monitor_settings.rs` | DB↔poller glue for the Monitoring panel (reads/writes `monitor_configs`, drives `monitor.rs`'s `MonitorMap`). |
 | `commands/mirror.rs` | Thin `#[tauri::command]` wrappers forwarding into `mirror.rs`. |
+| `commands/ai.rs` | AI providers (vault table `ai_providers`), streamed `ai_chat` with `ai_cancel`, and `ai_exec` for approved commands. |
+| `commands/mcp.rs` | Thin wrappers around `mcp.rs`, plus the `mcp-approval` event and `mcp_answer`. |
 | `commands/sftp_parallel.rs` / `commands/sftp_remote_copy.rs` | Parallel ranged reads for large SFTP downloads; direct server-to-server copy between two sessions' SFTP channels (in memory, nothing staged locally). |
 | `commands/rdp.rs` | Launches the OS Remote Desktop client with a generated `.rdp` file (no password written). |
 | `commands/rdp_session.rs` | Embedded RDP: starts one `subterm-rdp-helper` process per session (a separate crate in `src-tauri/rdp-helper/` with its own lockfile, because IronRDP's pinned crypto crates cannot share a dependency graph with `russh`), relays its framed stdout to the front end over a raw binary channel and forwards input bytes to its stdin. Framing: `rdp-helper/src/wire.rs`. |
