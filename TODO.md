@@ -100,6 +100,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## Settled decisions (not doing, and why)
 
-- **No transfer-concurrency setting.** Uploads and downloads take one slot per session on purpose (`acquireTransferSlot`): two transfers aimed at the same path would both pass the backend's exists check and write into the file together. Revisit only with a per-path lock.
 - **No "trim trailing spaces on copy" or "Alt as Meta" options.** Selection text already omits trailing whitespace, and xterm already sends Alt as an ESC prefix on desktop.
+
 
