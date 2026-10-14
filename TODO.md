@@ -36,6 +36,13 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
+- 🟡 **P2 / S** — Connect Claude Code to the MCP server of a running build, using the settings card's `claude mcp add` command. Check:
+  - `list_sessions` with two SSH tabs open;
+  - `run_command`: the dialog appears, Run returns output, Decline returns an error, and production servers show it red;
+  - an unanswered request is declined after 2 minutes;
+  - New token cuts the old client off.
+
+  The protocol and HTTP layer are tested in `mcp.rs`, including with a real HTTP client. The bridge is tested in `McpBridge.test.ts`.
 - 🟡 **P2 / S** — Look at the AI panel in the running app, and run it once with a real Anthropic key.
   - Already covered by tests:
     - a live round trip against Ollama 0.33 with `qwen3.5:4b` (streaming, tool call, tool result, follow-up answer; the `live_` test in `commands/ai.rs`);
