@@ -1082,10 +1082,10 @@ function DesktopApp() {
             window.dispatchEvent(new CustomEvent(`submarine-focus-pane-${localSession.id}`, { detail: { id } }));
           }}
           onCloseLocalTab={(id) => localSession && window.dispatchEvent(new CustomEvent(`subterm-close-terminal-${localSession.id}`, { detail: { id } }))}
+          onLocalTabMenu={(id, x, y) => { if (!localSession) return; setActiveView(localSession.id); window.dispatchEvent(new CustomEvent(`subterm-terminal-menu-${localSession.id}`, { detail: { id, x, y } })); }}
           onNewLocalTab={() => openLocalTerminal(undefined, true)}
           onOpenLocalShell={(id) => openLocalTerminal(id ?? (localStorage.getItem('subterm-local-shell') || undefined), true)}
           isMobile={isMobile}
-          onLocalTabMenu={(id, x, y) => { if (!localSession) return; setActiveView(localSession.id); window.dispatchEvent(new CustomEvent(`subterm-terminal-menu-${localSession.id}`, { detail: { id, x, y } })); }}
           isUnlocked={isUnlocked}
           onUnlock={() => setIsUnlockModalOpen(true)}
           onLogout={handleLogout}
@@ -1114,12 +1114,12 @@ function DesktopApp() {
                             setActiveView(localSession.id);
                             window.dispatchEvent(new CustomEvent(`submarine-focus-pane-${localSession.id}`, { detail: { id: t.id } }));
                           }}
-                          className={`w-full h-7 px-2 rounded-lg border text-left text-[12px] truncate ${active ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border-transparent'}`}
-                        >{t.title}</button>
-                        {localTabs.length > 1 && (
                           onContextMenu={(e) => { e.preventDefault(); setActiveView(localSession.id); window.dispatchEvent(new CustomEvent(`subterm-terminal-menu-${localSession.id}`, { detail: { id: t.id, x: e.clientX, y: e.clientY } })); }}
                           title="Right-click for options"
                           style={t.color ? { boxShadow: `inset 3px 0 0 ${t.color}` } : undefined}
+                          className={`w-full h-7 px-2 rounded-lg border text-left text-[12px] truncate ${active ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border-transparent'}`}
+                        >{t.title}</button>
+                        {localTabs.length > 1 && (
                           <button
                             type="button"
                             aria-label={`Close ${t.title}`}
