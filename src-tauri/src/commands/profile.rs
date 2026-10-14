@@ -1151,6 +1151,14 @@ pub(crate) async fn setup_master_db_inner(
     )
     .map_err(|e| format!("[DATABASE] SHORTCUTS_MIGRATION_FAILED: {}", e))?;
 
+    // AI providers for the assistant panel. Local to this vault and not synced:
+    // `api_key` is a secret only commands::ai reads; it is never returned over IPC.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ai_providers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, kind TEXT NOT NULL, base_url TEXT NOT NULL, model TEXT NOT NULL DEFAULT '', api_key TEXT)",
+        [],
+    )
+    .map_err(|e| format!("[DATABASE] AI_PROVIDERS_MIGRATION_FAILED: {}", e))?;
+
     // ---- Per-entity sync instrumentation (schema v6) ----
     // A per-profile Hybrid Logical Clock backs the `hlc_now()` SQL function so
     // every row mutation auto-stamps `updated_at`. Seed the clock past the

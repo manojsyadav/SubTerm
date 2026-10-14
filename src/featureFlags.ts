@@ -151,14 +151,14 @@ export const FEATURES = [
   {
     key: "panelGit",
     group: "Panels",
-    label: "Git status pill and drawer",
-    desc: "Git branch pill and drawer. When off, no git status command is run on the server after connecting.",
+    label: "Git panel",
+    desc: "Git tab in the session toolbar: stage, commit, push and history. Git only runs while the tab is open.",
   },
   {
     key: "aiCopilot",
     group: "AI",
-    label: "AI Shell Copilot",
-    desc: "Copilot button, Ctrl+I shortcut and the \"Explain\" action after a failed command. When off, the copilot code is never loaded and no data can be sent to an AI service.",
+    label: "AI assistant",
+    desc: "Copilot button, Ctrl+I shortcut and the \"Explain\" action after a failed command. When off, the assistant code is never loaded and no data can be sent to an AI service.",
   },
 ] as const satisfies readonly FeatureDef[];
 

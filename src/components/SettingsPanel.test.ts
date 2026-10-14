@@ -129,14 +129,15 @@ describe("SettingsPanel layout", () => {
     expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ rightClickAction: "smart", linkOpenMode: "ctrl-click" }));
   });
 
-  it("shows pinned servers, quick commands and keyboard shortcuts as cards on one Quick Access page", () => {
+  it("shows quick commands and keyboard shortcuts as cards on one Quick Access page", () => {
     const labels = [...host.querySelectorAll("nav button")].map((b) => b.textContent ?? "");
     expect(labels.some((l) => l.includes("Quick Access"))).toBe(true);
     expect(labels.some((l) => l.includes("Quick Commands"))).toBe(false);
     expect(labels.some((l) => l.includes("Keyboard Shortcuts"))).toBe(false);
     click(nav("Quick Access"));
     expect(host.querySelector('[role="tab"]')).toBeNull();
-    for (const text of ["Pinned Servers", "Quick Commands by OS", "Keyboard Shortcuts"]) {
+    expect(host.textContent).not.toContain("Pinned Servers");
+    for (const text of ["Quick Commands by OS", "Keyboard Shortcuts"]) {
       expect(host.textContent, text).toContain(text);
     }
   });

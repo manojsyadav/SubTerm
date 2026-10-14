@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   X, Save, FileCode, Check, RefreshCw, SplitSquareHorizontal, 
-  Copy, MessageSquareOff
+  Copy, MessageSquareOff, Eye, Pencil
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { computeDiff } from "../fs/diff";
@@ -10,6 +10,9 @@ import { useFeatureFlag } from "../featureFlags";
 import { detectLanguage } from "../editor/language";
 import { hiddenCommentLineCount, supportsCommentHiding } from "../editor/comments";
 import { readEditorPrefs } from "../editor/editorPrefs";
+
+const MarkdownView = lazy(() => import("../editor/markdown").then((m) => ({ default: m.MarkdownView })));
+const isMarkdown = (name: string) => /\.(md|markdown|mdown|mkd)$/i.test(name);
 
 // Lazy so the CodeMirror bundle is only downloaded/evaluated when highlighting is enabled and a file is opened.
 const CodeEditor = lazy(() => import("../editor/CodeEditor").then((m) => ({ default: m.CodeEditor })));
@@ -36,9 +39,14 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Editing and saving need the file's real content; after a failed read the buffer is not
+  // the file, and saving it would overwrite the file (a >2 MB log with a few bytes).
+  const [loaded, setLoaded] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Every file opens in the viewer (Markdown rendered, anything else read-only); Edit switches over.
+  const [mode, setMode] = useState<"view" | "edit">("view");
 
   const highlightEnabled = useFeatureFlag("editorSyntaxHighlight");
   // Read once per open: changing these in Settings applies the next time a file is opened.
@@ -58,8 +66,12 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
 
     let mounted = true;
     setLoading(true);
+    setLoaded(false);
+    setOriginalContent("");
+    setContent("");
     setError(null);
     setShowDiff(false);
+    setMode("view");
 
     (async () => {
       try {
@@ -80,6 +92,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
         if (mounted) {
           setOriginalContent(text);
           setContent(text);
+          setLoaded(true);
         }
       } catch (err) {
         if (mounted) setError(String(err));
@@ -95,7 +108,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
 
   // Handle Save
   const handleSave = async () => {
-    if (!entry || saving || !isDirty) return;
+    if (!entry || saving || !isDirty || !loaded) return;
 
     setSaving(true);
     setError(null);
@@ -193,7 +206,25 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
               </button>
             )}
 
+            {/* View / Edit */}
+            <div role="group" aria-label="Mode" className="h-7 flex rounded-lg border border-white/10 bg-white/[0.04] overflow-hidden text-xs font-mono">
+              {([["view", Eye, isMarkdown(entry.name) ? "Preview" : "View"], ["edit", Pencil, "Edit"]] as const).map(([m, Icon, label]) => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); setShowDiff(false); }}
+                  disabled={loading || (m === "edit" && !loaded)}
+                  aria-pressed={mode === m}
+                  title={m === "view" ? "Read-only view" : "Edit the file"}
+                  className={`px-2.5 flex items-center gap-1.5 transition-colors ${mode === m ? "bg-indigo-600/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/10"}`}
+                >
+                  <Icon size={13} />
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+
             {/* Diff Toggle */}
+            {(mode === "edit" || isDirty) && (
             <button
               onClick={() => setShowDiff((p) => !p)}
               disabled={loading}
@@ -207,6 +238,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
               <SplitSquareHorizontal size={13} />
               <span className="hidden sm:inline">{showDiff ? "Editor" : "Diff"}</span>
             </button>
+            )}
 
             {/* Copy Button */}
             <button
@@ -222,6 +254,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
             </button>
 
             {/* Save Button */}
+            {(mode === "edit" || isDirty) && (
             <button
               onClick={handleSave}
               disabled={saving || loading || !isDirty}
@@ -237,6 +270,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
               )}
               <span>{saveSuccess ? "Saved" : "Save"}</span>
             </button>
+            )}
 
             <div className="h-4 w-px bg-white/10 mx-1" />
 
@@ -304,17 +338,22 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
                 </div>
               ))}
             </div>
+          ) : mode === "view" && isMarkdown(entry.name) ? (
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading…</div>}>
+              <MarkdownView source={content} />
+            </Suspense>
           ) : (
             /* Syntax-highlighted code editor (CodeMirror 6) */
             <div className="flex-1 flex overflow-hidden relative">
               {highlightEnabled ? (
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading editor…</div>}>
-                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} hideComments={hideCommentsAvailable && hideComments} />
+                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} hideComments={hideCommentsAvailable && hideComments} readOnly={mode === "view" || !loaded} />
                 </Suspense>
               ) : (
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
+                  readOnly={mode === "view" || !loaded}
                   spellCheck={false}
                   style={{ fontSize: `${editorPrefs.fontSize}px`, tabSize: editorPrefs.tabSize, whiteSpace: editorPrefs.wordWrap ? "pre-wrap" : "pre" }}
                   className="flex-1 h-full p-3 bg-transparent text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none font-mono leading-5 overflow-auto custom-scrollbar"
@@ -336,7 +375,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
             <span>Provider: {provider.label}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-zinc-400">Ctrl+S to Save</span>
+            <span className="text-zinc-400">{mode === "view" ? "Read-only · Edit to change" : "Ctrl+S to Save"}</span>
             <span className="text-zinc-400">Esc to Close</span>
           </div>
         </div>

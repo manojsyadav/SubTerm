@@ -41,10 +41,12 @@ interface SidebarProps {
   workspaceName?: string;
   workspaceIcon?: string;
   /** Shells open in the Local tab, listed under the Local item (desktop rail). */
-  localTabs?: { id: string; label: string; title: string }[];
+  localTabs?: { id: string; label: string; title: string; color?: string }[];
   activeLocalTab?: string | null;
   onSelectLocalTab?: (id: string) => void;
   onCloseLocalTab?: (id: string) => void;
+  /** Right-click on a local shell: open its tab menu at the pointer. */
+  onLocalTabMenu?: (id: string, x: number, y: number) => void;
   onNewLocalTab?: () => void;
   /** Extra content under a rail item (the open-session lists for Servers, SFTP, RDP). */
   renderUnder?: (itemId: string) => ReactNode;
@@ -76,6 +78,7 @@ export const Sidebar = ({
   activeLocalTab = null,
   onSelectLocalTab,
   onCloseLocalTab,
+  onLocalTabMenu,
   onNewLocalTab,
   renderUnder,
 }: SidebarProps) => {
@@ -339,7 +342,9 @@ export const Sidebar = ({
                     role="tab"
                     aria-selected={t.id === activeLocalTab}
                     onClick={() => onSelectLocalTab?.(t.id)}
-                    title={t.title}
+                    onContextMenu={(e) => { e.preventDefault(); onLocalTabMenu?.(t.id, e.clientX, e.clientY); }}
+                    title={`${t.title} · right-click for options`}
+                    style={t.color ? { boxShadow: `inset 3px 0 0 ${t.color}` } : undefined}
                     className={`w-full h-7 px-0.5 rounded-lg text-[9px] font-bold uppercase tracking-tight truncate border transition-colors ${
                       t.id === activeLocalTab
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'

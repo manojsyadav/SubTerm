@@ -9,7 +9,6 @@ import { localShellEvent, type Session } from "../hooks/useSessionManager";
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
-import type { GitRepoInfo } from "./GitDrawer";
 import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
 
 // Tool panels are lazy: their code is only fetched the first time the panel is opened,
@@ -17,26 +16,20 @@ import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
 const TunnelsPanel = lazy(() => import("./TunnelsPanel"));
 const InfoPanel = lazy(() => import("./InfoPanel"));
 const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.CmdsPanel })));
-const GitDrawer = lazy(() => import("./GitDrawer").then((m) => ({ default: m.GitDrawer })));
-// Probes the git repo in the folder passed as $1 (supports "~" and "~/x"); prints nothing outside a repo.
-const GIT_PROBE_SCRIPT =
-  'D="$1"; case "$D" in "~") D="$HOME";; "~/"*) D="$HOME/${D#\\~/}";; esac; [ -n "$D" ] && cd "$D" 2>/dev/null; ' +
-  'b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); ' +
-  'if [ -n "$b" ]; then d=$(git status --porcelain 2>/dev/null | wc -l); echo "SUBTERM_GIT:$b:$d"; git status -s 2>/dev/null; fi';
+const GitPanel = lazy(() => import("./GitPanel"));
 const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
 import { PathChoiceModal } from "./PathChoiceModal";
 import {
   loadSplitOrientation, saveSplitOrientation, loadSplitRatios, saveSplitRatios, initialSplitRatios, cyclePaneId,
 } from "../splitLayoutPrefs";
-import { getTerminalCwd, onTerminalCwdChange, shellQuote } from "../terminal/cwd";
 import { QuickFilePickerModal } from "./QuickFilePickerModal";
 import { useIsCompact } from "../hooks/useViewport";
 import { saveSessionAudit, downloadAuditLog, AuditLogEntry } from "../utils/auditLogger";
 import { useTextPrompt } from "../ui/confirm";
 import { useQuickCommands, resolveEnvKey } from "../utils/quickCommandsStore";
 import DistroLogo from "./DistroLogo";
-import { RenameInput } from "../ui/renameInput";
+import { TerminalTabMenu, type TabMenuAction } from "./TerminalTabMenu";
 import { reconnectDelayMs, readReconnectSettings, shouldGiveUp } from "../ssh/reconnectPolicy";
 import { notifyDesktop } from "../util/desktopNotify";
 
@@ -108,7 +101,7 @@ interface SessionDisconnectedPayload {
   user_initiated?: boolean;
 }
 
-type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'mirrors' | 'cmds' | 'info';
+type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'git' | 'mirrors' | 'cmds' | 'info';
 
 interface SessionViewProps {
   session: Session;
@@ -117,7 +110,7 @@ interface SessionViewProps {
   addLog: (msg: string, type?: string) => void;
   onStatusChange?: (sessionId: string, status: string) => void;
   chromeless?: boolean;
-  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string }[], activeTab: string) => void;
+  onTerminalsChange?: (sessionId: string, terminals: { id: string; title: string; container?: { name: string; useSudo: boolean }; shell?: string; color?: string; renamed?: boolean }[], activeTab: string) => void;
   isSessionActive?: boolean;
   onOpenSettings?: () => void;
 }
@@ -254,44 +247,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // reconnected terminal appeared frozen while SFTP/tunnels worked fine.
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
-
-  const [gitInfo, setGitInfo] = useState<GitRepoInfo | null>(null);
-  const [gitDrawerOpen, setGitDrawerOpen] = useState(false);
-  // Mount the drawer on first open and keep it mounted so its internal state survives close/reopen.
-  const [gitDrawerMounted, setGitDrawerMounted] = useState(false);
-  useEffect(() => { if (gitDrawerOpen) setGitDrawerMounted(true); }, [gitDrawerOpen]);
-
-  const activeTabRef = useRef<string>("");
-
-  const refreshGitInfo = async () => {
-    if (!isFeatureEnabled('panelGit')) return;
-    if (statusRef.current !== 'connected' || !session?.id) return;
-    try {
-      const out = await invoke<string>("sftp_exec_command", {
-        sessionId: session.id,
-        // This runs on its own exec channel, which starts in $HOME, so cd into the shell's folder first
-        // (passed as $1 so it needs no escaping inside the script).
-        command: `sh -c ${shellQuote(GIT_PROBE_SCRIPT)} sh ${shellQuote(getTerminalCwd(activeTabRef.current) ?? "")}`,
-      });
-      if (out.includes("SUBTERM_GIT:")) {
-        const line = out.split("\n").find(l => l.startsWith("SUBTERM_GIT:")) || "";
-        const parts = line.replace("SUBTERM_GIT:", "").split(":");
-        const branch = parts[0]?.trim() || "";
-        const dirtyCount = parseInt(parts[1] || "0", 10);
-        const statusText = out.split("\n").filter(l => !l.startsWith("SUBTERM_GIT:")).join("\n").trim();
-        setGitInfo({
-          branch,
-          isDirty: dirtyCount > 0,
-          dirtyCount,
-          statusText,
-        });
-      } else {
-        setGitInfo(null);
-      }
-    } catch {
-      // not in a git repo
-    }
-  };
 
   // ---- Dedicated SSH connections for SFTP / port-forwarding -----------------
   // Two INDEPENDENT, per-tab toggles (the controls live in the SFTP and
@@ -490,7 +445,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // panel). Container slots stay otherwise identical — same xterm, same
   // events — they just point the backend at `open_container_terminal`.
   // `shell` (local sessions only): the shell this sub-tab runs, when it differs from the session's.
-  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string}[]>(() => {
+  const [terminals, setTerminals] = useState<{id: string, title: string, container?: { name: string; useSudo: boolean }, shell?: string, color?: string, renamed?: boolean}[]>(() => {
     return [{ id: `${session.id}-term-0`, title: '1' }];
   });
   // Bumped on every successful reconnect. TerminalView watches this prop
@@ -511,7 +466,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   };
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
-  activeTabRef.current = activeTab;
 
   // Local tab: another shell opened from the sidebar, the top-bar shell menu or "New tab"
   // becomes a sub-tab here instead of a separate session tab.
@@ -528,7 +482,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     return () => window.removeEventListener(localShellEvent(session.id), onNewShell);
   }, [session.id, session.isLocal]);
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; termId: string } | null>(null);
-  const [termRename, setTermRename] = useState<{ termId: string; value: string } | null>(null);
   const terminalsRef = useRef(terminals);
   terminalsRef.current = terminals;
 
@@ -606,26 +559,11 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     docker: useFeatureFlag('panelDocker'),
     processes: useFeatureFlag('panelProcesses'),
     services: useFeatureFlag('panelServices'),
+    git: useFeatureFlag('panelGit'),
     info: useFeatureFlag('panelSystem'),
     cmds: useFeatureFlag('panelLibrary'),
     mirrors: true,
   };
-  const gitEnabled = useFeatureFlag('panelGit');
-  // Keep the Git pill in step with the shell: refresh when you cd (prompt/OSC 7 report) or switch panes.
-  useEffect(() => {
-    if (!gitEnabled) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const schedule = (ms: number) => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { refreshGitInfo(); }, ms);
-    };
-    schedule(300);
-    const off = onTerminalCwdChange((terminalId) => {
-      if (terminalId === activeTabRef.current) schedule(600);
-    });
-    return () => { off(); if (timer) clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, gitEnabled]);
   const copilotEnabled = useFeatureFlag('aiCopilot');
   // A tool panel is mounted the first time it is opened and then kept mounted (its state and
   // polling are preserved across tab switches); panels never opened cost nothing.
@@ -670,11 +608,15 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   // Remember pane sizes (per pane count) so the next split of that size starts the way the user left it.
   useEffect(() => { saveSplitRatios(splitRatios); }, [splitRatios]);
 
-  const splitWithNewPane = (orientation?: "h" | "v") => {
+  const splitWithNewPane = (orientation?: "h" | "v", from?: string) => {
     if (orientation) setSplitOrientation(orientation);
     const newId = `${session.id}-term-${Date.now()}`;
-    setTerminals(prev => [...prev, { id: newId, title: `${prev.length + 1}` }]);
-    if (splitTerminals.length >= 2) {
+    const src = from ? terminals.find(t => t.id === from) : undefined;
+    setTerminals(prev => [...prev, { id: newId, title: src?.shell ?? `${prev.length + 1}`, ...(src?.shell ? { shell: src.shell } : {}), ...(src?.container ? { container: src.container } : {}) }]);
+    if (from && from !== activeTab && !splitTerminals.includes(from)) {
+      setSplitTerminals([from, newId]);
+      setSplitRatios(initialSplitRatios(2));
+    } else if (splitTerminals.length >= 2) {
       setSplitTerminals(prev => [...prev, newId]);
       // Prefer the sizes last used for this many panes; otherwise keep existing sizes and give the newcomer an equal share.
       setSplitRatios(prev => loadSplitRatios(prev.length + 1) ?? [...prev, 1]);
@@ -685,29 +627,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     setActiveTab(newId);
   };
 
-  // Close one terminal sub-tab (the strip's x, or the sidebar's Local list).
-  const closeTerminalTab = (id: string) => {
-    if (terminals.length <= 1) return;
-    setTerminals(prev => prev.filter(x => x.id !== id));
-    if (activeTab === id) setActiveTab(terminals.find(x => x.id !== id)!.id);
-    // Closing a terminal that's participating in the split
-    // has to drop it from splitTerminals AND splitRatios or
-    // the flex layout renders a torn-down partner.
-    if (splitTerminals.includes(id)) {
-      const idx = splitTerminals.indexOf(id);
-      const nextTerms = splitTerminals.filter(x => x !== id);
-      const nextRatios = splitRatios.filter((_, i) => i !== idx);
-      // Falling below 2 members collapses back to the plain
-      // absolute-overlap layout.
-      if (nextTerms.length < 2) {
-        setSplitTerminals([]);
-        setSplitRatios([]);
-      } else {
-        setSplitTerminals(nextTerms);
-        setSplitRatios(nextRatios);
-      }
+  // Close terminal sub-tabs (the strip's x, the tab menu, or the sidebar's Local list); one always stays.
+  const closeTerminalTabs = (ids: string[]) => {
+    const keep = terminals.filter(x => !ids.includes(x.id));
+    if (keep.length === 0 || keep.length === terminals.length) return;
+    setTerminals(keep);
+    if (ids.includes(activeTab)) setActiveTab(keep[0].id);
+    // A closed pane has to leave splitTerminals AND splitRatios or the flex layout renders a torn-down partner.
+    const nextTerms = splitTerminals.filter(x => !ids.includes(x));
+    if (nextTerms.length !== splitTerminals.length) {
+      // Falling below 2 members collapses back to the plain absolute-overlap layout.
+      setSplitTerminals(nextTerms.length < 2 ? [] : nextTerms);
+      setSplitRatios(nextTerms.length < 2 ? [] : splitRatios.filter((_, i) => !ids.includes(splitTerminals[i])));
     }
   };
+  const closeTerminalTab = (id: string) => closeTerminalTabs([id]);
   const closeTerminalTabRef = useRef(closeTerminalTab);
   closeTerminalTabRef.current = closeTerminalTab;
   useEffect(() => {
@@ -717,6 +651,47 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     };
     window.addEventListener(`subterm-close-terminal-${session.id}`, onClose);
     return () => window.removeEventListener(`subterm-close-terminal-${session.id}`, onClose);
+  }, [session.id]);
+
+  const tabAction = (id: string, a: TabMenuAction) => {
+    const idx = terminals.findIndex(t => t.id === id);
+    const t = terminals[idx];
+    if (!t) return;
+    const move = (to: number) => setTerminals(prev => {
+      const next = [...prev];
+      next.splice(to, 0, ...next.splice(idx, 1));
+      return next;
+    });
+    switch (a) {
+      case "duplicate": {
+        const newId = `${session.id}-term-${Date.now()}`;
+        setTerminals(prev => [...prev.slice(0, idx + 1), { ...t, id: newId }, ...prev.slice(idx + 1)]);
+        setActiveTab(newId);
+        break;
+      }
+      case "split": splitWithNewPane(undefined, id); break;
+      case "moveLeft": if (idx > 0) move(idx - 1); break;
+      case "moveRight": if (idx < terminals.length - 1) move(idx + 1); break;
+      case "export":
+      case "find":
+        setActiveTab(id);
+        setActiveTool(null);
+        // TerminalView owns the buffer and the search box.
+        window.dispatchEvent(new CustomEvent(`subterm-terminal-action-${id}`, { detail: a }));
+        break;
+      case "closeOthers": closeTerminalTabs(terminals.filter(x => x.id !== id).map(x => x.id)); setActiveTab(id); break;
+      case "closeRight": closeTerminalTabs(terminals.slice(idx + 1).map(x => x.id)); break;
+      case "close": closeTerminalTab(id); break;
+    }
+  };
+  useEffect(() => {
+    // The sidebar's Local shell list opens this tab's menu through an event.
+    const onMenu = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; x: number; y: number }>).detail;
+      if (d?.id) setTermMenu({ x: d.x, y: d.y, termId: d.id });
+    };
+    window.addEventListener(`subterm-terminal-menu-${session.id}`, onMenu);
+    return () => window.removeEventListener(`subterm-terminal-menu-${session.id}`, onMenu);
   }, [session.id]);
 
   const addNewTerminal = () => {
@@ -1113,7 +1088,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       // survives an app restart — otherwise the prompt would reappear every
       // session, which was especially painful for SOCKS-proxied connections.
       invoke("persist_vault").catch(console.error);
-      setTimeout(() => { refreshGitInfo(); }, 1200);
       // Separate-sessions: now that the primary is up (and the host key is
       // saved, so no double fingerprint prompt), spin up the dedicated SFTP /
       // forwarding connections. No-op when the setting is off. Fires on
@@ -1673,16 +1647,14 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setTermMenu({ x: rect.left, y: rect.bottom + 4, termId: t.id });
-                setTermRename({ termId: t.id, value: t.title });
+                setTermMenu({ x: e.clientX, y: e.clientY, termId: t.id });
               }}
               onDoubleClick={(e) => {
                 e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
                 setTermMenu({ x: rect.left, y: rect.bottom + 4, termId: t.id });
-                setTermRename({ termId: t.id, value: t.title });
               }}
+              style={t.color ? { boxShadow: `inset 0 -2px 0 ${t.color}` } : undefined}
               title={t.container ? `Container: ${t.container.name}` : undefined}
               className={`h-8 px-3 sm:px-4 ${terminals.length > 1 ? 'pr-8' : ''} rounded-lg flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all ${
                 isFocusedHalf
@@ -1802,45 +1774,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             narrow viewports (below md) so the terminal tab strip keeps its
             horizontal real estate when space is tight; the full description
             stays in the tooltip either way. */}
-        {/* Quick actions (Git, Copilot, detected OS, quick commands), in the same row as the
+        {/* Quick actions (detected OS, quick commands), in the same row as the
             tools. On a local tab the shells are in the sidebar, so these get the space. */}
         {!activeTool && (
         <div className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 mr-1 text-[10.5px] font-mono text-zinc-400 ${localTabsInSidebar ? 'flex-1' : 'max-w-[45%]'}`}>
-          {/* Git Branch & Status Pill */}
-          {gitEnabled && (
-            <button
-              onClick={() => {
-                refreshGitInfo();
-                setGitDrawerOpen(true);
-              }}
-              title={gitInfo ? `Git: ${gitInfo.branch} (${gitInfo.isDirty ? `${gitInfo.dirtyCount} modified` : "clean"})` : "Inspect Git Status"}
-              className={`h-5 px-2 rounded border flex items-center gap-1.5 shrink-0 transition-all font-mono text-[10px] ${
-                gitInfo?.branch
-                  ? gitInfo.isDirty
-                    ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
-                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
-                  : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <GitBranch size={10} className={gitInfo?.branch ? (gitInfo.isDirty ? "text-amber-400" : "text-emerald-400") : "text-zinc-500"} />
-              <span>{gitInfo?.branch || "Git"}</span>
-              {gitInfo?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
-            </button>
-          )}
-          {copilotEnabled && (
-            <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
-              }}
-              title="Open AI Shell Copilot (Ctrl+I)"
-              className="h-5 px-2 rounded bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary transition-all shrink-0 flex items-center gap-1 font-semibold text-[10px]"
-            >
-              <Sparkles size={10} />
-              <span>Copilot</span>
-            </button>
-          )}
-          <div className="h-3 w-px bg-white/10 shrink-0" />
-
           {/* Detected OS Badge Pill */}
           {detectedOs && (
             <div
@@ -1913,6 +1850,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
+                { id: 'git',       icon: GitBranch, label: 'Git',      hint: 'Git — source control' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
               ]
             : [
@@ -1921,6 +1859,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
+                { id: 'git',       icon: GitBranch, label: 'Git',      hint: 'Git — source control' },
                 { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
               ]
@@ -1944,6 +1883,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               </button>
             );
           })}
+          {copilotEnabled && (
+            <button
+              onClick={() => {
+                // The assistant docks beside the terminal, so a full tool panel has to make way for it.
+                setActiveTool(null);
+                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
+              }}
+              title="AI assistant (Ctrl+I)"
+              aria-label="AI assistant (Ctrl+I)"
+              className="h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
+            >
+              <Sparkles size={14} className="shrink-0 text-primary" />
+              <span className="hidden md:inline text-[11px] font-semibold tracking-tight">AI</span>
+            </button>
+          )}
         </div>
       </div>
       )}
@@ -2051,40 +2005,28 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
         document.body
       )}
 
-      {termMenu && createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-[9998]"
-            onClick={() => { setTermMenu(null); setTermRename(null); }}
-            onContextMenu={(e) => { e.preventDefault(); setTermMenu(null); setTermRename(null); }}
+      {termMenu && (() => {
+        const idx = terminals.findIndex(t => t.id === termMenu.termId);
+        const t = terminals[idx];
+        if (!t) return null;
+        const patch = (p: Partial<typeof t>) => setTerminals(prev => prev.map(x => x.id === t.id ? { ...x, ...p } : x));
+        return (
+          <TerminalTabMenu
+            x={termMenu.x}
+            y={termMenu.y}
+            title={t.title}
+            color={t.color}
+            canMoveLeft={idx > 0}
+            canMoveRight={idx < terminals.length - 1}
+            canClose={terminals.length > 1}
+            canCloseRight={idx < terminals.length - 1}
+            onAction={(a) => tabAction(t.id, a)}
+            onRename={(title) => patch({ title, renamed: true })}
+            onColor={(color) => patch({ color })}
+            onDismiss={() => setTermMenu(null)}
           />
-          <div
-            style={{ left: Math.min(termMenu.x, window.innerWidth - 200), top: Math.min(termMenu.y, window.innerHeight - 100) }}
-            className="fixed z-[9999] w-[180px] bg-[#15151a] border border-white/10 rounded-lg shadow-2xl p-1.5 text-[11.5px]"
-          >
-            <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-              Rename Tab
-            </div>
-            <RenameInput
-              initialValue={termRename?.value ?? ""}
-              placeholder="Tab title…"
-              onCommit={(newTitle) => {
-                const trimmed = newTitle.trim();
-                if (trimmed) {
-                  setTerminals(prev => prev.map(item => item.id === termMenu.termId ? { ...item, title: trimmed } : item));
-                }
-                setTermMenu(null);
-                setTermRename(null);
-              }}
-              onCancel={() => {
-                setTermMenu(null);
-                setTermRename(null);
-              }}
-            />
-          </div>
-        </>,
-        document.body
-      )}
+        );
+      })()}
 
       {/* Disconnection / auto-reconnect banner. Pinned to the top so it's
           visible whether the terminal or SFTP is in focus. The disabled
@@ -2511,6 +2453,27 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           </div>
           )}
 
+          {/* Git (Source Control) Panel */}
+          {toolEnabled.git && openedTools.has('git') && (
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'git' ? '' : 'hidden'}`}>
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Source Control</span>
+              <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+            <Suspense fallback={<PanelFallback />}>
+            <GitPanel
+              sessionId={session.id}
+              terminalId={activeTab}
+              isLocal={session.isLocal}
+              disabled={status !== 'connected'}
+              visible={activeTool === 'git'}
+            />
+            </Suspense>
+          </div>
+          )}
+
           {/* InfoPanel (System, Network, Ports) */}
           {toolEnabled.info && openedTools.has('info') && (
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'info' ? '' : 'hidden'}`}>
@@ -2533,19 +2496,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           )}
         </div>
       </div>
-      {/* Git Drawer */}
-      {gitEnabled && gitDrawerMounted && (
-        <Suspense fallback={null}>
-          <GitDrawer
-            isOpen={gitDrawerOpen}
-            onClose={() => setGitDrawerOpen(false)}
-            sessionId={session.id}
-            terminalId={activeTab}
-            gitInfo={gitInfo}
-            onRefresh={refreshGitInfo}
-          />
-        </Suspense>
-      )}
       {pathChoices && (
         <PathChoiceModal
           name={pathChoices.name}

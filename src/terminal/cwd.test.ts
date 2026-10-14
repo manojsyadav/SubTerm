@@ -21,6 +21,10 @@ describe("parsePromptCwd", () => {
     expect(parsePromptCwd("\n(venv) dev@box:~/app$ ")).toBe("~/app");
   });
 
+  it("reads past the git segment of SubTerm's local bash prompt", () => {
+    expect(parsePromptCwd("manoj@pc:~/repo/src [33m[repo:main ↑1 ●2][0m$ ")).toBe("~/repo/src");
+  });
+
   it("uses the LAST prompt in a chunk (after cd)", () => {
     const chunk = "a@b:~$ cd /var/log\r\n" + "\x1b[32ma@b\x1b[0m:\x1b[34m/var/log\x1b[0m$ ";
     expect(parsePromptCwd("\n" + chunk)).toBe("/var/log");

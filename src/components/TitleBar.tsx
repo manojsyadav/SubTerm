@@ -8,7 +8,6 @@ import logoUrl from "../assets/logo.png";
 import { useConfirm } from "../ui/confirm";
 import { RenameInput } from "../ui/renameInput";
 import type { Server } from "../types";
-import { renderServerIcon } from "./ServerIcon";
 import { getActiveShortcut } from "../shortcuts";
 import { Session } from "../hooks/useSessionManager";
 import { WallItem } from "../hooks/useWallManager";
@@ -24,22 +23,18 @@ export interface TitleBarProps {
   confirm: ReturnType<typeof useConfirm>;
   broadcast: BroadcastContextValue;
   broadcastMenuOpen: boolean;
-  closeSession: (sessId: string) => void;
   isMaximized: boolean;
   isMobile: boolean;
   isUnlocked: boolean;
   mergedSessionIds: string[];
   mobileSessionPickerOpen: boolean;
-  openServer: (server: Server, initialTool?: Session["initialTool"], opts?: { fullWidth?: boolean }) => void;
   pinTerminalToWall: (sid: string, terminalId: string) => void;
-  quickAccessServersList: Server[];
   sessionActiveTerm: Record<string, string>;
   sessionStatuses: Record<string, string>;
   sessions: Session[];
   setActiveView: React.Dispatch<React.SetStateAction<string>>;
   setBroadcastMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsCommandPaletteOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsUnlockModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setMergedSessionIds: React.Dispatch<React.SetStateAction<string[]>>;
   setMobileSessionPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSessionStatuses: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -73,22 +68,18 @@ export function TitleBar(props: TitleBarProps) {
     appWindow,
     broadcast,
     broadcastMenuOpen,
-    closeSession,
     isMaximized,
     isMobile,
     isUnlocked,
     mergedSessionIds,
     mobileSessionPickerOpen,
-    openServer,
     pinTerminalToWall,
-    quickAccessServersList,
     sessionActiveTerm,
     sessionStatuses,
     sessions,
     setActiveView,
     setBroadcastMenuOpen,
     setIsCommandPaletteOpen,
-    setIsUnlockModalOpen,
     setMergedSessionIds,
     setMobileSessionPickerOpen,
     setSessionStatuses,
@@ -130,87 +121,6 @@ export function TitleBar(props: TitleBarProps) {
           <img src={logoUrl} alt="" draggable={false} className="h-6 w-auto max-w-[24px] object-contain select-none" />
           <span className="text-[12px] font-bold text-white tracking-tight">SubTerm</span>
         </div>
-
-        {/* Quick-access server bookmarks (local shells are opened from the sidebar's Local item). */}
-        {quickAccessServersList.length > 0 && (
-        <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.03] border border-white/5 rounded-lg no-drag shrink-0 mx-1">
-          {/* Server Bookmarks */}
-          {quickAccessServersList.map((server) => {
-            const sess = sessions.find((s) => s.serverId === server.id || s.serverName === server.name);
-            const isCurrent = Boolean(sess && activeView === sess.id);
-            const isConn = Boolean(sess && sessionStatuses[sess.id] === "connected");
-            const isConnIng = Boolean(sess && sessionStatuses[sess.id] === "connecting");
-            const isProd = Boolean(server.is_production || /prod|production|live/i.test(server.name || ""));
-
-            return (
-              <div key={server.id} className="group relative flex items-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isUnlocked) {
-                      setIsUnlockModalOpen(true);
-                      return;
-                    }
-                    if (sess) {
-                      if (!mergedSessionIds.includes(sess.id)) setMergedSessionIds([]);
-                      setActiveView(sess.id);
-                    } else {
-                      openServer(server);
-                    }
-                  }}
-                  title={
-                    isCurrent
-                      ? `${server.name} (Active Session)`
-                      : sess
-                      ? `Switch to ${server.name}`
-                      : `Connect to ${server.name}`
-                  }
-                  className={`w-[130px] h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-all overflow-hidden ${
-                    isCurrent
-                      ? "bg-[#182338] border border-blue-500/50 text-blue-200 shadow-sm font-semibold"
-                      : isConn
-                      ? "bg-white/[0.08] border border-white/15 text-zinc-200 hover:bg-white/[0.12] hover:text-white"
-                      : "bg-white/[0.02] border border-white/5 text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] hover:border-white/10"
-                  }`}
-                >
-                  <span className="shrink-0" style={server.color ? { color: server.color } : {}}>
-                    {renderServerIcon(server.icon || "server", 11)}
-                  </span>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      isCurrent || isConn
-                        ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
-                        : isConnIng
-                        ? "bg-amber-400 animate-pulse"
-                        : "bg-zinc-600"
-                    }`}
-                  />
-                  <span className="truncate flex-1 min-w-0 text-left tracking-tight">{server.name}</span>
-                  {isProd && (
-                    <span className="px-1 py-0.2 rounded text-[7.5px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
-                      PROD
-                    </span>
-                  )}
-                  {sess && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeSession(sess.id);
-                      }}
-                      title="Disconnect session"
-                      className="ml-0.5 w-3.5 h-3.5 rounded flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-white/10 opacity-70 group-hover:opacity-100 transition-opacity shrink-0"
-                    >
-                      <X size={10} />
-                    </span>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        )}
 
         {/* Mobile session picker — replaces the horizontal tab strip on
             narrow viewports so a phone doesn't spend its whole title row

@@ -14,6 +14,7 @@ mod cloud_config;
 mod about;
 mod mirror;
 mod docker;
+mod mcp;
 mod hlc;
 mod identity;
 mod vault;
@@ -389,6 +390,17 @@ pub fn run() {
             commands::terminal::set_ssh_keepalive_interval, commands::terminal::set_ssh_connect_timeout, commands::terminal::set_host_key_policy,
             commands::network::send_wake_on_lan, commands::network::perform_port_knock,
             commands::network::probe_tcp_port, commands::network::batch_probe_ports,
+            commands::ai::ai_list_providers,
+            commands::ai::ai_save_provider,
+            commands::ai::ai_delete_provider,
+            commands::ai::ai_list_models,
+            commands::ai::ai_chat,
+            commands::ai::ai_exec,
+            commands::ai::ai_cancel,
+            commands::mcp::mcp_start,
+            commands::mcp::mcp_stop,
+            commands::mcp::mcp_set_sessions,
+            commands::mcp::mcp_answer,
             commands::monitor_settings::monitor_list,
             commands::monitor_settings::monitor_add,
             commands::monitor_settings::monitor_remove,

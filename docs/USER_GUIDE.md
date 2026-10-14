@@ -14,7 +14,7 @@ When you launch SubTerm, you are presented with the **Unlock** screen:
 
 ### 1.2 The Sidebar Pages
 The left sidebar (bottom bar on narrow windows) has one entry per activity:
-- **Local**: asks which shell to open (**Default shell** first, then every installed shell); each one opens as a sub-tab of the single **Local** tab, and on desktop the open shells are listed under **Local** in the sidebar (click to switch, hover **x** to close, **+** for another). Without a shell list it opens the default shell. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL).
+- **Local**: asks which shell to open (**Default shell** first, then every installed shell); each one opens as a sub-tab of the single **Local** tab, and on desktop the open shells are listed under **Local** in the sidebar (click to switch, hover **x** to close, **+** for another, right-click to change its color, rename, duplicate, split, move, export its text, find, or close it or the others). Without a shell list it opens the default shell. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL). Inside a git repository, PowerShell, bash and WSL prompts show `[repo:branch ↑ahead ↓behind ●changes]` (`≡` when level with the upstream as of the last fetch).
 - **Servers**: your saved servers and folders (the home page). The search box doubles as quick connect: type `10.0.0.5`, `root@10.0.0.5` or `host.example.com:2222` and press **Enter**. If a saved server matches (and it is the only match) it opens; if nothing matches, the Quick Connect dialog opens with the host, user and port filled in and the cursor in the password field. A bare word such as `web` is only ever a search. The lightning button inside the search box opens the empty Quick Connect dialog. **Add server** (with **Import SSH config** under its arrow) sits at the right end of the same row; **Connect All** appears below it when there are two or more servers.
 - **SFTP**: a searchable list of your SSH servers. Click one to open its file browser across the whole window, with this computer's files on one side and the server's on the other (drag to transfer). Close the file browser (the **x** in its header) to return to the terminal; the terminal keeps running behind it.
 - **RDP**: a searchable list of your Remote Desktop servers with a **New RDP server** button. Connect opens it inside SubTerm or in the system client, as set under **Settings > General > Remote Desktop**. Hidden when the RDP feature is turned off.
@@ -90,7 +90,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
 9. **Session Menu & Session Management**:
    - Right-click an open session in the sidebar list to access the session menu:
      - **Rename tab**: Saved servers keep the new name across restarts (per workspace); Quick Connect sessions only for this run.
-     - **Pin session**: Keeps it at the top of its list and reopens it after each unlock.
+     - **Pin session** (also the pin button that appears when you hover an entry): Keeps it at the top of its list and reopens it after each unlock. A pinned server stays in the list after you close it, dimmed; click it to connect again. Hover and click the pin again to unpin.
      - **Group**: Put it in an existing group or **+ New group**; groups are collapsible headings in the list. Names, pins and groups are stored per workspace and are not part of preferences export.
      - **Reconnect / Disconnect**: Cleanly drop or re-establish connection without closing the tab.
      - **Split View With...**: Tick other open sessions to instantly tile them side-by-side or stacked.
@@ -134,8 +134,8 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - **Compare with Other Pane**: Right-click a file and choose **Compare with Other Pane** to open a unified diff against the same-named file in the opposite pane's current directory — works local-vs-remote or across two different sessions. **Use Left →** / **← Use Right** copies one file's contents over the other.
 3. **Editing Remote Files**:
    - Double-click any text configuration file (e.g. `nginx.conf` or `.env`).
-   - The in-app code editor opens with syntax highlighting.
-   - Press `Ctrl+S` to save modifications directly back to the remote server over SFTP.
+   - The file opens read-only in the viewer, with syntax highlighting (Markdown files are shown rendered). You can select, copy and search with `Ctrl+F`.
+   - Click **Edit** in the toolbar to change it, then press `Ctrl+S` to save back to the server over SFTP. **View** (or **Preview** for Markdown) goes back to the viewer.
 4. **File Transfers**:
    - Drag and drop files from your local file explorer into the SubTerm SFTP panel to start transfers.
    - Monitor real-time transfer progress and transfer speed in the progress widget.
@@ -192,6 +192,16 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Click the **Logs** button to view real-time log output.
    - Click the **Terminal** icon to attach an interactive `docker exec -it` shell directly inside the container.
 
+### Workflow 4b: Committing with the Git Tab
+
+*Goal*: Stage, commit and push changes in a repository on the server or on this computer.
+
+1. Click **Git** in the tool row. The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
+2. Hover a file under **Changes** and click **+** to stage it (**−** under **Staged Changes** unstages). The **+** on the section header stages everything.
+3. Type a message and press **Ctrl+Enter** or click **Commit**. If nothing is staged, all changes are committed.
+4. With a clean tree, the button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push). Pull, Push, Fetch and Stash are under **…**.
+5. Git runs without a terminal, so it can't ask for a password. Use an SSH key, a credential helper, or agent forwarding for pushes.
+
 ### Workflow 5: Parameterized Snippets & Runbook Automation
 
 *Goal*: Create and execute reusable commands with dynamic variable prompts and default values.
@@ -215,6 +225,31 @@ The home dashboard's search bar filters by server name or host as you type. It a
 4. **Scoping a Snippet to One Server**:
    - When adding or editing a command in Snippets, set **Scope** to a specific server instead of **Global**, and optionally add comma-separated **Tags**.
    - A server-scoped snippet only appears in that server's Command Palette (`Ctrl+K`) — global snippets (the default) still show everywhere. Library cards show a scope badge and tag chips, and the Snippets search box matches against tags too.
+
+### Workflow 6: Asking the AI Assistant
+
+*Goal*: Get help with a session from a local or online model, and optionally let it run checks for you.
+
+1. **Add a model**:
+   - Open Settings > Features > AI assistant and pick a provider from **Add provider…**.
+   - **Ollama** first needs Ollama installed and a model pulled, for example `ollama pull qwen2.5:7b`. For agent mode, use a model that supports tool calls, such as qwen2.5 or llama3.1.
+   - An Ollama on another machine works too: set the base URL to `http://<that-ip>:11434/v1`. That machine has to listen on its network address, so set `OLLAMA_HOST=0.0.0.0` there.
+   - For **Anthropic**, **OpenAI**, **Gemini** or **OpenRouter**, paste an API key from that provider's console. The key is saved in the vault and never shown again.
+   - Click the refresh button next to **Model** to list what the provider offers, pick one, then **Save**.
+2. **Open the panel** with `Ctrl+I`, the **AI** button in the tool row, or **Explain** on the bar shown after a failed command. The panel keeps its conversation while closed. While it works, the send button turns into **Stop**. Stop keeps the text written so far and ends any remaining steps. A command that is already running finishes first, within its 60-second limit. **Output** sends the last 80 lines of the terminal with your message.
+3. **Choose what it may do** (bottom left of the panel):
+   - **Suggest**: answers only. Each command gets **Insert**, which types it without running, and **Run**. It also gets **Run & send**, which runs the command on a separate channel and sends the result back so the assistant can pick the next step. Use it with models that can't run commands themselves, such as small local models.
+   - **Ask**: the assistant runs commands on its own and reads the results. Every command shows up as a card with **Run** and **Skip**. Skip stops it so you can say what to do instead. It stops after 10 steps.
+   - **Auto**: like Ask, but read-only commands run without a card. These are commands like `ls`, `cat`, `df`, `ps`, `systemctl status`, `docker ps` and `journalctl` without `-f`. Anything with `sudo`, redirection, or a path that looks like a key or secret still asks. So does every command on a server marked as production.
+   - Commands run on a separate channel, so they don't appear in your terminal or history. Each one has a 60-second limit. In a local tab they run in that tab's shell (PowerShell, cmd, Git Bash or WSL), without its profile. In a container shell only Suggest is available.
+4. **Agent CLIs**: Claude Code, Codex and Gemini CLI use their own sign-in. Install one, open a Local tab, and click **claude**, **codex** or **gemini** in the quick commands.
+   - **Let an agent CLI use your SSH sessions (MCP)**:
+     1. Turn on Settings > Features > AI assistant > **Let agent CLIs use open SSH sessions (MCP)**.
+     2. Copy the `claude mcp add …` command shown there and run it once in a terminal. Other MCP clients need the URL and the `Authorization` header from that command.
+     3. Claude Code can then list the SSH sessions open in SubTerm and ask to run commands on them. Every command opens a SubTerm dialog with **Run** and **Decline**; on a production server the dialog is red. A request nobody answers is declined after 2 minutes.
+     4. Commands run on a separate channel with a 60-second limit, the same way as the AI panel's. Local shells, RDP and the SFTP page's connections are not offered.
+     5. **New token** (the refresh button) cuts off agents set up with the old one. Turning the switch off stops the server.
+5. **Privacy**: with an online provider, your messages, the included output, and the output of every command you approve go to that provider. SubTerm asks once per provider before the first send. Use a local model for sessions that show secrets.
 
 ---
 
@@ -251,7 +286,7 @@ SubTerm includes a **Settings Panel** with 7 pages and a search box that jumps s
   - **SSH Connection** (Terminal page): **Unknown host keys** (*Ask me* lets you trust a new key once; *Refuse (strict)* blocks any server whose key is not already on file, so connect once in Ask mode to add a server), **Connection timeout** (5 to 60 s for the first TCP connect, direct or through a proxy), **Auto-reconnect attempts** (keep trying by default, or stop after 3 to 100) and **Longest wait between retries** (backoff ceiling), plus **Default port**, **Default username** and **Forward SSH agent on new servers** that prefill the add-server form. Only turn agent forwarding on by default if you trust every host you add.
   - **SSH Keep-Alive Interval**: Configure keep-alive ping frequency (Disabled, 15s, 30s, 60s, 120s) to keep remote SSH tunnels and terminal sessions resilient across unstable networks and strict NAT firewalls.
   - **Terminal Triggers & Alert Keywords**: Define keyword or regex patterns matched against live output in any session. Each trigger fires one of: a toast notification, the audible bell chime, the visual bell flash, or an entry in the Activity Log — useful for noticing `ERROR`/`FATAL`/`Exception` in a background session tab.
-- **Quick Access**: one page of cards. **Pinned Servers** (pin up to 5 servers to the top bar) and **Quick Commands** need the vault unlocked; **Keyboard Shortcuts** do not. Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
+- **Quick Access**: one page of cards. **Quick Commands** need the vault unlocked; **Keyboard Shortcuts** do not. Rebind global shortcuts (e.g., Command Palette `Ctrl+K`, Quick Terminal `Ctrl+Alt+T`, Switch Profile).
 - **Monitoring** (under **General**): turn background resource monitoring on or off. Polling interval, timeouts, the outage threshold, notifications and the outage beep are on the **Monitor** page; **Open Monitor** in Settings jumps there.
 - **Accounts & Sync**: one page with two sections.
   - **Cloud & Sync**: Configure custom self-hosted sync endpoints and manage profile synchronization. Under **What to sync on this device** you can leave out servers, credentials, saved commands or notes on this device only; unchecked data is neither uploaded nor downloaded.
@@ -285,4 +320,4 @@ Press `Ctrl+Alt+T` or click **Local** in the sidebar. SubTerm no longer opens a 
 SubTerm detects both and retries automatically — you don't need to manually reconnect. A sleep/resume cycle or a network change (Wi-Fi roam, VPN toggle, cable unplug) triggers an immediate reconnect attempt instead of waiting for the passive connection-health check to notice. If the server is still unreachable, retries continue with increasing backoff (2s, 4s, 8s, up to 30s) until it comes back, shown as a "Reconnecting · attempt N" banner. A connection you disconnected yourself (right-click → Disconnect) never auto-reconnects — click **Reconnect** on the banner when you're ready.
 
 ### Q: Why are some settings categories showing a lock screen?
-Sensitive settings categories (Profiles, Cloud Sync, the Pinned Servers and Quick Commands cards of Quick Access, System (Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.
+Sensitive settings categories (Profiles, Cloud Sync, the Quick Commands card of Quick Access, System (Known Hosts, Maintenance, Activity Log) contain private credentials and configurations. If your vault is locked, SubTerm prevents access until you click **Unlock** and enter your master password.

@@ -13,7 +13,7 @@ import { IS_MOBILE_OS } from "../util/platform";
 import { toExportableServers, serversToJson, serversToCsv } from "../export/serverExport";
 import {
   Settings, Palette, RefreshCw, List, Cloud, User,
-  ArrowLeft, Activity, Server, ArrowUp, ArrowDown, Trash2,
+  ArrowLeft, Activity, Server, Trash2,
   Plus, Terminal, ChevronRight, Lock, ShieldCheck,
   Download, X, SlidersHorizontal, ToggleRight, Search,
 } from "lucide-react";
@@ -22,6 +22,8 @@ const CloudPanel = lazy(() => import("./CloudPanel"));
 import { SettingsProfileManagement } from "./SettingsProfileManagement";
 import { SettingsKeyboardShortcuts } from "./SettingsKeyboardShortcuts";
 import { SettingsQuickCommands } from "./SettingsQuickCommands";
+import { SettingsAiProviders } from "./SettingsAiProviders";
+import { SettingsMcp } from "./SettingsMcp";
 import { SettingsCloudSync } from "./SettingsCloudSync";
 import { SettingsKnownHosts } from "./SettingsKnownHosts";
 import { TERMINAL_THEMES, FONT_FAMILY_PRESETS, SCROLLBACK_PRESETS, getAllTerminalThemes, saveCustomThemes, getCustomThemes, TerminalThemeConfig } from "../terminal/themes";
@@ -45,7 +47,7 @@ const CATEGORIES: Category[] = [
   { id: "appearance",    label: "Appearance",        icon: <Palette size={16} />,     description: "Colors, fonts, and terminal theme" },
   { id: "terminal",      label: "Terminal",           icon: <Terminal size={16} />,    description: "Mouse, clipboard, sessions, triggers" },
   { id: "features",      label: "Features",           icon: <ToggleRight size={16} />, description: "Turn optional features on or off" },
-  { id: "quick",         label: "Quick Access",       icon: <Server size={16} />,      description: "Pinned servers, quick commands, keyboard shortcuts" },
+  { id: "quick",         label: "Quick Access",       icon: <Server size={16} />,      description: "Quick commands, keyboard shortcuts" },
   { id: "accounts",      label: "Accounts & Sync",    icon: <User size={16} />,        description: "Profiles, cloud account and sync" },
   { id: "system",        label: "System",             icon: <ShieldCheck size={16} />, description: "Known hosts, maintenance and the activity log" },
 ];
@@ -146,7 +148,6 @@ const bgColors = [
   { name: "Deep Space", value: "#0d0d10" },
 ];
 
-type PinnableServer = ServerRecord & { ip?: string };
 
 interface SettingsPageProps {
   settings: AppSettings;
@@ -436,6 +437,7 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
   };
 
   const featureExtras: Partial<Record<FeatureKey, React.ReactNode>> = {
+    aiCopilot: (<><SettingsAiProviders /><SettingsMcp /></>),
     terminalFileLinks: (
       <div data-setting="file-types" className="py-2">
         <div className="text-xs text-zinc-500 mb-2">Which file names in terminal output can be clicked to open in the editor.</div>
@@ -1130,62 +1132,6 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
   );
 };
 
-const PageServers = ({ settings, setSettings, servers }: SettingsPageProps & { servers: PinnableServer[] }) => {
-  const [selectedToAdd, setSelectedToAdd] = useState("");
-  const quickAccessIds: number[] = settings.quickAccessServerIds || [];
-  const currentQuickServers = quickAccessIds.map((id) => servers.find((s) => s.id === id)).filter((s): s is PinnableServer => !!s);
-  const availableToAdd = servers.filter((s) => !quickAccessIds.includes(s.id));
-  const handleAdd = () => {
-    const numId = parseInt(selectedToAdd, 10);
-    if (!numId || quickAccessIds.length >= 5) return;
-    setSettings({ ...settings, quickAccessServerIds: [...quickAccessIds, numId] });
-    setSelectedToAdd("");
-  };
-  const remove = (id: number) => setSettings({ ...settings, quickAccessServerIds: quickAccessIds.filter((i) => i !== id) });
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= quickAccessIds.length) return;
-    const next = [...quickAccessIds];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    setSettings({ ...settings, quickAccessServerIds: next });
-  };
-  return (
-    <>
-      <SectionCard title={`Pinned Servers (${currentQuickServers.length}/5)`} subtitle="These servers appear as quick-connect buttons in the top title bar.">
-        <div className="space-y-2 mt-2">
-          {currentQuickServers.length === 0 && (
-            <div className="p-4 text-center rounded-xl border border-dashed border-white/10 text-xs text-zinc-500">No servers pinned yet. Add up to 5 below.</div>
-          )}
-          {currentQuickServers.map((srv, idx) => (
-            <div key={srv.id} className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0">{idx + 1}</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                <span className="text-xs font-semibold text-white truncate">{srv.name}</span>
-                <span className="text-[11px] text-zinc-500 font-mono truncate hidden sm:inline">{srv.host || srv.ip || "SSH"}</span>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button disabled={idx === 0} onClick={() => move(idx, idx - 1)} className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30" title="Move up"><ArrowUp size={13} /></button>
-                <button disabled={idx === currentQuickServers.length - 1} onClick={() => move(idx, idx + 1)} className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30" title="Move down"><ArrowDown size={13} /></button>
-                <button onClick={() => remove(srv.id)} className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 ml-1" title="Remove"><Trash2 size={13} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-        {currentQuickServers.length < 5 && availableToAdd.length > 0 && (
-          <div className="pt-3 border-t border-white/5 flex items-center gap-2 mt-3">
-            <select value={selectedToAdd} onChange={(e) => setSelectedToAdd(e.target.value)} className="flex-1 bg-[#18181f] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary/50">
-              <option value="">Select a server to pin...</option>
-              {availableToAdd.map((s) => (<option key={s.id} value={s.id}>{s.name} ({s.host || s.ip || "SSH"})</option>))}
-            </select>
-            <button disabled={!selectedToAdd} onClick={handleAdd} className="px-3 py-2 bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors disabled:opacity-40"><Plus size={13} /> Pin</button>
-          </div>
-        )}
-      </SectionCard>
-    </>
-  );
-};
-
 const PageCloud = ({ settings, setSettings, onSync, syncing, lastSyncLabel }: SettingsPageProps & CloudSyncExtras) => {
   const [cloudOpen, setCloudOpen] = useState(false);
   return (
@@ -1213,20 +1159,17 @@ const PageProfile = ({ onUnlocked, activeProfile, onSwitchProfile, isUnlocked, o
 );
 
 
-// Pinned servers, quick commands and keyboard shortcuts as three cards in the same column layout
-// as the other settings pages. Shortcuts need no vault; the other two are replaced by an unlock
-// card while the vault is locked.
-const PageQuick = ({ settings, setSettings, servers, isUnlocked, onRequestUnlock }: SettingsPageProps & {
-  servers: PinnableServer[]; isUnlocked: boolean; onRequestUnlock?: () => void;
-}) => (
+// Quick commands and keyboard shortcuts as cards in the same column layout as the other settings
+// pages. Shortcuts need no vault; quick commands are replaced by an unlock card while it is locked.
+// (Servers are pinned from the sidebar session list, not here.)
+const PageQuick = ({ isUnlocked, onRequestUnlock }: { isUnlocked: boolean; onRequestUnlock?: () => void }) => (
   <>
     {isUnlocked ? (
       <>
-        <PageServers settings={settings} setSettings={setSettings} servers={servers} />
         <SettingsQuickCommands />
       </>
     ) : (
-      <SectionCard id="quick-locked" title="Pinned Servers and Quick Commands" subtitle="These hold server names, addresses and saved scripts, so they need the vault unlocked.">
+      <SectionCard id="quick-locked" title="Quick Commands" subtitle="These hold saved scripts, so they need the vault unlocked.">
         <button
           type="button"
           onClick={onRequestUnlock}
@@ -1268,7 +1211,7 @@ const PageMaintenance = ({ settings, setSettings, servers = [], folders = [] }: 
 
   return (
     <>
-      <SectionCard title="Reset Preferences" subtitle="Restores every setting on the General, Appearance, Terminal and Features pages to its default and switches all features back on. Your servers, credentials, profiles, pinned servers and shortcuts are unaffected.">
+      <SectionCard title="Reset Preferences" subtitle="Restores every setting on the General, Appearance, Terminal and Features pages to its default and switches all features back on. Your servers, credentials, profiles, pinned sessions and shortcuts are unaffected.">
         <button
           onClick={() => { if (window.confirm("Reset all settings to their defaults?")) { setSettings(resetAllSettings(settings)); } }}
           className="mt-4 px-4 h-9 bg-zinc-900 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase hover:bg-white/5 transition-all w-full"
@@ -1406,6 +1349,7 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "features-terminal", page: "features", label: "Terminal features", keywords: "features optional enable disable switch terminal" },
   { id: "features-panels", page: "features", label: "Panels features", keywords: "features optional enable disable switch panels sftp docker" },
   { id: "features-ai", page: "features", label: "AI features", keywords: "features optional enable disable switch ai copilot" },
+  { id: "mcp", page: "features", label: "Let agent CLIs use open SSH sessions (MCP)", keywords: "mcp claude code codex gemini agent server port token" },
   { id: "ssh-mode", page: "features", label: "When you type ssh / sftp", keywords: "local terminal saved server auto ask quick connect" },
   { id: "file-types", page: "features", label: "Clickable file types", keywords: "extensions editor open file click" },
 ];
@@ -1462,7 +1406,7 @@ const SettingsPanel = ({ settings, setSettings, onOpenLogs, onOpenMonitor, onClo
       case "appearance":    return <div className={COLUMNS}><PageAppearance settings={settings} setSettings={setSettings} /><PageTerminal part="appearance" settings={settings} setSettings={setSettings} /></div>;
       case "terminal":      return <div className={COLUMNS}><PageTerminal part="terminal" settings={settings} setSettings={setSettings} /></div>;
       case "features":      return <div className={COLUMNS}><PageTerminal part="features" settings={settings} setSettings={setSettings} /></div>;
-      case "quick":         return <div className={COLUMNS}><PageQuick settings={settings} setSettings={setSettings} servers={servers} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} /></div>;
+      case "quick":         return <div className={COLUMNS}><PageQuick isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} /></div>;
       case "accounts":      return (
         <div className={COLUMNS}>
           <PageProfile onUnlocked={onUnlocked} activeProfile={activeProfile} onSwitchProfile={onSwitchProfile} isUnlocked={isUnlocked} onRequestUnlock={onRequestUnlock} />

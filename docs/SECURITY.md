@@ -138,6 +138,29 @@ SubTerm does not ship or trust any CA or fixed host-key list — every server's 
 - **Revocation / management**: Settings → System → Known Hosts (`src/components/SettingsKnownHosts.tsx`, backed by `get_known_hosts` / `delete_known_host`) lists every trusted fingerprint with its host, port, and key type, and lets the user delete any entry directly — forcing the next connection to that host through the first-connection TOFU prompt again. This is the manual equivalent of `ssh-keygen -R <host>`.
 - **Failure-closed on DB errors**: if the known-hosts lock is poisoned (a prior panic left the mutex in a bad state), the handshake is refused outright rather than silently falling back to "unknown host" — which would otherwise re-prompt the user and could mask a real key-change warning behind a plain first-time prompt.
 
+## 8a. AI Assistant
+
+- **Keys**: provider API keys are stored in the `api_key` column of the vault's `ai_providers` table, so they are encrypted at rest like everything else in §1. `commands/ai.rs` is the only code that reads them. It reads a key into a `Zeroizing<String>` for one request. No command returns a key: the front end only sees `hasKey`, and there is no reveal command. The table is left out of Cloud Sync, so a key stays on the device where it was entered.
+- **Network**: all model traffic goes from Rust (`reqwest`, rustls). The webview only calls `ai_chat` and receives text over a `Channel`.
+- **What leaves the machine**: with an online provider, the provider receives:
+  - the user's messages;
+  - the terminal output attached to them (the last 80 lines, or the failed block for Explain);
+  - the output of every command the model runs.
+
+  Before the first send to an endpoint that is not loopback, `.local` or a private address, the panel asks the user to confirm. It asks once per provider. Saved server passwords are never part of the context.
+- **Running commands**: `ai_exec` only runs commands that the front end passes in, after one of these:
+  - the user approves them in the panel (Ask);
+  - they match the read-only allowlist in `src/ai/agentLoop.ts` (Auto). That list refuses redirection, command substitution, backgrounding, `sudo`/`su`, follow flags and secret-looking paths.
+
+  Auto never skips the prompt on a production server. The model's output and tool results are labelled as data in the system prompt, but prompt injection from text on the server is still possible. The approval step is the control, not the prompt. `ai_exec` grants no new capability to the webview, which can already type into any open terminal.
+- **MCP server for agent CLIs**: off by default (`src-tauri/src/mcp.rs`, `commands/mcp.rs`). When on, it binds `127.0.0.1` only. It has these defences:
+  - It requires a random 192-bit bearer token, compared in constant time.
+  - It refuses any request with an `Origin` header, so a web page can't reach it even by guessing the port.
+  - It caps the request head at 16 KB and the body at 1 MB, and drops a request that takes over 30 s to arrive.
+  - It can only list sessions and run commands. Every command waits for the user to press Run in a SubTerm dialog. A declined, closed or unanswered (120 s) request returns an error to the agent.
+
+  There is no read-file, write-file or Auto mode. The token is kept in the webview's local storage, not the vault: it opens nothing on its own, because every action still needs approval. Local shells are not offered.
+
 ## 9. Vault Format & KDF Rotation Strategy
 
 No vault has ever shipped with anything other than `VAULT_VERSION = 1` and the single hardcoded Argon2id profile in §1.1, so nothing here is implemented yet — this is the design for the day `ARGON2_M_COST`/`T_COST`/`P_COST` need to change (a stronger recommended profile, a response to a published Argon2 weakness, etc.) without breaking every vault already on disk. Written here, in the file that already specifies the format it amends, rather than a standalone doc that could drift out of sync with it.

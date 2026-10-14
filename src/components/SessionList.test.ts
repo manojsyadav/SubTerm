@@ -58,4 +58,27 @@ describe("SessionList", () => {
     act(() => ([...host.querySelectorAll("button")].find((b) => b.textContent === "Prod") as HTMLButtonElement).click());
     expect(p.onToggleGroup).toHaveBeenCalledWith("Prod");
   });
+
+  it("pins and unpins from the hover button", () => {
+    const onTogglePin = vi.fn();
+    render({ onTogglePin });
+    act(() => (host.querySelector('[aria-label="Pin web-1"]') as HTMLButtonElement).click());
+    expect(onTogglePin).toHaveBeenCalledWith("ssh:1");
+    act(() => (host.querySelector('[aria-label="Unpin cache"]') as HTMLButtonElement).click());
+    expect(onTogglePin).toHaveBeenCalledWith("ssh:3");
+  });
+
+  it("lists pinned servers with no open session, and reconnects them on click", () => {
+    const onOpenPinned = vi.fn();
+    render({ sessions: [], pinnedClosed: [{ key: "ssh:9", name: "backup" }], onOpenPinned, onTogglePin: vi.fn() });
+    expect(host.textContent).toContain("backup");
+    act(() => item("backup").click());
+    expect(onOpenPinned).toHaveBeenCalledWith("ssh:9");
+    expect(host.querySelector('[aria-label="Unpin backup"]')).not.toBeNull();
+  });
+
+  it("renders nothing with no sessions and no pinned servers", () => {
+    render({ sessions: [] });
+    expect(host.querySelector('[role="list"]')).toBeNull();
+  });
 });

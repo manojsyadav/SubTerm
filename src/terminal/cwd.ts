@@ -4,7 +4,7 @@
  * The cwd is learned from (a) OSC 7 reports and (b) the shell prompt text. The
  * prompt path is needed on stock Debian/Ubuntu shells, which colour the prompt
  * and don't emit OSC 7. Several features depend on it: opening a clicked
- * relative path, and the Git pill (whose check runs on a separate SSH channel
+ * relative path, and the Git panel (whose commands run on a separate SSH channel
  * that starts in $HOME, not in the shell's folder).
  */
 
@@ -15,8 +15,9 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, "");
 }
 
-// `user@host:path$` / `#`, optionally preceded by a venv/conda marker like `(venv) `.
-const PROMPT_RE = /(?:^|[\r\n])(?:\([^)\r\n]*\)\s*)?[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:([/~][^$#\s)]*)[$#]/g;
+// `user@host:path$` / `#`, optionally preceded by a venv/conda marker like `(venv) ` and
+// followed by the git segment SubTerm's local bash integration adds (` [repo:main ●2]`).
+const PROMPT_RE = /(?:^|[\r\n])(?:\([^)\r\n]*\)\s*)?[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:([/~][^$#\s)]*)(?: \[[^\]\r\n]*\])?[$#]/g;
 
 /** The cwd shown by the LAST shell prompt in `chunk` (raw terminal output), or null. */
 export function parsePromptCwd(chunk: string): string | null {

@@ -74,6 +74,14 @@ describe("Sidebar Local shell list", () => {
     expect(onNewLocalTab).toHaveBeenCalled();
   });
 
+  it("opens a shell's tab menu on right-click", () => {
+    const onLocalTabMenu = vi.fn();
+    render({ localTabs: [{ id: "t1", label: "PWSH", title: "pwsh (tab 1)" }], onLocalTabMenu });
+    const tab = host.querySelector('[role="tab"]') as HTMLButtonElement;
+    act(() => { tab.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 20 })); });
+    expect(onLocalTabMenu).toHaveBeenCalledWith("t1", 10, 20);
+  });
+
   it("shows nothing extra without a Local tab", () => {
     render({ localTabs: [] });
     expect(host.querySelector('[aria-label="Local shells"]')).toBeNull();
