@@ -183,3 +183,45 @@ pub fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), Strin
         .open_url(&url, None::<&str>)
         .map_err(|e| format!("[OPEN] {}", e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_semver_greater() {
+        assert!(semver_greater("0.4.2", "0.4.1"));
+        assert!(!semver_greater("0.4.1", "0.4.1"));
+        assert!(!semver_greater("0.4.0", "0.4.1"));
+        assert!(semver_greater("1.0.0", "0.9.9"));
+        assert!(semver_greater("0.10.0", "0.9.0"));
+        assert!(!semver_greater("0.4.1-beta", "0.4.1"));
+        assert!(!semver_greater("0.4.1+build123", "0.4.1"));
+    }
+
+    #[test]
+    fn test_release_json_parsing() {
+        let json = r#"[
+            {"tag_name": "v0.4.0", "html_url": "https://github.com/manojsyadav/SubTerm/releases/tag/v0.4.0", "draft": false, "prerelease": false},
+            {"tag_name": "v0.4.2-beta", "html_url": "https://github.com/manojsyadav/SubTerm/releases/tag/v0.4.2-beta", "draft": false, "prerelease": true},
+            {"tag_name": "v0.4.2", "html_url": "https://github.com/manojsyadav/SubTerm/releases/tag/v0.4.2", "draft": false, "prerelease": false}
+        ]"#;
+        let releases: Vec<GhRelease> = serde_json::from_str(json).unwrap();
+        assert_eq!(releases.len(), 3);
+        let mut best: Option<(String, String)> = None;
+        for r in releases {
+            if r.draft || r.prerelease || r.tag_name.is_empty() {
+                continue;
+            }
+            let clean = r.tag_name.strip_prefix('v').unwrap_or(&r.tag_name).to_string();
+            let wins = match &best {
+                None => true,
+                Some((cur_best, _)) => semver_greater(&clean, cur_best),
+            };
+            if wins {
+                best = Some((clean, r.html_url));
+            }
+        }
+        assert_eq!(best, Some(("0.4.2".into(), "https://github.com/manojsyadav/SubTerm/releases/tag/v0.4.2".into())));
+    }
+}
