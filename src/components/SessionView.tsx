@@ -9,7 +9,6 @@ import { localShellEvent, type Session } from "../hooks/useSessionManager";
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
-import type { GitRepoInfo } from "./GitDrawer";
 import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
 
 // Tool panels are lazy: their code is only fetched the first time the panel is opened,
@@ -17,7 +16,7 @@ import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
 const TunnelsPanel = lazy(() => import("./TunnelsPanel"));
 const InfoPanel = lazy(() => import("./InfoPanel"));
 const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.CmdsPanel })));
-const GitDrawer = lazy(() => import("./GitDrawer").then((m) => ({ default: m.GitDrawer })));
+const GitPanel = lazy(() => import("./GitPanel"));
 // Probes the git repo in the folder passed as $1 (supports "~" and "~/x"); prints nothing outside a repo.
 const GIT_PROBE_SCRIPT =
   'D="$1"; case "$D" in "~") D="$HOME";; "~/"*) D="$HOME/${D#\\~/}";; esac; [ -n "$D" ] && cd "$D" 2>/dev/null; ' +
@@ -108,7 +107,8 @@ interface SessionDisconnectedPayload {
   user_initiated?: boolean;
 }
 
-type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'mirrors' | 'cmds' | 'info';
+type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'git' | 'mirrors' | 'cmds' | 'info';
+interface GitRepoInfo { branch: string; isDirty: boolean; dirtyCount: number; statusText: string }
 
 interface SessionViewProps {
   session: Session;
@@ -256,10 +256,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
   useEffect(() => { statusRef.current = status; }, [status]);
 
   const [gitInfo, setGitInfo] = useState<GitRepoInfo | null>(null);
-  const [gitDrawerOpen, setGitDrawerOpen] = useState(false);
-  // Mount the drawer on first open and keep it mounted so its internal state survives close/reopen.
-  const [gitDrawerMounted, setGitDrawerMounted] = useState(false);
-  useEffect(() => { if (gitDrawerOpen) setGitDrawerMounted(true); }, [gitDrawerOpen]);
 
   const activeTabRef = useRef<string>("");
 
@@ -606,11 +602,12 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     docker: useFeatureFlag('panelDocker'),
     processes: useFeatureFlag('panelProcesses'),
     services: useFeatureFlag('panelServices'),
+    git: useFeatureFlag('panelGit'),
     info: useFeatureFlag('panelSystem'),
     cmds: useFeatureFlag('panelLibrary'),
     mirrors: true,
   };
-  const gitEnabled = useFeatureFlag('panelGit');
+  const gitEnabled = toolEnabled.git;
   // Keep the Git pill in step with the shell: refresh when you cd (prompt/OSC 7 report) or switch panes.
   useEffect(() => {
     if (!gitEnabled) return;
@@ -1811,7 +1808,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             <button
               onClick={() => {
                 refreshGitInfo();
-                setGitDrawerOpen(true);
+                setActiveTool('git');
               }}
               title={gitInfo ? `Git: ${gitInfo.branch} (${gitInfo.isDirty ? `${gitInfo.dirtyCount} modified` : "clean"})` : "Inspect Git Status"}
               className={`h-5 px-2 rounded border flex items-center gap-1.5 shrink-0 transition-all font-mono text-[10px] ${
@@ -1913,6 +1910,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
+                { id: 'git',       icon: GitBranch, label: 'Git',      hint: 'Git — source control' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
               ]
             : [
@@ -1921,6 +1919,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — systemd services' },
+                { id: 'git',       icon: GitBranch, label: 'Git',      hint: 'Git — source control' },
                 { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
               ]
@@ -2511,6 +2510,28 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           </div>
           )}
 
+          {/* Git (Source Control) Panel */}
+          {toolEnabled.git && openedTools.has('git') && (
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'git' ? '' : 'hidden'}`}>
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-white/5 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Source Control</span>
+              <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+            <Suspense fallback={<PanelFallback />}>
+            <GitPanel
+              sessionId={session.id}
+              terminalId={activeTab}
+              isLocal={session.isLocal}
+              disabled={status !== 'connected'}
+              visible={activeTool === 'git'}
+              onChanged={refreshGitInfo}
+            />
+            </Suspense>
+          </div>
+          )}
+
           {/* InfoPanel (System, Network, Ports) */}
           {toolEnabled.info && openedTools.has('info') && (
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'info' ? '' : 'hidden'}`}>
@@ -2533,19 +2554,6 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           )}
         </div>
       </div>
-      {/* Git Drawer */}
-      {gitEnabled && gitDrawerMounted && (
-        <Suspense fallback={null}>
-          <GitDrawer
-            isOpen={gitDrawerOpen}
-            onClose={() => setGitDrawerOpen(false)}
-            sessionId={session.id}
-            terminalId={activeTab}
-            gitInfo={gitInfo}
-            onRefresh={refreshGitInfo}
-          />
-        </Suspense>
-      )}
       {pathChoices && (
         <PathChoiceModal
           name={pathChoices.name}

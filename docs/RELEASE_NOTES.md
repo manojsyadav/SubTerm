@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(git)` — Git tab with a Source Control panel**:
+  The tool row has a **Git** button next to Docker and Services, on SSH and local tabs. It opens a panel laid out like VS Code's Source Control: a message box (Ctrl+Enter commits), **Staged Changes** and **Changes** with a +/− per file and for all files, a **Commit** button that becomes **Publish Branch** for a branch with no upstream and **Sync Changes** when you are ahead or behind, a **…** menu with Pull, Push, Fetch, Stash and Pop Stash, and the last 50 commits with their branches and tags. With nothing staged, Commit commits every change. The panel follows the terminal's folder; you can also type a repository path at the top. Git runs on a separate channel, so it never prompts in your shell: a push that needs a password fails with git's message instead. The branch pill now opens this panel; the old Git drawer is gone. Off switch: Settings > Features > Panels > Git pill and Source Control panel.
+
 - **`feat(ai)` — AI assistant with local and online models**:
   The Copilot button and Ctrl+I now open an AI panel on the right of the terminal. It works with a local Ollama or LM Studio (no key needed) and with Anthropic, OpenAI, Google Gemini and OpenRouter, or any OpenAI-compatible endpoint. Add models under Settings > Features > AI assistant. API keys are stored in the encrypted vault and are not synced.
 

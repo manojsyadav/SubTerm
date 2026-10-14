@@ -192,6 +192,16 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Click the **Logs** button to view real-time log output.
    - Click the **Terminal** icon to attach an interactive `docker exec -it` shell directly inside the container.
 
+### Workflow 4b: Committing with the Git Tab
+
+*Goal*: Stage, commit and push changes in a repository on the server or on this computer.
+
+1. Click **Git** in the tool row (or the branch pill). The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
+2. Hover a file under **Changes** and click **+** to stage it (**−** under **Staged Changes** unstages). The **+** on the section header stages everything.
+3. Type a message and press **Ctrl+Enter** or click **Commit**. If nothing is staged, all changes are committed.
+4. With a clean tree, the button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push). Pull, Push, Fetch and Stash are under **…**.
+5. Git runs without a terminal, so it can't ask for a password. Use an SSH key, a credential helper, or agent forwarding for pushes.
+
 ### Workflow 5: Parameterized Snippets & Runbook Automation
 
 *Goal*: Create and execute reusable commands with dynamic variable prompts and default values.
