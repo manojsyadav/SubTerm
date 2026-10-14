@@ -120,4 +120,4 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## Settled decisions (not doing, and why)
 
-- **No "trim trailing spaces on copy" or "Alt as Meta" options.** Selection text already omits trailing whitespace, and xterm already sends Alt as an ESC prefix on desktop.
+- **No "Alt as Meta" option.** xterm already sends Alt as an ESC prefix on desktop.
