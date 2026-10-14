@@ -71,4 +71,29 @@ describe("QuickEditorModal viewer mode", () => {
     act(() => btn(host, "Edit")!.click());
     expect(host.querySelector("textarea")!.value).toBe("# Hello\n\nworld");
   });
+
+  it("opens the in-viewer find bar on Ctrl+F and counts search matches", async () => {
+    const host = await open("/r/README.md");
+    expect(host.querySelector("input[placeholder='Find in document…']")).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
+    });
+
+    const searchInput = host.querySelector("input[placeholder='Find in document…']") as HTMLInputElement | null;
+    expect(searchInput).not.toBeNull();
+
+    act(() => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      nativeSetter?.call(searchInput, "world");
+      searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("1 of 1");
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(host.querySelector("input[placeholder='Find in document…']")).toBeNull();
+  });
 });

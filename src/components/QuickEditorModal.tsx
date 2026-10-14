@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   X, Save, FileCode, Check, RefreshCw, SplitSquareHorizontal, 
-  Copy, MessageSquareOff, Eye, Pencil
+  Copy, MessageSquareOff, Eye, Pencil, Search, ChevronUp, ChevronDown
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { computeDiff } from "../fs/diff";
@@ -59,6 +59,30 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
   });
 
   const isDirty = content !== originalContent;
+
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
+
+  const matchesCount = useMemo(() => {
+    if (!searchQuery.trim()) return 0;
+    try {
+      const rx = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      return (content.match(rx) || []).length;
+    } catch {
+      return 0;
+    }
+  }, [content, searchQuery]);
+
+  const findNext = (backwards = false) => {
+    if (!searchQuery.trim()) return;
+    if (typeof window !== "undefined" && typeof (window as unknown as { find?: (q: string, caseSensitive: boolean, backwards: boolean, wrap: boolean) => boolean }).find === "function") {
+      (window as unknown as { find: (q: string, caseSensitive: boolean, backwards: boolean, wrap: boolean) => boolean }).find(searchQuery, false, backwards, true);
+    }
+    if (matchesCount > 0) {
+      setSearchIndex((prev) => (backwards ? (prev <= 1 ? matchesCount : prev - 1) : (prev >= matchesCount ? 1 : prev + 1)));
+    }
+  };
 
   // Load file content whenever entry opens
   useEffect(() => {
@@ -137,7 +161,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
     }
   };
 
-  // Keyboard shortcut Ctrl+S / Cmd+S
+  // Keyboard shortcut Ctrl+S / Cmd+S and Ctrl+F in viewer
   useEffect(() => {
     if (!isOpen) return;
 
@@ -145,7 +169,17 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         handleSave();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        if (mode === "view") {
+          e.preventDefault();
+          setShowSearch((prev) => !prev);
+        }
       } else if (e.key === "Escape") {
+        if (showSearch) {
+          e.preventDefault();
+          setShowSearch(false);
+          return;
+        }
         if (isDirty) {
           if (window.confirm("You have unsaved changes. Discard and close?")) {
             onClose();
@@ -158,7 +192,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, content, originalContent, isDirty, saving, entry]);
+  }, [isOpen, content, originalContent, isDirty, saving, entry, mode, showSearch]);
 
   const lines = useMemo(() => content.split("\n"), [content]);
   const diffLines = useMemo(() => {
@@ -240,6 +274,22 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
             </button>
             )}
 
+            {/* Find in viewer */}
+            {mode === "view" && (
+              <button
+                onClick={() => setShowSearch((s) => !s)}
+                className={`h-7 px-2 rounded-lg border text-xs flex items-center gap-1 transition-all ${
+                  showSearch
+                    ? "bg-primary/20 border-primary/40 text-primary font-semibold"
+                    : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                }`}
+                title="Find in viewer (Ctrl+F)"
+                aria-label="Find in viewer"
+              >
+                <Search size={13} />
+              </button>
+            )}
+
             {/* Copy Button */}
             <button
               onClick={async () => {
@@ -287,6 +337,67 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* In-viewer Find Bar */}
+        {showSearch && (
+          <div className="px-4 py-1.5 bg-[#17171f] border-b border-white/10 flex items-center gap-2 text-xs">
+            <Search size={13} className="text-zinc-500 shrink-0" />
+            <input
+              type="text"
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchIndex(e.target.value.trim() ? 1 : 0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  findNext(e.shiftKey);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setShowSearch(false);
+                }
+              }}
+              placeholder="Find in document…"
+              aria-label="Find in document"
+              className="bg-black/30 border border-white/10 rounded px-2 py-0.5 text-zinc-200 placeholder-zinc-500 font-mono text-[11px] focus:outline-none focus:border-primary/50 w-64"
+            />
+            <span className="text-[10.5px] text-zinc-400 font-mono select-none min-w-[70px]">
+              {searchQuery.trim()
+                ? matchesCount > 0
+                  ? `${searchIndex || 1} of ${matchesCount}`
+                  : "No matches"
+                : ""}
+            </span>
+            <button
+              onClick={() => findNext(true)}
+              disabled={!matchesCount}
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30"
+              title="Previous match (Shift+Enter)"
+              aria-label="Previous match"
+            >
+              <ChevronUp size={13} />
+            </button>
+            <button
+              onClick={() => findNext(false)}
+              disabled={!matchesCount}
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30"
+              title="Next match (Enter)"
+              aria-label="Next match"
+            >
+              <ChevronDown size={13} />
+            </button>
+            <button
+              onClick={() => setShowSearch(false)}
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 ml-auto"
+              title="Close find (Esc)"
+              aria-label="Close find"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
 
         {/* Error Banner */}
         {error && (
