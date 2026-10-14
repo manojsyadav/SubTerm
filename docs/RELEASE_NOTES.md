@@ -215,6 +215,9 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(editor)` — A file that could not be opened can no longer be overwritten**:
+  When a file fails to open in the editor, most often because it is over 2 MB, the editor shows the error and stays read-only: Edit and Save are not available. Before, the empty editor could still be edited and saved, which replaced the whole file with what was typed (a 6 MB log became 5 bytes in testing). The editor also starts empty for each file, so the previous file's text can't be saved into the next one.
+
 - **`fix(build)` — Desktop bundle identifier no longer ends in `.app`**:
   The desktop identifier is now `com.subterm.desktop` (macOS treats folders ending in `.app` as app bundles, and Tauri warned about it). On first start SubTerm copies profiles, sync and cloud settings, recordings and saved preferences from the old `com.subterm.app` folders; nothing in the new folder is overwritten. Android keeps `com.subterm.app`, so phone updates are unaffected. On Windows the new installer installs alongside the old one once: uninstall the old "SubTerm" entry after checking your data came across. On macOS and Linux saved preferences (not profiles) may not carry over, because the webview keeps them elsewhere; export them with Settings > General > Backup & Restore before upgrading.
 
