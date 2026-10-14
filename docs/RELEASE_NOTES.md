@@ -20,7 +20,7 @@
   When a server asks `[sudo] password for …` in a session that logged in with a saved password, a bar offers **Fill password**. Before sending, SubTerm types `x` + Backspace and refuses if anything echoes back, so the password only goes to a prompt that hides input (the right-click **Paste saved password** uses the same check). The bar closes when you type or the prompt goes away. Off switch: Settings > Features > Terminal > Offer saved password at sudo prompts.
 
 - **`feat(terminal)` — Built-in shell integration for local shells**:
-  Local PowerShell and bash tabs now report when each command ends (OSC 133), so command blocks show exit codes and "Long command finished" notifications work without installing anything. It wraps your existing PowerShell prompt and sets `PROMPT_COMMAND` for bash (a `PROMPT_COMMAND` in your `.bashrc` takes precedence). Applies while Command blocks is on; local cmd and WSL are not covered.
+  Local PowerShell, bash and WSL tabs now report when each command ends (OSC 133), so command blocks show exit codes and "Long command finished" notifications work without installing anything. It wraps your existing PowerShell prompt and sets `PROMPT_COMMAND` for bash (a `PROMPT_COMMAND` in your `.bashrc` takes precedence). Applies while Command blocks is on. WSL gets it through `WSLENV` when its shell is bash; local cmd is not covered. When the local prompt comes back after an `ssh` you typed ends, SubTerm offers saved servers again, in bash and WSL too.
 
 - **`feat(sftp)` — Browse this computer from the SFTP page**:
   **This computer** on the SFTP page opens the file browser on local files without connecting to a server (create, rename, delete, open). It remembers the last folder. Desktop only.

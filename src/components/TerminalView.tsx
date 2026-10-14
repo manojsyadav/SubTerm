@@ -911,8 +911,10 @@ const TerminalView = ({
     // OSC 133 Shell Integration handler (FinalTerm / iTerm / VS Code spec)
     try {
       term.parser.registerOscHandler(133, (data: string) => {
-        if (!isFeatureEnabled('terminalCommandBlocks')) return true; // swallow the marker, track nothing
         const parts = data.split(';');
+        // Only SubTerm's own local shell hook adds this tag, so a remote prompt seen through ssh can't trigger it.
+        if (isLocal && parts[0] === 'A' && parts.includes('subterm=local')) sshForegroundRef.current = false;
+        if (!isFeatureEnabled('terminalCommandBlocks')) return true; // swallow the marker, track nothing
         const action = parts[0]?.trim();
         const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
 

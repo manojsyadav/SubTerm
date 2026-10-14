@@ -219,20 +219,22 @@ function global:prompt {
   $ok = $global:?
   $c = if ($ok) { 0 } elseif ($global:LASTEXITCODE) { $global:LASTEXITCODE } else { 1 }
   $e = [char]27; $b = [char]7
-  "$e]133;D;$c$b$e]133;A$b" + (& $global:__stPrompt)
+  "$e]133;D;$c$b$e]133;A;subterm=local$b" + (& $global:__stPrompt)
 }"#;
 
 /// bash equivalent; a PROMPT_COMMAND set in the user's .bashrc replaces it.
-const BASH_PROMPT_COMMAND: &str = r#"printf '\033]133;D;%s\007\033]133;A\007' "$?""#;
+const BASH_PROMPT_COMMAND: &str = r#"printf '\033]133;D;%s\007\033]133;A;subterm=local\007' "$?""#;
 
 #[cfg_attr(mobile, allow(dead_code))]
 enum ShellIntegration {
     Args(Vec<String>),
-    Env(&'static str, &'static str),
+    Env(Vec<(&'static str, String)>),
 }
 
 /// How to add OSC 133 markers to `shell_cmd`, if it is a shell we know how to hook.
-/// cmd has no prompt hook, and WSL does not pass the environment through.
+/// cmd has no prompt hook. WSL only passes variables listed in WSLENV through.
+/// The `subterm=local` tag on the prompt marker tells this shell's prompt apart
+/// from a remote shell's one, inside an ssh started from it.
 #[cfg_attr(mobile, allow(dead_code))]
 fn shell_integration(shell_cmd: &str) -> Option<ShellIntegration> {
     let name = std::path::Path::new(shell_cmd)
@@ -250,7 +252,14 @@ fn shell_integration(shell_cmd: &str) -> Option<ShellIntegration> {
                 base64::engine::general_purpose::STANDARD.encode(utf16),
             ]))
         }
-        "bash" => Some(ShellIntegration::Env("PROMPT_COMMAND", BASH_PROMPT_COMMAND)),
+        "bash" => Some(ShellIntegration::Env(vec![("PROMPT_COMMAND", BASH_PROMPT_COMMAND.into())])),
+        "wsl" => {
+            let wslenv = match std::env::var("WSLENV") {
+                Ok(v) if !v.is_empty() => format!("{v}:PROMPT_COMMAND/u"),
+                _ => "PROMPT_COMMAND/u".into(),
+            };
+            Some(ShellIntegration::Env(vec![("PROMPT_COMMAND", BASH_PROMPT_COMMAND.into()), ("WSLENV", wslenv)]))
+        }
         _ => None,
     }
 }
@@ -377,7 +386,7 @@ fn resolve_local_shell(input: Option<&str>) -> (String, Vec<String>) {
     if shell_integration_on.unwrap_or(false) {
         match shell_integration(&shell_cmd) {
             Some(ShellIntegration::Args(args)) => args.iter().for_each(|a| cmd.arg(a)),
-            Some(ShellIntegration::Env(k, v)) => cmd.env(k, v),
+            Some(ShellIntegration::Env(vars)) => vars.iter().for_each(|(k, v)| cmd.env(k, v)),
             None => {}
         }
     }
@@ -653,7 +662,7 @@ mod shell_integration_tests {
     use super::*;
 
     #[test]
-    fn hooks_powershell_and_bash_only() {
+    fn hooks_powershell_bash_and_wsl() {
         use base64::Engine as _;
         let Some(ShellIntegration::Args(args)) = shell_integration("/usr/bin/pwsh") else { panic!("pwsh") };
         assert_eq!(&args[..2], ["-NoExit", "-EncodedCommand"]);
@@ -661,9 +670,12 @@ mod shell_integration_tests {
         let units: Vec<u16> = raw.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
         assert_eq!(String::from_utf16(&units).unwrap(), PWSH_INTEGRATION);
         assert!(matches!(shell_integration("powershell.exe"), Some(ShellIntegration::Args(_))));
-        assert!(matches!(shell_integration("/bin/bash"), Some(ShellIntegration::Env("PROMPT_COMMAND", _))));
+        let Some(ShellIntegration::Env(vars)) = shell_integration("/bin/bash") else { panic!("bash") };
+        assert_eq!(vars[0].0, "PROMPT_COMMAND");
+        assert!(vars[0].1.contains("133;A;subterm=local"));
+        let Some(ShellIntegration::Env(vars)) = shell_integration("wsl.exe") else { panic!("wsl") };
+        assert!(vars.iter().any(|(k, v)| *k == "WSLENV" && v.ends_with("PROMPT_COMMAND/u")));
         assert!(shell_integration("cmd.exe").is_none());
-        assert!(shell_integration("wsl.exe").is_none());
         assert!(shell_integration("/usr/bin/zsh").is_none());
     }
 }
