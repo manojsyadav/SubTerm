@@ -24,8 +24,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
-- 🟡 **P2 / S** — Push `main` to Gitea (`origin`, 10.0.0.20:222). It is about 50 commits ahead of `origin/main`, including the AI assistant merge (febbe85) and the fixes after it.
-- 🟢 **P3 / S** — Merge `feat/ai-assistant` into `main` again for whatever lands on it after febbe85 (another session was still committing to it).
 
 - 🟢 **P3 / S** — Git prompt: still to try in the app with plain bash and WSL bash (only Docker's `sh` distro was available), with oh-my-posh, and in a very large repo (prompt delay). Checked in a running build on 2026-10-14: Windows PowerShell and PowerShell 7 show clean, dirty `●1`, ahead `↑1`, diverged `↑1 ↓1` after a fetch, detached HEAD as a short hash, and nothing outside a repo. Git Bash keeps its own `(main)` prompt, as designed.
 - 🟢 **P3 / S** — File viewer: still to try Ctrl+F in view mode and clicking a Markdown link (opens the browser). Checked in a running build: local and remote (SFTP) files open read-only, Edit then Save writes the file, README.md renders headings, task lists, tables and code, and literal `<img onerror>` / `<script>` stay text and never run. Files over 2 MB are refused; that check found the overwrite bug fixed in b6524f4.

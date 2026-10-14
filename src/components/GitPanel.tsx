@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, RefreshCw, MoreHorizontal, Plus, Minus, UploadCloud, ArrowDownUp, ChevronDown, ChevronRight, FolderGit2, Sparkles } from "lucide-react";
+import { Check, RefreshCw, MoreHorizontal, Plus, Minus, UploadCloud, ArrowDownUp, ChevronDown, ChevronRight, FolderGit2, Sparkles, RotateCcw } from "lucide-react";
 import type { ExecResult } from "../ai/agentLoop";
 import { getTerminalCwd, onTerminalCwdChange, setTerminalGitBranch, shellQuote } from "../terminal/cwd";
 import { parseStatusZ, parseLog, LOG_FORMAT, type GitStatus, type GitCommit, type GitFile } from "../git/porcelain";
@@ -212,6 +212,20 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
     { label: "Pop Stash", cmds: [["stash", "pop"]] },
   ];
 
+  const discardFile = (f: GitFile) => {
+    if (!window.confirm(`Discard changes in "${f.path}"? This cannot be undone.`)) return;
+    if (f.code === "U" || f.code === "?") {
+      run([["clean", "-f", "--", top(f.path)]]);
+    } else {
+      run([["restore", "--", top(f.path)]]);
+    }
+  };
+
+  const discardAll = () => {
+    if (!window.confirm("Discard ALL changes in the working tree? This cannot be undone.")) return;
+    run([["restore", "."], ["clean", "-fd"]]);
+  };
+
   const fileRow = (f: GitFile, staged: boolean) => {
     const name = f.path.split("/").pop() || f.path;
     const parent = f.path.slice(0, f.path.length - name.length).replace(/\/$/, "");
@@ -229,6 +243,17 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
         >
           {staged ? <Minus size={12} /> : <Plus size={12} />}
         </button>
+        {!staged && (
+          <button
+            onClick={() => discardFile(f)}
+            disabled={busy}
+            title="Discard Changes"
+            aria-label={`Discard changes in ${f.path}`}
+            className="p-0.5 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          >
+            <RotateCcw size={12} />
+          </button>
+        )}
         <span className={`w-3 text-center font-bold text-[10px] ${color}`}>{f.code}</span>
       </div>
     );
@@ -333,7 +358,12 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
             {section("changes", "Changes", status.changes.length, status.changes.length
               ? status.changes.map((f) => fileRow(f, false))
               : <p className="px-6 py-1 text-zinc-500">No changes.</p>,
-              status.changes.length > 0 && <button onClick={() => run([["add", "-A"]])} disabled={busy} title="Stage All Changes" aria-label="Stage All Changes" className="p-0.5 rounded hover:bg-white/10 hover:text-white"><Plus size={12} /></button>)}
+              status.changes.length > 0 && (
+                <div className="flex items-center gap-0.5">
+                  <button onClick={discardAll} disabled={busy} title="Discard All Changes" aria-label="Discard All Changes" className="p-0.5 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"><RotateCcw size={12} /></button>
+                  <button onClick={() => run([["add", "-A"]])} disabled={busy} title="Stage All Changes" aria-label="Stage All Changes" className="p-0.5 rounded hover:bg-white/10 hover:text-white"><Plus size={12} /></button>
+                </div>
+              ))}
 
             {section("graph", "Graph", null, (
               <div className="pb-2">
