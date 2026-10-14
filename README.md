@@ -21,6 +21,10 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - [**Security & Threat Model**](docs/SECURITY.md): Argon2id KDF specifications, AES-256-GCM AEAD encryption, zero-knowledge cloud sync, and safety controls.
 - [**Performance & Competitive Benchmarks**](docs/PERFORMANCE.md): WebGL hardware acceleration throughput, memory footprint, and competitive matrix against Termius, Warp, Ghostty, PuTTY, WinSCP, and MobaXterm.
 - [**User Guide & Workflows**](docs/USER_GUIDE.md): Step-by-step guides for server connectivity, SFTP editing, port forwarding, and settings.
+- [**Data Model**](docs/DATA_MODEL.md): The vault's logical schema, what syncs and how (UUID + HLC + soft delete), and what lives outside the vault.
+- [**Backup & Recovery**](docs/BACKUP_AND_RECOVERY.md): What is irreplaceable, how to export and restore a profile, and why there is no password recovery.
+- [**Runbook**](docs/RUNBOOK.md): Cutting a release, responding to a dependency advisory, rotating keys, recurring maintenance.
+- [**Troubleshooting**](docs/TROUBLESHOOTING.md): Symptom-first, including the Linux WebKit workarounds and the platform-specific gotchas.
 - [**Release Notes**](docs/RELEASE_NOTES.md): Customer-ready changelog and feature announcements for version releases.
 - [**Roadmap & Backlog**](TODO.md): Active development tasks, pending architectural optimizations, and strategic feature milestones.
 
