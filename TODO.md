@@ -100,9 +100,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## Settled decisions (not doing, and why)
 
-- **No re-wrapping of long lines in a narrow local Windows pane.** A line wider than the pane is cut at the edge until the pane is wider again. ConPTY repaints the screen from its own copy after a resize, and that copy cuts the line; `portable-pty` already passes `PSEUDOCONSOLE_RESIZE_QUIRK`. Letting xterm own the screen would need ConPTY's experimental passthrough mode, which means patching `portable-pty`, and it changes how every console program's output is handled. Revisit if passthrough becomes the ConPTY default.
-- **No tar fast path for folder transfers** (removed 2026-10-13). It ran `tar` on the server and unpacked locally, which skipped every local path guard — a malicious server could drop files outside the chosen folder, e.g. into the Windows Startup folder — quoted server paths in double quotes (so `$(…)` ran), used guessable `/tmp` names, and reported "done" when tar failed. Folder transfers always use the guarded per-file walk. Revisit only with extraction into a temp dir plus per-entry validation, single-quote escaping, `mktemp`, and exit-code checks.
 - **No transfer-concurrency setting.** Uploads and downloads take one slot per session on purpose (`acquireTransferSlot`): two transfers aimed at the same path would both pass the backend's exists check and write into the file together. Revisit only with a per-path lock.
 - **No "trim trailing spaces on copy" or "Alt as Meta" options.** Selection text already omits trailing whitespace, and xterm already sends Alt as an ESC prefix on desktop.
-- **No separate "show hidden files by default" setting.** The file browser's own toggle already remembers the choice.
-- **Monitoring intervals and alert thresholds stay on the Monitor page.** Settings only holds the on/off switch and a link; duplicating them would put one value in two places.
+
