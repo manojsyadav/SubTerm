@@ -361,6 +361,7 @@ pub fn run() {
             commands::diagnostics::ssh_systemctl_action,
             commands::diagnostics::ssh_kill_process,
             commands::diagnostics::detect_session_os,
+            commands::diagnostics::get_session_telemetry,
             commands::diagnostics::ssh_iptables_chain,
             commands::diagnostics::ssh_nft_chain,
             docker::ssh_docker_container_action,

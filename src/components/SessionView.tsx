@@ -476,6 +476,63 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     });
   }, [activeTab]);
 
+  const [loadAvg, setLoadAvg] = useState<number | null>(null);
+  const prevCpuRef = useRef<{ total: number; idle: number } | null>(null);
+
+  // Direct active SSH session telemetry polling
+  useEffect(() => {
+    if (session?.isLocal || status !== "connected") return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await invoke<{
+          cpu_total?: number | null;
+          cpu_idle?: number | null;
+          cpu_perc?: number | null;
+          mem_perc?: number | null;
+          load?: number | null;
+          temp_c?: number | null;
+        }>("get_session_telemetry", { sessionId: session.id });
+
+        if (cancelled) return;
+
+        if (typeof res.cpu_perc === "number") {
+          setCpuUsage(res.cpu_perc);
+        } else if (typeof res.cpu_total === "number" && typeof res.cpu_idle === "number") {
+          if (prevCpuRef.current) {
+            const dt = res.cpu_total - prevCpuRef.current.total;
+            const di = res.cpu_idle - prevCpuRef.current.idle;
+            if (dt > 0) {
+              const perc = Math.max(0, Math.min(100, ((dt - di) / dt) * 100));
+              setCpuUsage(perc);
+            }
+          }
+          prevCpuRef.current = { total: res.cpu_total, idle: res.cpu_idle };
+        }
+
+        if (typeof res.mem_perc === "number") {
+          setMemUsage(res.mem_perc);
+        }
+        if (typeof res.temp_c === "number") {
+          setTempUsage(res.temp_c);
+        }
+        if (typeof res.load === "number") {
+          setLoadAvg(res.load);
+        }
+      } catch {
+        // Silently ignore telemetry poll error
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 3500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [session?.id, session?.isLocal, status]);
+
   useEffect(() => {
     if (!session?.serverId || session.serverId <= 0) return;
     const unlistenPromise = listen<{ values?: Record<string, number> }>(
@@ -2575,29 +2632,29 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
       {/* Bottom Status Bar */}
       {!chromeless && (
-        <footer className="h-7 shrink-0 bg-[#0c0c0f] border-t border-white/5 flex items-center justify-between px-2 sm:px-3 text-[10.5px] font-mono text-zinc-400 select-none z-10 gap-2">
+        <footer className="h-8 shrink-0 bg-[#0c0c0f] border-t border-white/5 flex items-center justify-between px-2.5 sm:px-3 text-[11.5px] sm:text-xs font-mono text-zinc-300 select-none z-10 gap-2">
           {/* Left: Detected OS badge + Quick commands */}
           <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar">
             {detectedOs && (
               <div
                 title={`Detected OS: ${detectedOs.distro} ${detectedOs.version} ${detectedOs.kernel ? `| Kernel: ${detectedOs.kernel}` : ""}`}
-                className="h-5 px-1.5 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1 shrink-0 text-[10px] select-none font-sans"
+                className="h-6 px-2 rounded-md bg-white/[0.05] border border-white/10 text-zinc-200 flex items-center gap-1.5 shrink-0 text-[11px] sm:text-[11.5px] select-none font-sans"
               >
-                <DistroLogo distroId={detectedOs.distro_id} distroName={detectedOs.distro} osType={detectedOs.os_type} size={11} />
-                <span className="font-semibold text-zinc-300 truncate max-w-[80px] sm:max-w-none">{detectedOs.distro || detectedOs.os_type}</span>
+                <DistroLogo distroId={detectedOs.distro_id} distroName={detectedOs.distro} osType={detectedOs.os_type} size={13} />
+                <span className="font-semibold text-zinc-200 truncate max-w-[90px] sm:max-w-none">{detectedOs.distro || detectedOs.os_type}</span>
               </div>
             )}
 
             <div className="flex items-center gap-1 shrink-0">
-              <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold ml-0.5 mr-0.5 select-none">Quick:</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 ml-0.5 mr-0.5 select-none">Quick:</span>
               {onOpenSettings && (
                 <button
                   type="button"
                   onClick={onOpenSettings}
                   title="Customize Quick Commands by OS/Environment in Settings"
-                  className="h-4 w-4 rounded hover:bg-white/10 text-zinc-500 hover:text-primary transition-colors flex items-center justify-center mr-0.5"
+                  className="h-5 w-5 rounded hover:bg-white/10 text-zinc-400 hover:text-primary transition-colors flex items-center justify-center mr-0.5"
                 >
-                  <SlidersHorizontal size={10} />
+                  <SlidersHorizontal size={11.5} />
                 </button>
               )}
             </div>
@@ -2612,21 +2669,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                   }).catch(console.error);
                 }}
                 title={`Run: ${item.cmd.replace('\r', '')}`}
-                className="h-5 px-1.5 rounded bg-white/[0.03] hover:bg-primary/10 border border-white/5 hover:border-primary/25 hover:text-primary transition-all shrink-0 flex items-center text-[10px]"
+                className="h-6 px-2 rounded-md bg-white/[0.04] hover:bg-primary/10 border border-white/10 hover:border-primary/30 hover:text-primary transition-all shrink-0 flex items-center text-[11px] sm:text-[11.5px] font-mono font-medium"
               >
                 {item.label}
               </button>
             ))}
           </div>
 
-          {/* Right: Path (CWD), CPU%, MEM%, Temp (if available), Host/Server details */}
-          <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
+          {/* Right: Path (CWD), CPU%, MEM%, Temp/Load, Host/Server details */}
+          <div className="flex items-center gap-1.5 shrink-0 text-[11px] sm:text-[11.5px]">
             {activeCwd && (
               <div
                 title={`Working Directory: ${activeCwd}`}
-                className="flex items-center gap-1 text-zinc-400 bg-white/[0.02] px-1.5 py-0.5 rounded border border-white/5 max-w-[130px] sm:max-w-[220px] truncate"
+                className="h-6 flex items-center gap-1.5 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/10 max-w-[150px] sm:max-w-[260px] truncate"
               >
-                <Folder size={11} className="text-zinc-500 shrink-0" />
+                <Folder size={12} className="text-zinc-500 shrink-0" />
                 <span className="truncate">{activeCwd}</span>
               </div>
             )}
@@ -2634,13 +2691,13 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             {cpuUsage !== null && (
               <div
                 title={`CPU Usage: ${cpuUsage.toFixed(1)}%`}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${
-                  cpuUsage > 85 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
-                  cpuUsage > 60 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                  'text-zinc-400 bg-white/[0.02] border-white/5'
+                className={`h-6 flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-mono ${
+                  cpuUsage > 85 ? 'text-rose-400 bg-rose-500/10 border-rose-500/25' :
+                  cpuUsage > 60 ? 'text-amber-400 bg-amber-500/10 border-amber-500/25' :
+                  'text-zinc-300 bg-white/[0.03] border-white/10'
                 }`}
               >
-                <Cpu size={11} className="shrink-0" />
+                <Cpu size={12} className="shrink-0 text-primary" />
                 <span>{Math.round(cpuUsage)}%</span>
               </div>
             )}
@@ -2648,46 +2705,54 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             {memUsage !== null && (
               <div
                 title={`Memory Usage: ${memUsage.toFixed(1)}%`}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${
-                  memUsage > 85 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
-                  memUsage > 60 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                  'text-zinc-400 bg-white/[0.02] border-white/5'
+                className={`h-6 flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-mono ${
+                  memUsage > 85 ? 'text-rose-400 bg-rose-500/10 border-rose-500/25' :
+                  memUsage > 60 ? 'text-amber-400 bg-amber-500/10 border-amber-500/25' :
+                  'text-zinc-300 bg-white/[0.03] border-white/10'
                 }`}
               >
-                <Activity size={11} className="shrink-0" />
+                <Activity size={12} className="shrink-0 text-emerald-400" />
                 <span>{Math.round(memUsage)}%</span>
               </div>
             )}
 
-            {tempUsage !== null && (
+            {tempUsage !== null ? (
               <div
-                title={`Temperature: ${tempUsage}°C`}
-                className="flex items-center gap-1 text-zinc-400 bg-white/[0.02] px-1.5 py-0.5 rounded border border-white/5"
+                title={`Temperature: ${tempUsage.toFixed(1)}°C`}
+                className="h-6 flex items-center gap-1.5 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/10 font-mono"
               >
-                <Thermometer size={11} className="shrink-0" />
+                <Thermometer size={12} className="shrink-0 text-amber-400" />
                 <span>{Math.round(tempUsage)}°C</span>
               </div>
-            )}
+            ) : loadAvg !== null ? (
+              <div
+                title={`System Load (1m): ${loadAvg.toFixed(2)}`}
+                className="h-6 flex items-center gap-1.5 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/10 font-mono"
+              >
+                <Activity size={12} className="shrink-0 text-sky-400" />
+                <span>Load {loadAvg.toFixed(2)}</span>
+              </div>
+            ) : null}
 
             <div
               title={session?.isLocal ? "Local Terminal" : `${session?.serverName || ''}${serverDetail ? ` (${serverDetail})` : ''}`}
-              className="flex items-center gap-1 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded border border-white/10 shrink-0"
+              className="h-6 flex items-center gap-1.5 text-zinc-200 bg-white/[0.05] px-2.5 py-0.5 rounded-md border border-white/10 shrink-0 font-medium"
             >
               {session?.isLocal ? (
                 <>
-                  <TerminalSquare size={11} className="text-emerald-400 shrink-0" />
-                  <span className="font-semibold text-zinc-300">
+                  <TerminalSquare size={12} className="text-emerald-400 shrink-0" />
+                  <span className="font-semibold text-zinc-200">
                     {terminals.find((t) => t.id === activeTab)?.shell ?? session.localShell ?? "Local"}
                   </span>
                 </>
               ) : (
                 <>
-                  <Server size={11} className="text-primary shrink-0" />
-                  <span className="font-semibold text-zinc-200 truncate max-w-[100px] sm:max-w-[150px]">
+                  <Server size={12} className="text-primary shrink-0" />
+                  <span className="font-semibold text-zinc-100 truncate max-w-[110px] sm:max-w-[170px]">
                     {session?.serverName}
                   </span>
                   {serverDetail && serverDetail !== session?.serverName && (
-                    <span className="text-zinc-500 hidden md:inline truncate max-w-[130px]">
+                    <span className="text-zinc-400 hidden md:inline truncate max-w-[150px] font-normal">
                       {serverDetail}
                     </span>
                   )}

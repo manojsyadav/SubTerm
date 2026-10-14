@@ -267,6 +267,59 @@ fn parse_os_probe(out: &str) -> serde_json::Value {
     })
 }
 
+#[tauri::command]
+pub(crate) async fn get_session_telemetry(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+) -> Result<serde_json::Value, String> {
+    let probe = r#"if [ -f /proc/stat ]; then
+  awk '
+    /^cpu / { print "CPU_TOTAL:" ($2+$3+$4+$5+$6+$7+$8); print "CPU_IDLE:" ($5+$6); }
+    /^MemTotal:/ { t=$2 } /^MemAvailable:/ { a=$2; ok=1 } /^MemFree:/ { f=$2 } /^Buffers:/ { b=$2 } /^Cached:/ { c=$2 }
+    END { if (ok && t>0) printf "MEM_PERC:%.1f\n", ((t-a)/t)*100; else if (t>0) printf "MEM_PERC:%.1f\n", ((t-(f+b+c))/t)*100; }
+  ' /proc/stat /proc/meminfo 2>/dev/null
+  awk '{printf "LOAD:%.2f\n", $1}' /proc/loadavg 2>/dev/null
+  for z in /sys/class/thermal/thermal_zone*/temp /sys/devices/virtual/thermal/thermal_zone*/temp; do
+    if [ -r "$z" ]; then awk '{printf "TEMP:%.1f\n", $1/1000}' "$z" 2>/dev/null; break; fi
+  done
+elif command -v sysctl >/dev/null 2>&1; then
+  top -l 1 -n 0 2>/dev/null | awk '/CPU usage:/ {sub(/%/, "", $3); printf "CPU_PERC:%.1f\n", $3} /PhysMem:/ {gsub(/[^0-9]/, "", $2); gsub(/[^0-9]/, "", $6); if ($2+$6>0) printf "MEM_PERC:%.1f\n", ($2/($2+$6))*100}'
+fi"#;
+
+    let out = run_exec_capture(&state, &session_id, probe, 5).await.unwrap_or_default();
+    let mut cpu_total: Option<u64> = None;
+    let mut cpu_idle: Option<u64> = None;
+    let mut cpu_perc: Option<f64> = None;
+    let mut mem_perc: Option<f64> = None;
+    let mut load: Option<f64> = None;
+    let mut temp_c: Option<f64> = None;
+
+    for line in out.lines().map(str::trim) {
+        if let Some(v) = line.strip_prefix("CPU_TOTAL:") {
+            cpu_total = v.parse().ok();
+        } else if let Some(v) = line.strip_prefix("CPU_IDLE:") {
+            cpu_idle = v.parse().ok();
+        } else if let Some(v) = line.strip_prefix("CPU_PERC:") {
+            cpu_perc = v.parse().ok();
+        } else if let Some(v) = line.strip_prefix("MEM_PERC:") {
+            mem_perc = v.parse().ok();
+        } else if let Some(v) = line.strip_prefix("LOAD:") {
+            load = v.parse().ok();
+        } else if let Some(v) = line.strip_prefix("TEMP:") {
+            temp_c = v.parse().ok();
+        }
+    }
+
+    Ok(serde_json::json!({
+        "cpu_total": cpu_total,
+        "cpu_idle": cpu_idle,
+        "cpu_perc": cpu_perc,
+        "mem_perc": mem_perc,
+        "load": load,
+        "temp_c": temp_c,
+    }))
+}
+
 // Validate an iptables/nft table/chain identifier — strict allow-list.
 // Chain names on real hosts are alphanumeric plus `-` `_` `.` and occasional
 // `@`; anything else would risk shell injection when we splice into the
