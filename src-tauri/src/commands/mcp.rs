@@ -31,10 +31,7 @@ pub async fn mcp_start(app: AppHandle, port: u16, token: String) -> Result<(), S
     if token.len() < 32 {
         return Err("Token too short".into());
     }
-    mcp_stop();
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
-        .await
-        .map_err(|e| format!("Could not listen on 127.0.0.1:{port}: {e}"))?;
+    let listener = rebind(port).await?;
     let token = Arc::new(token);
     let task = tokio::spawn(async move {
         loop {
@@ -44,6 +41,21 @@ pub async fn mcp_start(app: AppHandle, port: u16, token: String) -> Result<(), S
     });
     inner().lock().map_err(|_| "[STATE] LOCK_FAILED")?.server = Some((port, task));
     Ok(())
+}
+
+/// Stop the running server and bind `port`, waiting for the old listener to be
+/// released first: abort() only requests cancellation, so binding straight away
+/// fails with "address in use" when restarting on the same port (new token).
+async fn rebind(port: u16) -> Result<tokio::net::TcpListener, String> {
+    let old = inner().lock().map_err(|_| "[STATE] LOCK_FAILED")?.server.take();
+    if let Some((_, task)) = old {
+        task.abort();
+        let _ = task.await;
+    }
+    mcp_stop();
+    tokio::net::TcpListener::bind(("127.0.0.1", port))
+        .await
+        .map_err(|e| format!("Could not listen on 127.0.0.1:{port}: {e}"))
 }
 
 #[tauri::command]
@@ -123,5 +135,23 @@ async fn run(app: &AppHandle, session: &SessionInfo, command: &str, client: &str
     match crate::commands::ai::exec_ssh(&app.state::<SshState>(), &session.id, command, EXEC_TIMEOUT).await {
         Ok(r) => (r.to_text(EXEC_TIMEOUT.as_secs()), false),
         Err(e) => (format!("Could not run the command: {e}"), true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn restarting_on_the_same_port_succeeds() {
+        let first = rebind(0).await.unwrap();
+        let port = first.local_addr().unwrap().port();
+        let task = tokio::spawn(async move {
+            let _keep = first;
+            std::future::pending::<()>().await;
+        });
+        inner().lock().unwrap().server = Some((port, task));
+        let again = rebind(port).await.expect("rebind on the same port");
+        assert_eq!(again.local_addr().unwrap().port(), port);
     }
 }
