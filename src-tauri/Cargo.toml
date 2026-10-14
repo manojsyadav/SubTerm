@@ -166,5 +166,10 @@ tauri-plugin-window-state = "2"
 # together with a deliberate tauri upgrade.
 tauri-plugin-autostart = "=2.5.1"
 rfd = "0.14"
+
+# Pinned to what tauri 2.11 already locks, so adding them changes nothing else in Cargo.lock.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "=0.38.2"
+windows-core = "=0.61.2"
 open = "5.1"
 portable-pty = "0.8"

@@ -18,6 +18,8 @@ mod mcp;
 mod hlc;
 mod identity;
 mod vault;
+#[cfg(windows)]
+mod webview_permissions;
 mod commands;
 #[cfg(desktop)]
 mod identifier_migration;
@@ -268,6 +270,8 @@ pub fn run() {
             let cloud_state = cloud::CloudState::new(&app.handle());
             app.manage(cloud_state);
             commands::connection::spawn_connection_health_watchers(app.handle().clone());
+            #[cfg(windows)]
+            webview_permissions::allow_clipboard_read(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

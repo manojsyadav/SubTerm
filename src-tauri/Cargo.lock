@@ -5921,6 +5921,8 @@ dependencies = [
  "tauri-plugin-window-state",
  "tokio",
  "tokio-socks",
+ "webview2-com",
+ "windows-core 0.61.2",
  "x25519-dalek",
  "zeroize",
  "zstd",
