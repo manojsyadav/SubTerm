@@ -96,16 +96,16 @@ export function SettingsKnownHosts() {
       {/* Header card */}
       <div className="bg-[#121215] border border-white/5 rounded-2xl p-6 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
               <ShieldCheck size={20} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-bold text-white tracking-tight">
                   SSH Known Hosts & Fingerprints
                 </h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-mono">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-mono shrink-0">
                   {hosts.length} trusted
                 </span>
               </div>
@@ -115,12 +115,12 @@ export function SettingsKnownHosts() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={fetchKnownHosts}
               disabled={loading}
               title="Refresh known hosts"
-              className="h-8 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0"
             >
               <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
               <span>Refresh</span>
@@ -128,7 +128,7 @@ export function SettingsKnownHosts() {
             {hosts.length > 0 && (
               <button
                 onClick={handleClearAll}
-                className="h-8 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                className="h-8 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0"
               >
                 <Trash2 size={12} />
                 <span>Clear All</span>

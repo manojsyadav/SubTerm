@@ -15,6 +15,17 @@ window.addEventListener("error", (e) => {
   console.error("[app] uncaught error:", e.error ?? e.message);
 });
 
+// Prevent default browser context menu (Back, Refresh, Save as, Print) so SubTerm
+// behaves like a native desktop app. Editable text inputs retain their
+// browser menu for cut/copy/paste, while custom app menus handle their own.
+window.addEventListener("contextmenu", (e) => {
+  const target = e.target as HTMLElement | null;
+  const isEditable = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
+  if (!isEditable) {
+    e.preventDefault();
+  }
+});
+
 // ── Android soft-keyboard sizing (visualViewport → --vv-h) ──────────────────
 // The Android on-screen keyboard covers our fixed-bottom UI (MobileKeyBar,
 // Sidebar dock) unless the layout root shrinks with the keyboard. The
