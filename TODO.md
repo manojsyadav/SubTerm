@@ -24,9 +24,7 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
-- 🔴 **P1 / S** — **Find out why a profile opened with no password prompt.** On 2026-10-14, the release build from 15:31, started with an empty WebView2 storage folder (so no saved biometric token), went straight to the `HomeLab` profile's server list without asking for the master password. The instance was stopped before anything was written. Check `useProfileVault` / `MasterUnlockPage` and the backend `select_profile` / `setup_master_db` path for an automatic unlock, and whether the vault is still encrypted at rest.
 - 🟡 **P2 / S** — Push `main` to Gitea (`origin`, 10.0.0.20:222). It is about 50 commits ahead of `origin/main`, including the AI assistant merge (febbe85) and the fixes after it.
-- 🟡 **P2 / S** — Merge the two branches that are not in `main` yet: `docs/standard-set` (2 commits: data model, backup and recovery, runbook and troubleshooting pages, architecture sequence diagrams) and `docs/session-split-release-note` (1 commit).
 - 🟢 **P3 / S** — Merge `feat/ai-assistant` into `main` again for whatever lands on it after febbe85 (another session was still committing to it).
 - 🟢 **P3 / S** — In a local Windows tab, a pane narrower than a line shows that line cut at the edge (ConPTY repaints its own copy of the screen); widening the pane brings it back in full. Re-wrapping would need SubTerm to own the buffer, as Windows Terminal does. Only worth it if people split local tabs often.
 
