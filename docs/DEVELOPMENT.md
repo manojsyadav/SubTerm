@@ -147,7 +147,7 @@ npm test
 # Test production Vite bundling
 npm run build
 ```
-`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~115 pre-existing ESLint warnings are a tracked baseline (unused imports/vars, `react-hooks/exhaustive-deps` gaps) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
+`npm run lint`, `npm test`, and `cargo check`/`cargo test` are gated in CI (see [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) — a PR that introduces a new lint error, a failing test, or a regression in an already-covered pure function is blocked from merging. ~100 pre-existing ESLint warnings are a tracked baseline (down from ~115 after cleaning unused variables and hook dependencies) and don't fail the gate; `cargo clippy` runs advisory-only pending its own warning-cleanup pass.
 
 ### 5.2 Rust Backend Verification
 ```bash
@@ -158,6 +158,9 @@ cargo check
 
 # Run Rust unit tests (vault path safety, cryptographic routines)
 cargo test
+
+# Run embedded RDP helper tests
+cargo test --manifest-path rdp-helper/Cargo.toml
 
 # Check formatting and lints
 cargo clippy

@@ -98,6 +98,7 @@ The home dashboard's search bar filters by server name or host as you type. It a
      - **Close Tab**: Disconnect and dismiss the active tab.
      - **Close Other Tabs**: Disconnect and close all tabs except the selected session.
      - **Close Tabs to the Right**: Batch-dismiss all tabs situated to the right of the current tab.
+     - **Sub-Tab Pinning & Preserved Output**: In local shell sub-tabs, right-click any sub-tab to **Pin tab** / **Unpin tab**. Pinned sub-tabs display a pin icon, stay positioned at the beginning of the sub-tab strip, and are immune to "Close other tabs" or accidental closure. When a local shell process exits (e.g. typing `exit`), its terminal output is preserved with a reconnection/restart banner rather than abruptly closing other tabs.
      - **Upload public key**: While connected, pick a saved key to append its public half to the server's `~/.ssh/authorized_keys` (`~/.ssh` and `authorized_keys` permissions are set correctly, duplicates are skipped) — the one-click equivalent of `ssh-copy-id`.
 
 10. **1-Click OpenSSH `~/.ssh/config` & Client Importer**:
@@ -252,6 +253,28 @@ The home dashboard's search bar filters by server name or host as you type. It a
      4. Commands run on a separate channel with a 60-second limit, the same way as the AI panel's. Local shells, RDP and the SFTP page's connections are not offered.
      5. **New token** (the refresh button) cuts off agents set up with the old one. Turning the switch off stops the server.
 5. **Privacy**: with an online provider, your messages, the included output, and the output of every command you approve go to that provider. SubTerm asks once per provider before the first send. Use a local model for sessions that show secrets.
+
+### Workflow 7: Git Source Control & Commit Intelligence
+
+*Goal*: Inspect git repository status, stage/unstage changes, generate Conventional Commits messages with AI, and review branch topologies directly within your terminal session.
+
+1. **Open the Git Panel**:
+   - In any local or SSH terminal whose current working directory is inside a git repository, the tool row displays a **Git** button with an automatic branch badge, for example `Git (main)`.
+   - Click the button to toggle the VS Code-inspired Source Control sidebar panel.
+2. **Reviewing and Staging Changes**:
+   - Files are partitioned cleanly into **Staged Changes** and **Changes** (working tree).
+   - Click any file to view side-by-side or inline diffs with line-level change counters (`+X / -Y`).
+   - Use the `+` / `-` buttons per file or at section headers to batch-stage or unstage files.
+3. **AI Commit Message Generation**:
+   - Click the **AI Generate** button above the commit message box.
+   - SubTerm inspects the staged diff (or working tree changes if nothing is staged) and prompts your active AI model (e.g. local Ollama, Claude, GPT, or Gemini) to craft a concise Conventional Commits message (e.g. `feat(auth): add key rotation hook`).
+   - You can review and edit the generated message before committing. Press `Ctrl+Enter` to commit.
+4. **Multi-Lane Commit Graph**:
+   - Click the **Graph** toggle in the Git panel header to view a topological commit graph rendered with SVG lanes.
+   - Visual branch lanes trace branch forks, merges, commit points, tags, and remotes with distinct color paths.
+5. **Shell Prompt Git Integration**:
+   - Built-in shell integration on local PowerShell, Bash, and WSL sessions injects live repository status into your shell prompt (e.g. `[repo:main ↑1 ●2]`).
+   - This status segment can be toggled independently from command block tracking under **Settings > Features > Terminal > Git status in shell prompt**.
 
 ---
 

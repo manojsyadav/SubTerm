@@ -58,7 +58,10 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 - **Native Local Terminal**: Integrated cross-platform local PTY shell (PowerShell/CMD on Windows, Bash/Zsh on macOS/Linux) with full xterm features (themes, shortcuts, OSC 133, copilot, split views). Launchable from the sidebar's Local item (pick a shell), Node Grid, Command Palette, or global shortcut (`Ctrl+Alt+T`); further shells open as sub-tabs of the one Local tab. Drop files or paste a screenshot onto a terminal to type their paths (uploaded to `/tmp` first on SSH sessions).
 - **Production Node Safeguards**: First-class Production Server flag with persistent database tracking, high-visibility `PROD` badges, active Safe Mode with destructive command interception, multi-line paste confirmation.
 - **Parallel Tool Tabs**: Dedicated first-class tabs for **Docker** (containers, images, compose stacks), **Processes** (real-time task manager), and **Services** (systemd control).
-- **Top Bar Quick Access Servers**: Pin up to 5 quick-access servers next to the logo with active green dot status indicators.
+- **Sidebar Session Pinning & Grouping**: Pin servers and sessions directly from the sidebar; pinned servers stay at the top and persist across unlock or closure for 1-click reconnect.
+- **Git Source Control & Commit Intelligence**: Built-in VS Code-style Git panel for local and SSH tabs, active branch badge on the tool row, AI-generated Conventional Commits messages from diffs, and SVG multi-lane commit graphs.
+- **Built-in AI Assistant & MCP Server**: Integrate local (Ollama, LM Studio) or cloud models (Claude, OpenAI, Gemini, OpenRouter) with Suggest, Ask, and Auto execution modes, plus an MCP server allowing agent CLIs (like Claude Code) to interact safely with open SSH sessions.
+- **Local Shell Sub-Tab Pinning & Output Preservation**: Sub-tabs in local terminals can be pinned via right-click to protect against bulk closure, and finished shells retain their buffer and display a restart banner rather than abruptly closing.
 - **Customizable Keyboard Shortcuts**: Fully customizable keybinding manager with interactive key recording, conflict detection, and category filters.
 - **Universal Command Palette**: `Ctrl+K` command palette for cluster fleet operations and quick actions.
 - **Hardware-Accelerated Terminal**: WebGL GPU rasterization with automatic canvas fallback for 60–120+ FPS throughput and reduced CPU overhead.
@@ -85,7 +88,7 @@ Comprehensive technical and user documentation is available in the [`docs/`](doc
 | Appearance | — | Accent color, background theme, terminal theme, fonts, cursor, WebGL, bell |
 | Terminal | — | Right-click, copy on select, link opening, sessions, SSH keep-alive, command widget, triggers |
 | Features | — | Optional feature toggles with their options nested underneath |
-| Quick Access | Partly | Cards for pinned servers and quick commands (**unlock required**: names/IPs and commands may be sensitive) and keyboard shortcuts (no unlock) |
+| Quick Access | Partly | Quick commands (**unlock required**: commands may be sensitive) and keyboard shortcuts (no unlock) |
 | Accounts & Sync | **Yes** | Profiles (create, rename, delete workspaces; change master password) and Cloud & Sync (API endpoint, auth, push/pull sync) |
 | System | **Yes** | Known Hosts (trusted SSH host keys and fingerprints, revocation), Maintenance (reset preferences, cache purge, export) and Activity Log (session diagnostics timeline) |
 
