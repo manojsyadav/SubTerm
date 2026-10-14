@@ -107,10 +107,36 @@ export const DEFAULT_QUICK_COMMANDS: Record<string, QuickCommandEnvGroup> = {
   },
 };
 
+const SEEN_DEFAULTS_KEY = "subterm-quick-commands-seen-defaults";
+// Defaults that shipped after people had saved their own lists. Every other
+// default counts as already seen, so one the user deleted does not come back.
+const LATER_DEFAULT = /-ai-\d+$/;
+const allDefaultIds = () => Object.values(DEFAULT_QUICK_COMMANDS).flatMap((g) => g.commands.map((c) => c.id));
+
+/** Append default commands this user has never been offered to their saved groups. Mutates both arguments. */
+export function addNewDefaults(config: Record<string, QuickCommandEnvGroup>, seen: Set<string>): string[] {
+  const added: string[] = [];
+  for (const [key, def] of Object.entries(DEFAULT_QUICK_COMMANDS)) {
+    const group = config[key];
+    for (const cmd of def.commands) {
+      if (seen.has(cmd.id)) continue;
+      seen.add(cmd.id);
+      if (group && !group.commands.some((c) => c.id === cmd.id)) {
+        config[key] = { ...config[key], commands: [...config[key].commands, cmd] };
+        added.push(cmd.id);
+      }
+    }
+  }
+  return added;
+}
+
 export function loadQuickCommandsConfig(): Record<string, QuickCommandEnvGroup> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_QUICK_COMMANDS };
+    if (!raw) {
+      localStorage.setItem(SEEN_DEFAULTS_KEY, JSON.stringify(allDefaultIds()));
+      return { ...DEFAULT_QUICK_COMMANDS };
+    }
     const parsed = JSON.parse(raw);
     // Ensure all default env keys exist
     const merged: Record<string, QuickCommandEnvGroup> = { ...DEFAULT_QUICK_COMMANDS };
@@ -122,6 +148,11 @@ export function loadQuickCommandsConfig(): Record<string, QuickCommandEnvGroup> 
         };
       }
     }
+    const storedSeen = localStorage.getItem(SEEN_DEFAULTS_KEY);
+    const seen = new Set<string>(storedSeen ? JSON.parse(storedSeen) : allDefaultIds().filter((id) => !LATER_DEFAULT.test(id)));
+    // Written without the change event: this runs inside state initialisers.
+    if (addNewDefaults(merged, seen).length) localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    localStorage.setItem(SEEN_DEFAULTS_KEY, JSON.stringify([...seen]));
     return merged;
   } catch (e) {
     console.warn("Failed to load quick commands from localStorage", e);

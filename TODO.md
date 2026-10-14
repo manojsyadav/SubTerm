@@ -35,7 +35,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🚀 Strategic Power Features (Competitive Differentiators)
 
-- 🟢 **P3 / S** — The `claude` / `codex` / `gemini` quick commands are defaults only. Anyone who already saved local quick commands sees them only after **Reset** in Settings > Quick Commands.
 - 🟡 **P2 / S** — Look at the AI panel in the running app, and run it once with a real Anthropic key.
   - Already covered by tests:
     - a live round trip against Ollama 0.33 with `qwen3.5:4b` (streaming, tool call, tool result, follow-up answer; the `live_` test in `commands/ai.rs`);
