@@ -162,6 +162,115 @@ When a profile is persisted (`persist_vault`), the in-memory SQLite database is 
 
 ---
 
+## 3.5 Sequence: Unlocking a Profile
+
+Everything below §3 depends on this having succeeded. The SQLite database is never a file
+— it exists only in memory, between unlock and lock.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant FE as MasterUnlock (React)
+    participant C as commands/profile.rs
+    participant V as vault.rs
+    participant DB as DbState (in memory)
+
+    U->>FE: master password
+    FE->>C: invoke unlock
+    C->>C: read *.subterm header (magic, version, salt, nonce)
+    alt version not recognised
+        C-->>FE: UNSUPPORTED_VERSION
+    else
+        C->>V: derive_key(password, salt) with Argon2id
+        V->>V: AES-256-GCM decrypt, then zstd decompress
+        alt tag mismatch
+            V-->>FE: CRYPTO DECRYPT_FAILURE
+            note over V,FE: A wrong password and a corrupt file are<br/>indistinguishable here, by design
+        else
+            V-->>C: plaintext SQLite image
+            C->>DB: sqlite3_deserialize into memory
+            C->>C: apply schema migrations, bump SCHEMA_VERSION
+            C->>C: mint and persist the sync DEK if absent
+            C->>DB: UPDATE monitor_configs SET paused = 1
+            C->>DB: store master_key (Zeroizing), salt, path, HLC
+            C-->>FE: unlocked
+        end
+    end
+```
+
+Every later mutation re-serializes, compresses, encrypts and rewrites the file through
+`save_vault_blocking` — temp file, fsync, atomic rename — so the previous vault stays
+intact until the replacement is fully on disk.
+
+---
+
+## 3.6 Sequence: Opening an SSH Session
+
+`initiate_connection` (`commands/connection.rs`) is the single entry point. The ladder is
+**private key, then password, then keyboard-interactive**, and the last runs only if the
+earlier attempt did not already authenticate.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant FE as SessionView (React)
+    participant C as initiate_connection
+    participant H as ClientHandler
+    participant S as Server
+    participant KH as known_hosts (vault)
+    participant T as tunnel.rs
+
+    FE->>C: invoke (session_id, server_id, sessionRole=primary)
+    C->>C: read the server row, resolve credential or key
+    opt ProxyJump / bastion configured
+        C->>S: handshake to the jump host, then open a direct-tcpip channel
+    end
+    C->>S: transport handshake (15s timeout)
+    S-->>H: host key
+    H->>KH: look up host:port
+    alt unknown or changed
+        H-->>FE: prompt with the SHA256 fingerprint
+        note over H,FE: The 15s handshake clock is PAUSED while the prompt<br/>is open; the prompt keeps its own 90s limit
+        FE-->>H: Accept
+        H->>KH: store the fingerprint
+    end
+    alt a private key is available
+        C->>S: authenticate_publickey (best supported RSA hash)
+    else a password is available
+        C->>S: authenticate_password
+    end
+    opt not yet authenticated and the server offers it
+        C->>S: keyboard-interactive
+        S-->>FE: prompts (2FA code, ...)
+        FE-->>C: answers
+        C->>S: responses
+    end
+    alt authenticated
+        C->>C: "still wanted?" generation check
+        note over C: A reconnect or teardown during the handshake bumps<br/>the generation, so a late success is discarded
+        C->>S: open the PTY channel (pty-req, shell)
+        C-->>FE: connected; output streams over a binary ipc::Channel
+        opt this session owns the server's tunnels
+            C->>T: start the saved port forwards
+        end
+        C->>C: start the per-session health watcher
+    else
+        C-->>FE: connection-failed, with a classified reason
+    end
+```
+
+Two details to keep in mind when changing this path:
+
+- **Only one session per server starts the saved tunnels.** The SFTP page's file browser
+  runs as its own session (`session-sftp-<id>`) and deliberately does not own them —
+  otherwise two sessions race for the same local ports.
+- **The host-key prompt pauses the handshake timeout.** It did not, once, and taking
+  longer than 15 seconds to check a fingerprint failed the connection while the prompt
+  was still on screen.
+
+---
+
 ## 4. SSH & Terminal Subsystems
 
 ### 4.1 Remote SSH (`russh`)
