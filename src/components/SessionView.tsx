@@ -1977,6 +1977,21 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               </button>
             );
           })}
+          {copilotEnabled && (
+            <button
+              onClick={() => {
+                // The assistant docks beside the terminal, so a full tool panel has to make way for it.
+                setActiveTool(null);
+                window.dispatchEvent(new CustomEvent(`submarine-open-copilot-${session.id}`));
+              }}
+              title="AI assistant (Ctrl+I)"
+              aria-label="AI assistant (Ctrl+I)"
+              className="h-10 sm:h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-all text-zinc-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 hover:text-white"
+            >
+              <Sparkles size={14} className="shrink-0 text-primary" />
+              <span className="hidden md:inline text-[11px] font-semibold tracking-tight">AI</span>
+            </button>
+          )}
         </div>
       </div>
       )}
