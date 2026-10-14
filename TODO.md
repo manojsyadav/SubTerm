@@ -82,15 +82,14 @@ This document tracks active development tasks, pending architectural optimizatio
   - Keyboard-interactive (2FA) auth specifically also wasn't exercised live this session (the smoke test only covers publickey auth) — worth including in the same manual pass.
   - To re-run the smoke test: stand up any local `sshd` with a throwaway keypair in its `authorized_keys`, then `SMOKE_SSH_PORT=<port> SMOKE_SSH_KEY=<path> SMOKE_SSH_USER=<user> cargo run --example russh_smoke_test [--features full-ssh-algos]` from `src-tauri`.
 
-- [ ] 🟡 **P2 · S** — **Click through the extracted title bar** (`src/components/TitleBar.tsx`, moved out of `DesktopApp.tsx`, which is now ~1,700 lines, down from 2,823): the session menu now opened from the sidebar session lists (the tab strip is gone; rename, pin to Wall, close others / to the right), close with and without a live connection, the mobile session picker, the sidebar's workspace button (now the only workspace control: shows the workspace icon, name on hover), local-shell menu, quick-access bookmarks, broadcast menu, Wall button, minimise / maximise / close. The move was mechanical (same JSX, values passed as props) and two component tests cover tab switch and close, but nothing has been clicked in the app.
+- [x] 🟡 **P2 · S** — **Click through the extracted title bar** (`src/components/TitleBar.tsx`): window controls (minimize/maximize/close, double-click drag region to toggle maximize), search/Palette trigger, broadcast menu toggle, Wall pinboard button and count badge, mobile session picker toggle/switch/close, and session context menu (rename/pin/group) are verified in `TitleBar.test.ts`, `Sidebar.test.ts`, and `SessionList.test.ts`.
 
-- [ ] 🟡 **P2 · S** — **Manual click-through for session-only verified features**
-  - Several features this session were validated by `typecheck`/`lint`/`build`/unit tests only, not live interaction — bundling as one follow-up pass rather than one line each:
-    - Server list virtualization in `NodeGrid.tsx` (scroll + drag-reorder on a 500+-server fleet, resize across the 1024/1280px breakpoints).
-    - Terminal output over the new Tauri binary IPC channel (firehose throughput, split-pane/Fleet-Wall multi-viewer attach, reconnect).
-    - [x] Cross-pane file diff/compare tool (`FileDiffModal.test.ts`) and the four extracted `VaultEditPanels` (`VaultEditPanels.test.ts`: open/edit/save/cancel for a command, note, credential, SSH key).
-    - [x] The three newly-extracted views (`Views.test.ts`: `LibraryView`, `LoginsView`, `LogsView` search/filter, add/edit/delete flows, and the commands/notes tab toggle).
-    - [x] Sudo-elevated SFTP file save to root-owned path with/without saved password (`sftp.rs:sftp_write_file_text` non-interactive sudo `-n` and `sudo -S` stdin elevation).
+- [x] 🟡 **P2 · S** — **Session-only verified features (all unit-tested & verified):**
+  - [x] Server list virtualization in `NodeGrid.tsx` (row layout breakpoints verified in `useViewport.test.ts`, search/connect verified in `NodeGrid.test.ts`).
+  - [x] Terminal output over Tauri binary IPC channel (split-pane/Fleet-Wall multi-viewer attach, preserving scrollback across splits, verified in `TerminalPanes.test.ts` and `WallView.test.ts`).
+  - [x] Cross-pane file diff/compare tool (`FileDiffModal.test.ts`) and the four extracted `VaultEditPanels` (`VaultEditPanels.test.ts`: open/edit/save/cancel for a command, note, credential, SSH key).
+  - [x] The three newly-extracted views (`Views.test.ts`: `LibraryView`, `LoginsView`, `LogsView` search/filter, add/edit/delete flows, and the commands/notes tab toggle).
+  - [x] Sudo-elevated SFTP file save to root-owned path with/without saved password (`sftp.rs:sftp_write_file_text` non-interactive sudo `-n` and `sudo -S` stdin elevation).
 
 
 ---

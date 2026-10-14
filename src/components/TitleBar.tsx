@@ -7,7 +7,6 @@ import { X, Key, Square, Copy, Radio, ChevronDown, Columns, LayoutGrid, Pin, Pin
 import logoUrl from "../assets/logo.png";
 import { useConfirm } from "../ui/confirm";
 import { RenameInput } from "../ui/renameInput";
-import type { Server } from "../types";
 import { getActiveShortcut } from "../shortcuts";
 import { Session } from "../hooks/useSessionManager";
 import { WallItem } from "../hooks/useWallManager";

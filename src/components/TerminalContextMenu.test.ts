@@ -50,7 +50,7 @@ describe("TerminalContextMenu", () => {
   });
 
   it("renders actions and respects selection state for copy", () => {
-    const p1 = render({ x: 100, y: 100, hasSelection: false, hasSavedPassword: false });
+    render({ x: 100, y: 100, hasSelection: false, hasSavedPassword: false });
     const copyBtn1 = buttonByText("Copy");
     expect(copyBtn1?.disabled).toBe(true);
 

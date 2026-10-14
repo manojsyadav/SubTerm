@@ -72,4 +72,85 @@ describe("TitleBar", () => {
     expect(host.textContent).not.toContain("Pin session");
     expect(host.textContent).toContain("Rename tab");
   });
+
+  it("handles window controls (minimize, maximize/restore, close)", () => {
+    const minBtn = host.querySelector('button[title="Minimize"]') as HTMLButtonElement;
+    expect(minBtn).toBeDefined();
+    act(() => minBtn.click());
+    expect(props.appWindow.minimize).toHaveBeenCalled();
+
+    const maxBtn = host.querySelector('button[title="Maximize"]') as HTMLButtonElement;
+    expect(maxBtn).toBeDefined();
+    act(() => maxBtn.click());
+    expect(props.toggleMaximize).toHaveBeenCalled();
+
+    const closeBtn = host.querySelector('button.hover\\:bg-red-500') as HTMLButtonElement;
+    expect(closeBtn).toBeDefined();
+    act(() => closeBtn.click());
+    expect(props.appWindow.close).toHaveBeenCalled();
+  });
+
+  it("toggles command palette from the search/palette trigger", () => {
+    const paletteBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Palette"));
+    expect(paletteBtn).toBeDefined();
+    act(() => paletteBtn?.click());
+    expect(props.setIsCommandPaletteOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("toggles the broadcast menu", () => {
+    const broadcastBtn = host.querySelector('button[aria-label="Broadcast input"]') as HTMLButtonElement;
+    expect(broadcastBtn).toBeDefined();
+    act(() => broadcastBtn.click());
+    expect(props.setBroadcastMenuOpen).toHaveBeenCalled();
+  });
+
+  it("renders Wall button when wallEnabled and toggles wall view", () => {
+    rerender({
+      wallEnabled: true,
+      wallItems: [{ serverId: 1, serverName: "web-1", terminalId: "term-1" } as any],
+    });
+    const wallBtn = host.querySelector('button[aria-label="Wall pinboard"]') as HTMLButtonElement;
+    expect(wallBtn).toBeDefined();
+    expect(wallBtn.textContent).toContain("1");
+    act(() => wallBtn.click());
+    expect(props.setActiveView).toHaveBeenCalledWith("wall");
+    expect(props.setMergedSessionIds).toHaveBeenCalledWith([]);
+  });
+
+  it("renders mobile session picker on mobile viewports and interacts with sessions", () => {
+    rerender({
+      isMobile: true,
+      mobileSessionPickerOpen: false,
+    });
+    const mobilePickerBtn = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    expect(mobilePickerBtn).toBeDefined();
+    expect(mobilePickerBtn.textContent).toContain("web-1");
+
+    act(() => mobilePickerBtn.click());
+    expect(props.setMobileSessionPickerOpen).toHaveBeenCalled();
+
+    rerender({
+      isMobile: true,
+      mobileSessionPickerOpen: true,
+    });
+    const listbox = host.querySelector('div[role="listbox"]');
+    expect(listbox).toBeDefined();
+    expect(listbox?.textContent).toContain("web-1");
+    expect(listbox?.textContent).toContain("db-1");
+
+    const optionBtn = listbox?.querySelector('button[role="option"]:nth-of-type(1)') as HTMLButtonElement;
+    act(() => optionBtn?.click());
+    expect(props.setActiveView).toHaveBeenCalledWith("session-a");
+  });
+
+  it("toggles maximize on double clicking title bar drag region", () => {
+    const titleBarDiv = host.firstElementChild as HTMLDivElement;
+    expect(titleBarDiv).toBeDefined();
+    act(() => {
+      titleBarDiv.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(props.toggleMaximize).toHaveBeenCalled();
+  });
 });
+
+
