@@ -215,6 +215,12 @@
 
 ### 🐛 Bug Fixes
 
+- **`fix(terminal)` — Pasting no longer stops at a browser permission prompt**:
+  On a fresh Windows install, the first right-click paste, image paste or menu Paste showed a "tauri.localhost wants to see text and images copied to the clipboard" bubble, and nothing was pasted until it was answered. SubTerm now has clipboard access for its own window from the start; other sites and permissions are unaffected.
+
+- **`fix(app)` — Image paste and binary exports work on Windows**:
+  On Windows, pasting an image into a terminal did nothing, and exports that save binary files failed. A security policy setting blocked the app's fast connection to its backend for every command, which also made ordinary commands take a slower route. Pasted images are now saved and their path typed as described.
+
 - **`fix(terminal)` — Local Windows tabs keep their text when a pane is resized**:
   Splitting a local shell tab on Windows, or resizing the window, used to leave the earlier output overlapped and shifted. The panes now stay aligned. In a pane narrower than a line, the line is cut at the edge until the pane is wider again.
 
