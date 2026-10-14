@@ -23,6 +23,7 @@ const AiPanel = lazy(() => import('./AiPanel').then((m) => ({ default: m.AiPanel
 import { matchesKeyCombo, getActiveShortcut } from '../shortcuts';
 import { TerminalContextMenu, ContextMenuState } from './TerminalContextMenu';
 import { IS_MOBILE_OS } from '../util/platform';
+import { windowsPtyFor } from '../terminal/windowsPty';
 import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE, endsWithWindowsShellPrompt } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
@@ -896,6 +897,13 @@ const TerminalView = ({
       scrollOnUserInput: localStorage.getItem('subterm-scroll-on-input') !== 'false',
       allowProposedApi: true
     });
+    if (isLocal && navigator.userAgent.includes('Windows')) {
+      term.options.windowsPty = windowsPtyFor();
+      (navigator as Navigator & { userAgentData?: { getHighEntropyValues(h: string[]): Promise<{ platformVersion?: string }> } })
+        .userAgentData?.getHighEntropyValues(['platformVersion'])
+        .then((v) => { term.options.windowsPty = windowsPtyFor(v.platformVersion); })
+        .catch(() => {});
+    }
     if (terminalRef.current) terminalRef.current.style.padding = `${Math.max(0, parseInt(localStorage.getItem('subterm-terminal-padding') || '0', 10) || 0)}px`;
 
     const fitAddon = new FitAddon();
