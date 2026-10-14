@@ -234,9 +234,10 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
             onChange={(e) => setSettings({ ...settings, windowBlur: e.target.value })}
             className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50"
           >
-            <option value="none">None</option>
+            <option value="none">Solid (opaque)</option>
             <option value="acrylic">Acrylic (blur)</option>
-            <option value="mica">Mica</option>
+            <option value="mica">Mica (wallpaper tint)</option>
+            <option value="tabbed">Tabbed (Mica Alt)</option>
           </select>
         </Row>
       )}

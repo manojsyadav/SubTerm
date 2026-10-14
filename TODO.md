@@ -2,7 +2,7 @@
 
 This document tracks active development tasks, pending architectural optimizations, and planned features for future SubTerm releases.
 
-> Completed work isn't tracked here — see [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md) for what's shipped and git history for implementation detail. This file lists only what's still open.
+> Completed work isn't tracked here — see [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md) for what's shipped and git history for implementation detail. This file lists only what's still open or deferred.
 
 ### Legend
 
@@ -20,25 +20,33 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🪟 Windows & Hardware Verification
 
-- 🔴 **P1 / M** — **Packaged Windows build: manual hardware checks**
-  - **Acrylic / Mica:** verify native window backdrop vibrancy on Windows 10 (Acrylic blur) and Windows 11 (Mica / Tabbed material).
-  - **Start on sign-in:** verify registry autostart toggle via Tauri autostart plugin across sign-out/sign-in.
-  - **Upgrade installation:** verify installing a new installer over existing `%APPDATA%/SubTerm` data preserves SQLite vault encryption, profile tokens, and custom settings without prompt loops.
-  - **Live RDP certificate dialog:** connect to a real Windows Server / Windows Pro host with an untrusted or self-signed TLS cert to verify the certificate fingerprint prompt and trust confirmation flow.
+- 🔴 **P1 / M** — **[DEFERRED] Untrusted RDP Host Certificate Prompt** *(Deferred for manual hardware testing)*
+  - **Validation Steps:**
+    1. Connect to any Windows Pro / Server RDP host using a self-signed or untrusted certificate (or quick-connect `rdp://<ip>`).
+    2. Verify the security warning modal displays with the host name and SHA-256 fingerprint.
+    3. Click **"Connect Anyway" / "Trust"** to save the certificate fingerprint and proceed to the session.
+    4. Reconnect to the same host and verify it connects directly without re-prompting.
 
 ---
 
 ## 🌐 Network, Protocols & Multi-Platform
 
-- 🟡 **P2 · M** — **RDP embedded view: verify against a real signed-in session, then a real tab**
-  - Live interaction on a real Windows RDP host:
-    - Screen rendering and user input (mouse move, click, drag, keyboard focus).
-    - Bidirectional clipboard text synchronization (copy remote -> paste local; copy local -> paste remote).
-    - Sound toggle (Sound on/off button; disabled at connect avoids audio channel negotiation).
-    - Dynamic resize (remote desktop follows container resize after ~0.4s debounce; server reactivates session).
-  - Verify that a hidden RDP tab keeps its session active without disconnect, keystrokes route strictly to the active tab, and app lock closes/suspends RDP sessions.
+- 🟡 **P2 · M** — **[DEFERRED] Embedded RDP Live Session Interaction** *(Deferred for manual hardware testing)*
+  - **Validation Steps:**
+    1. **Input & Rendering:** Connect to an RDP host; verify smooth mouse tracking, clicking, dragging, and keyboard input.
+    2. **Bidirectional Clipboard:**
+       - Copy text from Windows Notepad → paste into remote RDP desktop.
+       - Copy text inside RDP desktop → paste into local Windows Notepad.
+    3. **Audio Toggle:**
+       - Toggle the **Sound / Audio** button in the RDP session toolbar.
+       - Play remote audio to verify local playback (or quiet mode when muted).
+    4. **Window Resizing:**
+       - Resize the SubTerm window.
+       - Verify the remote desktop follows the window resolution (~0.4s debounce) without disconnecting.
+    5. **Tab Switching & Lock:**
+       - Switch to another terminal tab and return to RDP (session must stay alive).
+       - Lock SubTerm (or let idle timeout trigger) → verify RDP disconnects cleanly and does not leak behind the lock screen.
   - First macOS/Linux release build with the helper binary (configured in `tauri.macos.conf.json` / `tauri.linux.conf.json`).
-  - *Context:* Helper program isolates IronRDP's pinned pre-release `picky`/`curve25519-dalek` dependencies from `russh` in the main process.
 
 - 🟢 **P3 · L** — **[DEFERRED] iOS / iPadOS: first Mac build** *(Deferred: requires macOS hardware with Xcode)*
   - Prepared architecture: desktop-only crates excluded for iOS, platform checks use `desktop` / `mobile`, iOS detection and Documents-folder sandbox handling exist, build scripts `ios:init` / `ios:dev` / `ios:build` configured in `package.json`, and instructions documented in [`docs/IOS.md`](docs/IOS.md).
@@ -48,12 +56,32 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🔐 SSH Protocol & Cryptography
 
-- 🟡 **P2** — **Live-verify SSH agent forwarding end-to-end with a real agent**
-  - Automated smoke test (`src-tauri/examples/russh_smoke_test.rs`) verifies connect, publickey auth (`PrivateKeyWithHashAlg`), channel open/exec, `tcpip_forward`, and bidirectional byte streaming through the callback bridge.
-  - Manual follow-up needed:
-    - Actual `ssh-agent` wire protocol round-trip through the bridge with a live local agent (`ssh-add -l` on remote reaching back to OpenSSH Authentication Agent, Pageant, 1Password, or KeePassXC).
-    - Exercise live keyboard-interactive (2FA / OTP) authentication prompt against a server requiring two-factor auth.
-    - Run against a remote Linux/macOS OpenSSH server to supplement the Windows test suite.
+- 🟡 **P2** — **[DEFERRED] SSH Agent Forwarding End-to-End** *(Deferred for manual testing with live agent)*
+  - **Validation Steps:**
+    1. **Start Local Agent:**
+       - In PowerShell:
+         ```powershell
+         Start-Service ssh-agent
+         ssh-add -l
+         # If empty, add your key:
+         ssh-add $HOME\.ssh\id_ed25519
+         ```
+         *(Or run Pageant / 1Password SSH Agent with keys loaded).*
+    2. **Enable Forwarding:** Edit server profile in SubTerm → **SSH Options** → enable **"Forward authentication agent"**.
+    3. **Connect & Check:**
+       - Open an SSH terminal session to the server.
+       - In the remote shell, run:
+         ```bash
+         echo $SSH_AUTH_SOCK
+         ssh-add -l
+         ```
+    4. **Expected Result:** `$SSH_AUTH_SOCK` points to an active socket, and `ssh-add -l` on the remote server lists your local public keys.
+
+- 🟡 **P2** — **[DEFERRED] Keyboard-Interactive (2FA / OTP) Authentication** *(Deferred for manual testing against 2FA server)*
+  - **Validation Steps:**
+    1. Connect to an SSH server configured with PAM 2FA (e.g., Google Authenticator, Duo, or YubiKey OTP).
+    2. Verify SubTerm displays a modal with the server's prompt message (e.g. `Verification code:`).
+    3. Enter the OTP and submit to confirm login completes into the terminal.
 
 ---
 

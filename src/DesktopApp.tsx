@@ -185,9 +185,23 @@ function DesktopApp() {
     const blur = normalizeBlur(appSettings.windowBlur);
     const translucent = pct < 100 || blur !== 'none';
     document.documentElement.classList.toggle('translucent', translucent);
-    document.documentElement.style.setProperty('--surface-alpha', String(pct / 100));
-    const effects = blur === 'acrylic' ? [Effect.Acrylic] : blur === 'mica' ? [Effect.Mica] : [];
-    getCurrentWindow().setEffects({ effects }).catch(() => { /* not supported on this OS */ });
+
+    // When blur/Mica is enabled, surface alpha must allow the native DWM backdrop through.
+    const effectiveAlpha = blur !== 'none' && pct >= 100
+      ? (blur === 'acrylic' ? 0.75 : 0.65)
+      : pct / 100;
+    document.documentElement.style.setProperty('--surface-alpha', String(effectiveAlpha));
+
+    const win = getCurrentWindow();
+    if (blur === 'acrylic') {
+      win.setEffects({ effects: [Effect.Acrylic], color: [10, 10, 12, 128] }).catch(() => {});
+    } else if (blur === 'mica') {
+      win.setEffects({ effects: [Effect.Mica] }).catch(() => {});
+    } else if (blur === 'tabbed') {
+      win.setEffects({ effects: [Effect.Tabbed] }).catch(() => {});
+    } else {
+      win.clearEffects().catch(() => {});
+    }
   }, [appSettings.windowOpacity, appSettings.windowBlur]);
 
   // High contrast: same pattern, following the OS "more contrast" preference by default.

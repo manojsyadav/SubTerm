@@ -109,7 +109,7 @@ export function TitleBar(props: TitleBarProps) {
         if (target.closest('.no-drag')) return;
         toggleMaximize();
       }}
-      className="h-10 bg-[#0d0d10] border-b border-white/5 flex items-center px-3 select-none shrink-0 z-50 drag absolute top-0 left-0 right-0"
+      className="titlebar-surface h-10 bg-[#0d0d10] border-b border-white/5 flex items-center px-3 select-none shrink-0 z-50 drag absolute top-0 left-0 right-0"
     >
       {/* Left: logo, bookmarks and the session tabs (they scroll within this half). */}
       <div data-tauri-drag-region className="flex-1 basis-0 min-w-0 flex items-center h-full">

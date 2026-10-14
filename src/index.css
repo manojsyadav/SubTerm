@@ -55,6 +55,7 @@ html.translucent,
 html.translucent body { background: transparent !important; }
 html.translucent .bg-background { background-color: rgb(10 10 12 / var(--surface-alpha, 1)) !important; }
 html.translucent .terminal-surface { background-color: transparent !important; }
+html.translucent .titlebar-surface { background-color: rgb(13 13 16 / var(--surface-alpha, 0.85)) !important; backdrop-filter: blur(8px); }
 
 /* Settings > Appearance > High contrast. The UI has no colour tokens, so this lifts the
    few muted utility classes it uses everywhere (secondary text, hairline borders). */

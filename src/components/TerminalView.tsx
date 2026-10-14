@@ -27,7 +27,7 @@ import { windowsPtyFor } from '../terminal/windowsPty';
 import { parseSshCommand, parseSshFromScreen, sshTargetKey, SshTarget, SSH_ENDED_RE, endsWithWindowsShellPrompt } from '../terminal/sshCommand';
 import { getTerminalTheme } from '../terminal/themes';
 import { withCursorColor } from '../terminal/cursorColor';
-import { readOpacity, withBackgroundOpacity } from '../ui/windowOpacity';
+import { readOpacity, readBlur, withBackgroundOpacity } from '../ui/windowOpacity';
 import { notifyDesktop, shouldNotifyLongCommand } from '../util/desktopNotify';
 import { playTerminalBellChime } from '../terminal/bell';
 import { looksLikePasswordPrompt, looksLikeSudoPrompt, probeWasEchoed } from '../terminal/passwordPrompt';
@@ -892,8 +892,8 @@ const TerminalView = ({
       fontFamily,
       lineHeight,
       scrollback,
-      theme: withBackgroundOpacity(withCursorColor(getTerminalTheme(themeId))),
-      allowTransparency: readOpacity() < 100,
+      theme: withBackgroundOpacity(withCursorColor(getTerminalTheme(themeId)), readOpacity(), readBlur()),
+      allowTransparency: readOpacity() < 100 || readBlur() !== 'none',
       wordSeparator: localStorage.getItem('subterm-word-separators') ?? undefined,
       scrollOnUserInput: localStorage.getItem('subterm-scroll-on-input') !== 'false',
       allowProposedApi: true
@@ -1931,8 +1931,8 @@ const TerminalView = ({
         term.options.scrollback = newScrollback;
       }
       const newThemeId = localStorage.getItem('subterm-terminal-theme') || 'subterm-dark';
-      term.options.allowTransparency = readOpacity() < 100;
-      term.options.theme = withBackgroundOpacity(withCursorColor(getTerminalTheme(newThemeId)));
+      term.options.allowTransparency = readOpacity() < 100 || readBlur() !== 'none';
+      term.options.theme = withBackgroundOpacity(withCursorColor(getTerminalTheme(newThemeId)), readOpacity(), readBlur());
       const newSeparators = localStorage.getItem('subterm-word-separators');
       if (newSeparators !== null && term.options.wordSeparator !== newSeparators) term.options.wordSeparator = newSeparators;
       term.options.scrollOnUserInput = localStorage.getItem('subterm-scroll-on-input') !== 'false';
