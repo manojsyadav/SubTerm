@@ -61,6 +61,13 @@ describe("Servers page header", () => {
     expect(cb.onImportSSHConfig).toHaveBeenCalled();
   });
 
+  it("renders the SFTP/RDP-like header with title and subtitle", () => {
+    const heading = host.querySelector("header h2");
+    expect(heading).toBeTruthy();
+    expect(heading?.textContent).toContain("Servers");
+    expect(host.textContent).toContain("Connect to saved SSH servers, open terminal sessions, or organize into folders.");
+  });
+
   it("the lightning button in the search box opens Quick Connect", () => {
     click(host.querySelector('button[aria-label="Quick connect"]'));
     expect(cb.onQuickConnect).toHaveBeenCalled();

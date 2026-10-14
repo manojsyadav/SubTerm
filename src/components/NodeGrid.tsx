@@ -11,12 +11,12 @@ import type { Session } from "../hooks/useSessionManager";
 import { parseQuickTarget, type QuickTarget } from "../utils/quickTarget";
 import { AddServerSplitButton } from "./AddServerSplitButton";
 
-// Fixed card geometry — MUST match the rendered card's actual CSS (h-16 =
-// 64px) and the grid's gap-3 (12px). Both the row virtualizer and the
+// Fixed card geometry — MUST match the rendered card's actual CSS (h-20 =
+// 80px) and the grid's gap-3 (12px). Both the row virtualizer and the
 // drag-reorder math below key off these constants instead of measuring the
 // DOM, which is what lets reordering work correctly even when most of the
 // list is scrolled out of view and not mounted.
-const CARD_H = 64;
+const CARD_H = 80;
 const GRID_GAP = 12;
 
 interface NodeGridProps {
@@ -107,7 +107,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   // JS can't read back synchronously). Mirrors Tailwind's default lg/xl
   // breakpoints (1024/1280) so the visual result is unchanged.
   const viewportWidth = useViewportWidth();
-  const columnCount = isMobile ? 1 : viewportWidth >= 1280 ? 4 : viewportWidth >= 1024 ? 3 : 2;
+  const columnCount = isMobile ? 1 : viewportWidth >= 1440 ? 4 : viewportWidth >= 1100 ? 3 : 2;
 
   const showFolders = !isSearching && activeFolderId === null;
   const folderCount = showFolders ? (folders?.length || 0) : 0;
@@ -141,7 +141,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   // Pointer + grab geometry for the floating clone.
   const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const grabOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const cardSizeRef = useRef<{ w: number; h: number }>({ w: 240, h: 64 });
+  const cardSizeRef = useRef<{ w: number; h: number }>({ w: 240, h: CARD_H });
   // Fixed snapshot of the grid CELL centres, captured at drag start. Insertion
   // is computed against these — never the live card rects — because the live
   // cards carry in-flight FLIP transforms that would corrupt the maths (the
@@ -271,8 +271,8 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     e.stopPropagation();
     const card = (e.currentTarget as HTMLElement).closest('[data-sid]') as HTMLElement | null;
     const r = card?.getBoundingClientRect();
-    grabOffsetRef.current = r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: 20, y: 32 };
-    cardSizeRef.current = r ? { w: r.width, h: r.height } : { w: 240, h: 64 };
+    grabOffsetRef.current = r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: 20, y: CARD_H / 2 };
+    cardSizeRef.current = r ? { w: r.width, h: r.height } : { w: 240, h: CARD_H };
     pointerRef.current = { x: e.clientX, y: e.clientY };
     // Analytic slot snapshot instead of querying real card DOM rects — with
     // virtualization, most server cards past a screenful aren't mounted at
@@ -362,7 +362,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           key={`server-${s.id}`}
           data-sid={s.id}
           aria-hidden
-          className="h-16 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.05]"
+          className="h-20 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/[0.05]"
         />
       );
     }
@@ -371,10 +371,10 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
         key={`server-${s.id}`}
         data-sid={s.id}
         onClick={() => { if (draggedRef.current) return; onOpenServer(s); }}
-        className="group relative flex items-center gap-3 h-16 pl-3.5 pr-2 rounded-xl bg-gradient-to-br from-[#17171c] to-[#121216] border border-white/5 hover:border-primary/40 hover:bg-white/[0.015] transition-colors duration-150 cursor-pointer overflow-hidden"
+        className="group relative flex items-center gap-3.5 h-20 px-4 rounded-2xl bg-[#121215] border border-white/5 hover:border-primary/40 hover:bg-white/[0.03] transition-colors duration-150 cursor-pointer overflow-hidden"
       >
         {/* Per-server colour accent: a crisp left bar. */}
-        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: accent }} />
+        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3.5px] rounded-l-2xl" style={{ background: accent }} />
 
         {/* Drag handle (grip) — grab to reorder. Hidden until hover on desktop,
             always shown on touch (no hover there). touch-action:none stops the
@@ -384,7 +384,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
             onPointerDown={(e) => beginDrag(e, s.id)}
             onClick={(e) => e.stopPropagation()}
             title="Drag to reorder"
-            className="shrink-0 -ml-1.5 -mr-1 p-1 rounded-md text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 transition-opacity"
+            className="shrink-0 -ml-1 -mr-0.5 p-1 rounded-md text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 transition-opacity"
             style={{ touchAction: 'none' }}
           >
             <GripVertical size={14} />
@@ -393,7 +393,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
 
         {/* Icon / Monogram avatar with tag colour. */}
         <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-inner shrink-0 border transition-all"
+          className="w-11 h-11 rounded-xl flex items-center justify-center shadow-inner shrink-0 border transition-all"
           style={{
             backgroundColor: s.color ? `${s.color}15` : 'rgba(var(--primary), 0.12)',
             borderColor: s.color ? `${s.color}35` : 'rgba(var(--primary), 0.25)',
@@ -401,18 +401,18 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           }}
         >
           {s.icon && s.icon !== "server" ? (
-            renderServerIcon(s.icon, 16)
+            renderServerIcon(s.icon, 18)
           ) : monogram ? (
-            <span className="font-black text-[14px] leading-none">{monogram}</span>
+            <span className="font-black text-[16px] leading-none">{monogram}</span>
           ) : (
-            <Server size={15} />
+            <Server size={17} />
           )}
         </div>
 
         {/* Name + host — flex-1 + min-w-0 so long values truncate cleanly. */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="font-bold text-zinc-100 text-[13px] truncate tracking-tight leading-tight">{s.name}</h3>
+            <h3 className="font-bold text-zinc-100 text-[14px] sm:text-[15px] truncate tracking-tight leading-tight">{s.name}</h3>
             {s.protocol === "rdp" && (
               <span
                 className="px-1.5 py-0.5 rounded text-[8.5px] font-bold tracking-wider uppercase bg-sky-500/15 border border-sky-500/30 text-sky-300 shrink-0"
@@ -430,9 +430,9 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-            <Globe size={10} className="text-zinc-400 shrink-0" />
-            <span className="text-[10.5px] text-zinc-300 font-mono truncate">{s.host}</span>
+          <div className="flex items-center gap-1.5 mt-1 min-w-0">
+            <Globe size={11} className="text-zinc-400 shrink-0" />
+            <span className="text-[12px] text-zinc-400 font-mono truncate">{s.host}</span>
           </div>
         </div>
 
@@ -451,7 +451,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                   distroId={info.distro_id}
                   distroName={info.distro}
                   osType={info.os_type}
-                  size={28}
+                  size={32}
                 />
               </div>
             );
@@ -462,36 +462,36 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
 
         {/* Actions: absolute + hover-revealed on desktop so the name gets the
             full width; inline + always-visible on mobile (no hover there). */}
-        <div className="flex items-center gap-0.5 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 sm:absolute sm:right-1.5 sm:top-1/2 sm:-translate-y-1/2 sm:pl-8 sm:bg-gradient-to-l sm:from-[#121216] sm:via-[#121216] sm:to-transparent transition-all duration-200">
+        <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 sm:absolute sm:right-2 sm:top-1/2 sm:-translate-y-1/2 sm:pl-8 sm:bg-gradient-to-l sm:from-[#121215] sm:via-[#121215] sm:to-transparent transition-all duration-200">
           <button
             onClick={(e) => { e.stopPropagation(); onOpenServer(s, 'sftp'); }}
             title="Open SFTP directly"
-            className="p-1.5 rounded-lg text-zinc-500 hover:text-indigo-400 hover:bg-white/5 transition-all"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-indigo-400 hover:bg-white/5 transition-all"
           >
-            <Folder size={13} />
+            <Folder size={14} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onOpenServer(s, 'info'); }}
             title="Open Docker & Overview directly"
-            className="p-1.5 rounded-lg text-zinc-500 hover:text-sky-400 hover:bg-white/5 transition-all"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-sky-400 hover:bg-white/5 transition-all"
           >
-            <Box size={13} />
+            <Box size={14} />
           </button>
           {onCloneServer && (
             <button
               onClick={(e) => { e.stopPropagation(); onCloneServer(s.id); }}
               title="Clone"
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-primary hover:bg-white/5 transition-all"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-white/5 transition-all"
             >
-              <Copy size={13} />
+              <Copy size={14} />
             </button>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onEditServer(s); }}
             title="Edit"
-            className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/5 transition-all"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
           >
-            <Edit2 size={13} />
+            <Edit2 size={14} />
           </button>
           <button
             onClick={async (e) => {
@@ -501,16 +501,16 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
               }
             }}
             title="Delete"
-            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-white/5 transition-all"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-white/5 transition-all"
           >
-            <Trash2 size={13} />
+            <Trash2 size={14} />
           </button>
         </div>
       </div>
     );
   };
 
-  // Folders share the compact horizontal language so the grid reads as one
+  // Folders share the generous language so the grid reads as one
   // surface: a tinted folder glyph, name + server count, inline rename in
   // place, and the same hover lift as server cards.
   const FolderCard = ({ f }: { f: FolderRecord }) => {
@@ -520,16 +520,16 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
     return (
       <div
         onClick={() => { if (!isRenaming) setActiveFolderId(f.id); }}
-        className="group relative flex items-center gap-3 h-16 pl-3.5 pr-2 rounded-xl bg-gradient-to-br from-[#1c1c22] to-[#141418] border border-white/5 hover:border-primary/40 hover:bg-white/[0.015] transition-colors duration-150 cursor-pointer overflow-hidden"
+        className="group relative flex items-center gap-3.5 h-20 px-4 rounded-2xl bg-[#121215] border border-white/5 hover:border-primary/40 hover:bg-white/[0.03] transition-colors duration-150 cursor-pointer overflow-hidden"
       >
-        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: accent }} />
+        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3.5px] rounded-l-2xl" style={{ background: accent }} />
 
         {/* Folder glyph avatar. */}
         <div
-          className="w-9 h-9 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center shadow-inner shrink-0"
+          className="w-11 h-11 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center shadow-inner shrink-0"
           style={{ color: f.color || undefined }}
         >
-          <Folder size={16} className={f.color ? '' : 'text-primary'} />
+          <Folder size={18} className={f.color ? '' : 'text-primary'} />
         </div>
 
         {/* Name (inline-editable) + count. */}
@@ -544,21 +544,21 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                 if (e.key === "Enter") { e.preventDefault(); commitRename(); }
                 if (e.key === "Escape") { e.preventDefault(); setRenaming(null); }
               }}
-              className="w-full h-7 px-2 bg-black/40 border border-primary/40 rounded-lg text-[13px] font-bold text-white outline-none"
+              className="w-full h-8 px-2.5 bg-black/40 border border-primary/40 rounded-lg text-[14px] font-bold text-white outline-none"
             />
           ) : (
             <>
-              <h3 className="font-bold text-zinc-100 text-[13px] truncate tracking-tight leading-tight">{f.name}</h3>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.12em]">
+              <h3 className="font-bold text-zinc-100 text-[14px] sm:text-[15px] truncate tracking-tight leading-tight">{f.name}</h3>
+              <div className="text-[11px] text-zinc-500 font-bold uppercase tracking-[0.12em] mt-1">
                 {serverCount === 1 ? '1 server' : `${serverCount} servers`}
-              </span>
+              </div>
             </>
           )}
         </div>
 
         {/* Right cluster: count badge (idle) that swaps to actions on hover. */}
         {isRenaming ? (
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={(e) => { e.stopPropagation(); commitRename(); }}
               title="Save name"
@@ -576,12 +576,12 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           </div>
         ) : (
           <div className="relative flex items-center shrink-0">
-            <span className="text-[10px] bg-black/60 text-zinc-400 px-1.5 py-0.5 rounded-md font-mono group-hover:opacity-0 transition-opacity">{serverCount}</span>
-            <div className="absolute right-0 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 transition-all bg-gradient-to-l from-[#16161b] via-[#16161b] to-transparent pl-6">
+            <span className="text-[11px] bg-black/60 text-zinc-400 px-2 py-0.5 rounded-md font-mono group-hover:opacity-0 transition-opacity">{serverCount}</span>
+            <div className="absolute right-0 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 [@media(hover:none)]:!opacity-100 transition-all bg-gradient-to-l from-[#121215] via-[#121215] to-transparent pl-8">
               <button
                 onClick={(e) => { e.stopPropagation(); setRenaming({ id: f.id, draft: f.name || "" }); }}
                 title="Rename folder"
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-primary hover:bg-white/5 transition-all"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-white/5 transition-all"
               >
                 <Edit2 size={13} />
               </button>
@@ -593,7 +593,7 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
                   }
                 }}
                 title="Delete folder"
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-white/5 transition-all"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-white/5 transition-all"
               >
                 <Trash2 size={13} />
               </button>
@@ -605,48 +605,59 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full p-6 overflow-hidden bg-transparent">
-      <div className="flex items-center gap-3 mb-6 shrink-0">
-        <div className="relative flex-1 max-w-xl">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
-          <input
-            type="text"
-            placeholder="Search servers, or type [user@]host and press Enter to connect"
-            aria-label="Search servers or connect to a host"
-            className="w-full h-9 bg-[#1c1c21] border border-white/10 rounded-lg pl-9 pr-10 text-[13px] text-zinc-100 outline-none focus:border-primary/50 focus:bg-[#161619] transition-all placeholder:text-zinc-600 shadow-inner"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" || !isSearching) return;
-              // One match: open it. No match: if the text reads as an address, connect to it
-              // (Quick Connect asks for the password). Several matches: let the user pick.
-              if (displayedServers.length === 1) {
-                onOpenServer(displayedServers[0]);
-              } else if (displayedServers.length === 0 && onQuickConnectTarget) {
-                const target = parseQuickTarget(search);
-                if (target) {
-                  onQuickConnectTarget(target);
-                  setSearch("");
-                }
-              }
-            }}
-          />
-          {onQuickConnect && (
-            <button
-              type="button"
-              onClick={onQuickConnect}
-              title="Quick connect to a host that is not saved"
-              aria-label="Quick connect"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15 transition-colors"
-            >
-              <Zap size={14} />
-            </button>
-          )}
+    <div className="flex-1 flex flex-col h-full p-4 sm:p-8 overflow-hidden bg-transparent">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b border-zinc-700 pb-5 shrink-0 mb-6">
+        <div className="min-w-0">
+          <h2 className="text-[18px] sm:text-[22px] font-bold text-white tracking-tight flex items-center gap-2">
+            <span className="text-primary">
+              <Server size={22} />
+            </span>
+            Servers
+          </h2>
+          <p className="hidden sm:block text-[13px] text-zinc-400">
+            Connect to saved SSH servers, open terminal sessions, or organize into folders.
+          </p>
         </div>
-        <div className="ml-auto shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
+            <input
+              type="text"
+              placeholder="Search servers, or type [user@]host and press Enter to connect"
+              aria-label="Search servers or connect to a host"
+              className="h-9 w-52 sm:w-72 md:w-80 pl-9 pr-9 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-primary/50 transition-all shadow-inner"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || !isSearching) return;
+                // One match: open it. No match: if the text reads as an address, connect to it
+                // (Quick Connect asks for the password). Several matches: let the user pick.
+                if (displayedServers.length === 1) {
+                  onOpenServer(displayedServers[0]);
+                } else if (displayedServers.length === 0 && onQuickConnectTarget) {
+                  const target = parseQuickTarget(search);
+                  if (target) {
+                    onQuickConnectTarget(target);
+                    setSearch("");
+                  }
+                }
+              }}
+            />
+            {onQuickConnect && (
+              <button
+                type="button"
+                onClick={onQuickConnect}
+                title="Quick connect to a host that is not saved"
+                aria-label="Quick connect"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15 transition-colors"
+              >
+                <Zap size={13} />
+              </button>
+            )}
+          </div>
           <AddServerSplitButton onAdd={onAddClick} onImport={onImportSSHConfig} />
         </div>
-      </div>
+      </header>
 
       <div className="flex-1 flex flex-col min-h-0">
 
@@ -776,18 +787,18 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
             transform: `translate(${pointerRef.current.x - grabOffsetRef.current.x}px, ${pointerRef.current.y - grabOffsetRef.current.y}px) rotate(1.5deg) scale(1.03)`,
           }}
         >
-          <div className="relative flex items-center gap-3 h-16 pl-3.5 pr-2 rounded-xl bg-gradient-to-br from-[#1b1b20] to-[#141418] border border-primary/50 ring-1 ring-primary/40 shadow-2xl shadow-black/60 overflow-hidden">
-            <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: draggedServer.color || 'rgb(var(--primary))' }} />
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/25 to-primary/[0.03] border border-primary/20 flex items-center justify-center text-primary shadow-inner shrink-0">
+          <div className="relative flex items-center gap-3.5 h-20 px-4 rounded-2xl bg-[#121215] border border-primary/50 ring-1 ring-primary/40 shadow-2xl shadow-black/60 overflow-hidden">
+            <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3.5px] rounded-l-2xl" style={{ background: draggedServer.color || 'rgb(var(--primary))' }} />
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary/25 to-primary/[0.03] border border-primary/20 flex items-center justify-center text-primary shadow-inner shrink-0">
               {(draggedServer.name || '').trim().charAt(0)
-                ? <span className="font-black text-[14px] leading-none">{(draggedServer.name || '').trim().charAt(0).toUpperCase()}</span>
-                : <Server size={14} />}
+                ? <span className="font-black text-[16px] leading-none">{(draggedServer.name || '').trim().charAt(0).toUpperCase()}</span>
+                : <Server size={18} />}
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-zinc-100 text-[13px] truncate tracking-tight leading-tight">{draggedServer.name}</h3>
-              <div className="flex items-center gap-1 mt-0.5">
-                <Globe size={10} className="text-zinc-400 shrink-0" />
-                <span className="text-[10.5px] text-zinc-300 font-mono truncate">{draggedServer.host}</span>
+              <h3 className="font-bold text-zinc-100 text-[14px] sm:text-[15px] truncate tracking-tight leading-tight">{draggedServer.name}</h3>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Globe size={11} className="text-zinc-400 shrink-0" />
+                <span className="text-[12px] text-zinc-300 font-mono truncate">{draggedServer.host}</span>
               </div>
             </div>
           </div>
