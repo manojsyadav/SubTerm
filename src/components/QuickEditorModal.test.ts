@@ -6,7 +6,14 @@ import { act } from "react-dom/test-utils";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const files: Record<string, string> = { "/r/README.md": "# Hello\n\nworld", "/r/a.conf": "port=1" };
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn((_cmd: string, a: { localPath: string }) => Promise.resolve(files[a.localPath])) }));
+const writes: string[] = [];
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((cmd: string, a: { localPath: string }) => {
+    if (cmd === "local_write_file_text") { writes.push(a.localPath); return Promise.resolve(); }
+    if (a.localPath === "/r/huge.log") return Promise.reject("File is too large (6120000 bytes, limit is 2097152 bytes)");
+    return Promise.resolve(files[a.localPath]);
+  }),
+}));
 // Plain textarea instead of CodeMirror, which jsdom cannot lay out.
 vi.mock("../featureFlags", () => ({ useFeatureFlag: () => false }));
 const { QuickEditorModal } = await import("./QuickEditorModal");
@@ -37,6 +44,19 @@ describe("QuickEditorModal viewer mode", () => {
     act(() => btn(host, "Edit")!.click());
     expect(host.querySelector("textarea")!.readOnly).toBe(false);
     expect(btn(host, "Save")).toBeDefined();
+  });
+
+  it("cannot edit or save a file that failed to load, so it is never overwritten", async () => {
+    const host = await open("/r/huge.log");
+    expect(host.textContent).toContain("too large");
+    expect(btn(host, "Edit")!.disabled).toBe(true);
+    act(() => btn(host, "Edit")!.click());
+    expect(host.querySelector("textarea")!.readOnly).toBe(true);
+    expect(btn(host, "Save")).toBeUndefined();
+    host.querySelector("textarea")!.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(writes).toEqual([]);
   });
 
   it("renders Markdown in the viewer and shows the source in Edit", async () => {

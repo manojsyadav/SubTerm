@@ -39,6 +39,9 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Editing and saving need the file's real content; after a failed read the buffer is not
+  // the file, and saving it would overwrite the file (a >2 MB log with a few bytes).
+  const [loaded, setLoaded] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -63,6 +66,9 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
 
     let mounted = true;
     setLoading(true);
+    setLoaded(false);
+    setOriginalContent("");
+    setContent("");
     setError(null);
     setShowDiff(false);
     setMode("view");
@@ -86,6 +92,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
         if (mounted) {
           setOriginalContent(text);
           setContent(text);
+          setLoaded(true);
         }
       } catch (err) {
         if (mounted) setError(String(err));
@@ -101,7 +108,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
 
   // Handle Save
   const handleSave = async () => {
-    if (!entry || saving || !isDirty) return;
+    if (!entry || saving || !isDirty || !loaded) return;
 
     setSaving(true);
     setError(null);
@@ -205,7 +212,7 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
                 <button
                   key={m}
                   onClick={() => { setMode(m); setShowDiff(false); }}
-                  disabled={loading}
+                  disabled={loading || (m === "edit" && !loaded)}
                   aria-pressed={mode === m}
                   title={m === "view" ? "Read-only view" : "Edit the file"}
                   className={`px-2.5 flex items-center gap-1.5 transition-colors ${mode === m ? "bg-indigo-600/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/10"}`}
@@ -340,13 +347,13 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
             <div className="flex-1 flex overflow-hidden relative">
               {highlightEnabled ? (
                 <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading editor…</div>}>
-                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} hideComments={hideCommentsAvailable && hideComments} readOnly={mode === "view"} />
+                  <CodeEditor value={content} onChange={setContent} fileName={entry.name} filePath={entry.path} hideComments={hideCommentsAvailable && hideComments} readOnly={mode === "view" || !loaded} />
                 </Suspense>
               ) : (
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  readOnly={mode === "view"}
+                  readOnly={mode === "view" || !loaded}
                   spellCheck={false}
                   style={{ fontSize: `${editorPrefs.fontSize}px`, tabSize: editorPrefs.tabSize, whiteSpace: editorPrefs.wordWrap ? "pre-wrap" : "pre" }}
                   className="flex-1 h-full p-3 bg-transparent text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none font-mono leading-5 overflow-auto custom-scrollbar"
