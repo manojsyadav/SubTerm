@@ -68,6 +68,13 @@ describe("MarkdownView", () => {
     expect(invoke).toHaveBeenCalledWith("open_external_url", { url: "https://example.com" });
   });
 
+  it("leaves underscore runs touching a word as text", () => {
+    const host = render("window.__xss=1 and window.__xss=2, a__b and c__d");
+    expect(host.querySelectorAll("em, strong")).toHaveLength(0);
+    expect(host.textContent).toBe("window.__xss=1 and window.__xss=2, a__b and c__d");
+    expect(render("__strong__ and _em_ and _a_b_").querySelectorAll("strong, em")).toHaveLength(3);
+  });
+
   it("does not make javascript: links clickable", () => {
     const host = render("[x](javascript:alert(1))");
     expect(host.querySelector("a")).toBeNull();
