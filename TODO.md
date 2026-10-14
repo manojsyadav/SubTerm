@@ -24,6 +24,8 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
+- 🟡 **P2 / S** — Try the git prompt in the app: a local PowerShell 7, Windows PowerShell, bash and WSL tab inside a repo (clean, dirty, ahead/behind after a fetch, detached HEAD), outside a repo, with oh-my-posh, and in a very large repo (prompt delay). Only the scripts were run outside the app (PowerShell 5.1 and 7 via -EncodedCommand, Git Bash).
+- 🟡 **P2 / S** — Try the file viewer in the app: open a remote and a local file (read-only, Ctrl+F works, Edit enables typing and Save), a README.md (rendered, links open in the browser, Edit shows the source), and a large file.
 - 🟢 **P3 / S** — Try sidebar pinning in the app: hover pin and unpin in the rail (the small corner button) and the wide panel, close a pinned server and reconnect it from its dimmed entry, pinned SFTP and RDP entries, and that the title bar has no server buttons left.
 - 🟡 **P2 / S** — Try the terminal tab menu in the app: right-click a local shell in the rail and in the wide sessions panel, and a tab inside an SSH session; check every item (colour stripe, rename shown in the sidebar, duplicate and split keep the shell, move, export, find, close others and below with a split open). Only the menu itself is unit-tested.
 - 🟡 **P2 / S** — Try the Git tab in the app: on an SSH server (stage, commit, Publish Branch, Sync, a push that needs a password) and on a local PowerShell tab on Windows (repository folder typed in, since PowerShell prompts do not report their folder). Not run in the app yet; only the parser is tested.
