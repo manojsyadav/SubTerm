@@ -88,17 +88,26 @@ describe("Sidebar Local shell list", () => {
   });
 });
 
-describe("Sidebar Local click asks which shell", () => {
-  it("opens the shell picker on a plain click, with the default shell first", () => {
+describe("Sidebar Local tab click and context menu", () => {
+  it("loads the default shell directly on left click (calling setActiveTab)", () => {
     const onOpenLocalShell = vi.fn();
     const setActiveTab = vi.fn();
     render({ localShells: [{ id: "wsl", name: "WSL" }], onOpenLocalShell, setActiveTab });
     act(() => localButton().click());
-    expect(setActiveTab).not.toHaveBeenCalled();
+    expect(setActiveTab).toHaveBeenCalledWith("local");
+    expect(host.querySelector("[role=menu]")).toBeNull();
+  });
+
+  it("shows the available shells to choose to open on right-click", () => {
+    const onOpenLocalShell = vi.fn();
+    const setActiveTab = vi.fn();
+    render({ localShells: [{ id: "wsl", name: "WSL" }], onOpenLocalShell, setActiveTab });
+    act(() => { localButton().dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
     const items = [...host.querySelectorAll("[role=menuitem]")] as HTMLElement[];
     expect(items.map((b) => b.textContent)).toEqual(["Default shellSettings", "WSLwsl"]);
-    act(() => items[0].click());
-    expect(onOpenLocalShell).toHaveBeenCalledWith(undefined);
+    act(() => items[1].click());
+    expect(onOpenLocalShell).toHaveBeenCalledWith("wsl");
+    expect(host.querySelector("[role=menu]")).toBeNull();
   });
 });
 

@@ -83,11 +83,15 @@ export const Sidebar = ({
   renderUnder,
 }: SidebarProps) => {
   const [shellMenu, setShellMenu] = useState<{ x: number; y: number } | null>(null);
-  // Local and its + ask which shell to open (desktop rail); without a shell list they open the default.
+  // Local loads the default shell on left-click; right-click opens the shell picker.
   const canPickShell = !!onOpenLocalShell && localShells.length > 0;
   const openShellMenu = (el: HTMLElement) => {
     const r = el.getBoundingClientRect();
-    setShellMenu({ x: r.right + 6, y: r.top });
+    if (isMobile) {
+      setShellMenu({ x: Math.max(8, r.left), y: Math.max(8, r.top - 160) });
+    } else {
+      setShellMenu({ x: r.right + 6, y: r.top });
+    }
   };
   const switchTitle = workspaceName ? `Workspace: ${workspaceName} (click to switch)` : "Switch workspace";
   // The workspace's own icon (an emoji) when it has one, so the active workspace is visible at a glance.
@@ -219,6 +223,7 @@ export const Sidebar = ({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
+              onContextMenu={item.id === 'local' && canPickShell ? (e) => { e.preventDefault(); openShellMenu(e.currentTarget); } : undefined}
               className={`p-2.5 rounded-xl transition-all duration-300 relative group flex items-center justify-center ${
                 activeTab === item.id
                   ? 'text-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.15)]'
@@ -299,7 +304,7 @@ export const Sidebar = ({
         {items.map((item) => (
           <Fragment key={item.id}>
           <button
-            onClick={(e) => { if (item.id === 'local' && canPickShell) openShellMenu(e.currentTarget); else setActiveTab(item.id); }}
+            onClick={() => setActiveTab(item.id)}
             onContextMenu={item.id === 'local' && canPickShell ? (e) => { e.preventDefault(); openShellMenu(e.currentTarget); } : undefined}
             aria-haspopup={item.id === 'local' && canPickShell ? 'menu' : undefined}
             className={`p-2.5 rounded-xl transition-all duration-300 relative group flex items-center justify-center ${
@@ -308,7 +313,7 @@ export const Sidebar = ({
                 : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
             }`}
             title={(item.id === 'nodes' || item.id === 'monitor') && enableMonitoring && alertSummary ? `${item.label} · ${alertSummary}`
-              : item.id === 'local' && canPickShell ? 'Local: open a shell' : item.label}
+              : item.id === 'local' && canPickShell ? 'Local terminal (right-click to choose shell)' : item.label}
           >
             <item.icon size={20} className={activeTab === item.id ? "drop-shadow-[0_0_8px_rgba(var(--primary),0.5)]" : ""} />
             {/* Live Health Pulse Badge */}
