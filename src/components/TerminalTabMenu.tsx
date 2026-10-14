@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Palette, PenLine, Copy, SplitSquareHorizontal, ArrowLeftRight, Save, Search, X, ChevronRight, Check } from "lucide-react";
+import { Palette, PenLine, Copy, SplitSquareHorizontal, ArrowLeftRight, Save, Search, X, ChevronRight, Check, Pin } from "lucide-react";
 import { RenameInput } from "../ui/renameInput";
 
 // Right-click menu for one terminal sub-tab, modelled on Windows Terminal's. Shared by the
@@ -9,7 +9,7 @@ import { RenameInput } from "../ui/renameInput";
 export const TAB_COLORS = ["#e74856", "#f7630c", "#fce100", "#16c60c", "#0078d4", "#886ce4", "#e3008c", "#767676"];
 
 export type TabMenuAction =
-  | "duplicate" | "split" | "moveLeft" | "moveRight" | "export" | "find"
+  | "pin" | "duplicate" | "split" | "moveLeft" | "moveRight" | "export" | "find"
   | "closeOthers" | "closeRight" | "close";
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   y: number;
   title: string;
   color?: string;
+  isPinned?: boolean;
   canMoveLeft: boolean;
   canMoveRight: boolean;
   canClose: boolean;
@@ -27,7 +28,7 @@ interface Props {
   onDismiss: () => void;
 }
 
-export function TerminalTabMenu({ x, y, title, color, canMoveLeft, canMoveRight, canClose, canCloseRight, onAction, onRename, onColor, onDismiss }: Props) {
+export function TerminalTabMenu({ x, y, title, color, isPinned, canMoveLeft, canMoveRight, canClose, canCloseRight, onAction, onRename, onColor, onDismiss }: Props) {
   const [sub, setSub] = useState<"color" | "rename" | "move" | "close" | null>(null);
   const row = "w-full flex items-center gap-2.5 px-3 py-1.5 rounded text-left text-zinc-200 hover:bg-white/[0.07] disabled:opacity-35 disabled:hover:bg-transparent";
   const act = (a: TabMenuAction) => () => { onAction(a); onDismiss(); };
@@ -72,6 +73,11 @@ export function TerminalTabMenu({ x, y, title, color, canMoveLeft, canMoveRight,
         {sub === "rename"
           ? <RenameInput initialValue={title} placeholder="Tab title…" onCommit={(v) => { if (v.trim()) onRename(v.trim()); onDismiss(); }} onCancel={onDismiss} />
           : plain(<PenLine size={14} />, "Rename tab", () => setSub("rename"))}
+        {plain(
+          <Pin size={14} className={isPinned ? "text-primary" : ""} />,
+          isPinned ? "Unpin tab" : "Pin tab",
+          act("pin")
+        )}
         {plain(<Copy size={14} />, "Duplicate tab", act("duplicate"))}
         {plain(<SplitSquareHorizontal size={14} />, "Split tab", act("split"))}
         {parent("move", <ArrowLeftRight size={14} />, "Move tab", <>

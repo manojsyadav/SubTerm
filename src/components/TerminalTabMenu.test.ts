@@ -63,4 +63,14 @@ describe("TerminalTabMenu", () => {
     render({ canClose: false, canCloseRight: false });
     expect(button("Close tab").disabled).toBe(true);
   });
+
+  it("handles pinning and unpinning", () => {
+    const p1 = render({ isPinned: false });
+    act(() => button("Pin tab").click());
+    expect(p1.onAction).toHaveBeenCalledWith("pin");
+
+    const p2 = render({ isPinned: true });
+    act(() => button("Unpin tab").click());
+    expect(p2.onAction).toHaveBeenCalledWith("pin");
+  });
 });
