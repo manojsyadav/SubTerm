@@ -101,3 +101,19 @@ describe("Sidebar Local click asks which shell", () => {
     expect(onOpenLocalShell).toHaveBeenCalledWith(undefined);
   });
 });
+
+describe("Sidebar mobile layout", () => {
+  it("renders a bottom navigation strip across full width on mobile", () => {
+    const setActiveTab = vi.fn();
+    render({ isMobile: true, activeTab: "nodes", setActiveTab });
+    const aside = host.querySelector("aside");
+    expect(aside).not.toBeNull();
+    expect(aside?.className).toContain("w-full");
+    expect(aside?.className).toContain("border-t");
+    const nav = host.querySelector("nav");
+    expect(nav?.className).toContain("flex-row");
+    const buttons = host.querySelectorAll("nav button");
+    expect(buttons.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
