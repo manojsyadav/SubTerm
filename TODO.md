@@ -24,6 +24,12 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## ✏️ Editor & Terminal UX
 
+- 🔴 **P1 / S** — **Find out why a profile opened with no password prompt.** On 2026-10-14, the release build from 15:31, started with an empty WebView2 storage folder (so no saved biometric token), went straight to the `HomeLab` profile's server list without asking for the master password. The instance was stopped before anything was written. Check `useProfileVault` / `MasterUnlockPage` and the backend `select_profile` / `setup_master_db` path for an automatic unlock, and whether the vault is still encrypted at rest.
+- 🟡 **P2 / S** — Push `main` to Gitea (`origin`, 10.0.0.20:222). It is about 50 commits ahead of `origin/main`, including the AI assistant merge (febbe85) and the fixes after it.
+- 🟡 **P2 / S** — Merge the two branches that are not in `main` yet: `docs/standard-set` (2 commits: data model, backup and recovery, runbook and troubleshooting pages, architecture sequence diagrams) and `docs/session-split-release-note` (1 commit).
+- 🟢 **P3 / S** — Merge `feat/ai-assistant` into `main` again for whatever lands on it after febbe85 (another session was still committing to it).
+- 🟢 **P3 / S** — In a local Windows tab, a pane narrower than a line shows that line cut at the edge (ConPTY repaints its own copy of the screen); widening the pane brings it back in full. Re-wrapping would need SubTerm to own the buffer, as Windows Terminal does. Only worth it if people split local tabs often.
+
 - 🟢 **P3 / S** — Git prompt: still to try in the app with plain bash and WSL bash (only Docker's `sh` distro was available), with oh-my-posh, and in a very large repo (prompt delay). Checked in a running build on 2026-10-14: Windows PowerShell and PowerShell 7 show clean, dirty `●1`, ahead `↑1`, diverged `↑1 ↓1` after a fetch, detached HEAD as a short hash, and nothing outside a repo. Git Bash keeps its own `(main)` prompt, as designed.
 - 🟢 **P3 / S** — File viewer: still to try Ctrl+F in view mode and clicking a Markdown link (opens the browser). Checked in a running build: local and remote (SFTP) files open read-only, Edit then Save writes the file, README.md renders headings, task lists, tables and code, and literal `<img onerror>` / `<script>` stay text and never run. Files over 2 MB are refused; that check found the overwrite bug fixed in b6524f4.
 - 🟢 **P3 / S** — Sidebar pinning: still to try in the wide sessions panel, and pinned SFTP and RDP entries. Checked in the rail: pin, close (stays as "pinned, not open"), reconnect by clicking it, unpin; the title bar has no server buttons left.
@@ -41,7 +47,6 @@ This document tracks active development tasks, pending architectural optimizatio
 
 - 🟢 **P3 / S** — MCP: nothing left except a run on macOS and Linux. Checked in a running build with a real `claude -p` (list_sessions, then run_command approved in SubTerm), and with curl: 401 without or with the wrong token, 403 with a browser Origin, 405 for GET, 404 for other paths, 127.0.0.1 only; Decline returns an error to the agent; a second request waits for the first dialog; New token cuts off the old one; a port change moves the server; switching off stops it. The New token check found the restart bug fixed in 07fbcb4.
 - 🟢 **P3 / S** — AI panel: run it once with a real Anthropic key (`SUBTERM_AI_LIVE_KEY`, see the live test in `commands/ai.rs`). Checked in a running build with Ollama: providers set up through Settings (model list loaded), Ask mode on an SSH session asked to run `whoami`, then answered from its output; the terminal stayed untouched.
-- 🟢 **P3 / S** — Seen while checking: the OS pill says "Linux" for a Windows SSH host; after splitting a local tab twice, the left pane's text overlapped as if it had not reflowed; the file viewer's header shows Windows' `\\?\C:\…` long-path prefix; underscores inside literal HTML in Markdown render as italics.
 
 ---
 
