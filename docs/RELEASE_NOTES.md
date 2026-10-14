@@ -15,8 +15,23 @@
 - **`feat(ui)` — Pin servers from the sidebar list; the title-bar server buttons are gone**:
   Hovering a session in the sidebar list (Servers, SFTP or Remote Desktop, in the rail and the wide panel) shows a pin button. A pinned server stays at the top of its list and now stays listed after you close it, dimmed with a dashed border; one click connects again. It still reopens after unlock, as before. The quick-connect buttons in the title bar and the **Pinned Servers** card under Settings > Quick Access have been removed, and the servers you had picked there are not carried over: pin them from the sidebar instead.
 
-- **`feat(terminal)` — Right-click menu for terminal tabs and local shells**:
-  Right-clicking a local shell in the sidebar (or in the wide sessions panel), or a terminal tab inside a session, now opens a menu like Windows Terminal's: **Change tab color**, **Rename tab**, **Duplicate tab** (same shell), **Split tab** (opens the same shell beside it), **Move tab** up or down, **Export text** (saves the scrollback as a `.log`), **Find**, **Close** other tabs or tabs below, and **Close tab**. A renamed local shell shows its new name in the sidebar; a coloured tab gets a stripe in that colour. Before, local shells in the sidebar had no right-click menu, and a session's tab strip only offered rename.
+- **`feat(terminal)` — Pinning for local shell sub-tabs**:
+  Terminal sub-tabs in local sessions can now be pinned via the right-click menu (**Pin tab** / **Unpin tab**). Pinned tabs display a distinct pin icon, remain positioned at the front of the tab strip, and suppress the hover close button to guard against accidental dismissals. When using **Close other tabs** or **Close tabs below / right**, pinned tabs are automatically preserved.
+
+- **`feat(git)` — Branch on Git button, AI commit generation, and multi-lane commit graph**:
+  The Git tool now provides deeper repository insight and intelligence:
+  - **Branch Pill**: When the active terminal's folder is inside a git repository, the tool row's **Git** button directly shows the current branch name (e.g. `Git (main)`).
+  - **AI Commit Messages**: An **AI Generate** button in the Git panel uses your configured AI provider (local or online) to analyze staged diffs (or working tree changes) and stream a concise Conventional Commits message.
+  - **Multi-Lane Graph**: The commit history now renders a visual multi-lane SVG graph topology, clearly tracing branch forks, merges, and commit routes in color-coded lanes.
+
+- **`feat(terminal)` — Independent Git status switch for shell prompts**:
+  The git repository status segment in local shell prompts now has its own independent toggle under **Settings > Features > Terminal > Git status in shell prompt**. You can leave command blocks and execution tracking active without running git in the background on every prompt.
+
+- **`fix(ai)` — Focused pane targeting for AI Assistant**:
+  Clicking the AI assistant button or pressing `Ctrl+I` in a split-session layout now opens the assistant strictly in the active, focused pane instead of launching across all panes simultaneously.
+
+- **`fix(settings)` — 2-column layout refinement for wide viewports**:
+  Settings pages for Quick Actions, Accounts & Sync, and System are constrained to a maximum of 2 columns on 1920px+ displays, ensuring cards stay readable and well-proportioned without over-compact 3-column squishing. The Known Hosts section also prevents split-column breaks between header and content.
 
 - **`feat(git)` — Git tab with a Source Control panel**:
   The tool row has a **Git** button next to Docker and Services, on SSH and local tabs. It opens a panel laid out like VS Code's Source Control: a message box (Ctrl+Enter commits), **Staged Changes** and **Changes** with a +/− per file and for all files, a **Commit** button that becomes **Publish Branch** for a branch with no upstream and **Sync Changes** when you are ahead or behind, a **…** menu with Pull, Push, Fetch, Stash and Pop Stash, and the last 50 commits with their branches and tags. With nothing staged, Commit commits every change. The panel follows the terminal's folder; you can also type a repository path at the top. Git runs on a separate channel, so it never prompts in your shell: a push that needs a password fails with git's message instead. It replaces the old Git drawer and the branch and Copilot pills beside the quick commands, along with the background `git status` those pills ran after every `cd`. Off switch: Settings > Features > Panels > Git panel.
