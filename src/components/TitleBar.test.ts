@@ -107,7 +107,7 @@ describe("TitleBar", () => {
   it("renders Wall button when wallEnabled and toggles wall view", () => {
     rerender({
       wallEnabled: true,
-      wallItems: [{ serverId: 1, serverName: "web-1", terminalId: "term-1" } as any],
+      wallItems: [{ serverId: 1, serverName: "web-1", terminalId: "term-1" } as unknown as Props["wallItems"][0]],
     });
     const wallBtn = host.querySelector('button[aria-label="Wall pinboard"]') as HTMLButtonElement;
     expect(wallBtn).toBeDefined();
