@@ -9,6 +9,9 @@ export type Session = {
   id: string;
   serverId: number;
   serverName: string;
+  serverHost?: string;
+  serverUser?: string;
+  serverPort?: number;
   mirrors?: string;
   runOnConnect?: string;
   quickAuth?: QuickAuth | null;
@@ -146,6 +149,9 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
               id: sessionId,
               serverId: server.id,
               serverName: server.name,
+              serverHost: server.host,
+              serverUser: server.username,
+              serverPort: server.port,
               mirrors: server.mirrors,
               runOnConnect: server.run_on_connect || "",
               initialTool: initialTool || null,
@@ -181,6 +187,9 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
           id: sId,
           serverId: srv.id,
           serverName: srv.name,
+          serverHost: srv.host,
+          serverUser: srv.username,
+          serverPort: srv.port,
           mirrors: srv.mirrors,
           runOnConnect: srv.run_on_connect || "",
           initialTool: null,
@@ -212,6 +221,9 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
           id: sessionId,
           serverId: 0,
           serverName: displayName,
+          serverHost: auth.host,
+          serverUser: auth.username,
+          serverPort: auth.port,
           quickAuth: auth,
           initialTool: opts?.initialTool ?? null,
         },

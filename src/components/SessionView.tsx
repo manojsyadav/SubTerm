@@ -3,10 +3,10 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio, Pin } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio, Pin, Cpu, Thermometer } from "lucide-react";
 import { useBroadcast } from "../ui/broadcast";
 import { localShellEvent, type Session } from "../hooks/useSessionManager";
-import { getTerminalGitBranch, onTerminalGitBranchChange } from "../terminal/cwd";
+import { getTerminalGitBranch, onTerminalGitBranchChange, getTerminalCwd, onTerminalCwdChange } from "../terminal/cwd";
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
@@ -457,12 +457,59 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   const [activeTab, setActiveTab] = useState<string>(`${session.id}-term-0`);
   const [gitBranch, setGitBranch] = useState<string>(() => getTerminalGitBranch(`${session.id}-term-0`) ?? "");
+  const [activeCwd, setActiveCwd] = useState<string>(() => getTerminalCwd(`${session.id}-term-0`) ?? "");
+  const [cpuUsage, setCpuUsage] = useState<number | null>(null);
+  const [memUsage, setMemUsage] = useState<number | null>(null);
+  const [tempUsage, setTempUsage] = useState<number | null>(null);
+
   useEffect(() => {
     setGitBranch(getTerminalGitBranch(activeTab) ?? "");
     return onTerminalGitBranchChange((termId, branch) => {
       if (termId === activeTab) setGitBranch(branch);
     });
   }, [activeTab]);
+
+  useEffect(() => {
+    setActiveCwd(getTerminalCwd(activeTab) ?? "");
+    return onTerminalCwdChange((termId, cwd) => {
+      if (termId === activeTab) setActiveCwd(cwd);
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!session?.serverId || session.serverId <= 0) return;
+    const unlistenPromise = listen<{ values?: Record<string, number> }>(
+      `monitor-sample-${session.serverId}`,
+      (event) => {
+        const vals = event.payload?.values;
+        if (!vals) return;
+        if (typeof vals.cpu === "number") setCpuUsage(vals.cpu);
+        else if (typeof vals.cpu_perc === "number") setCpuUsage(vals.cpu_perc);
+        if (typeof vals.mem === "number") setMemUsage(vals.mem);
+        else if (typeof vals.mem_perc === "number") setMemUsage(vals.mem_perc);
+        if (typeof vals.temp === "number") setTempUsage(vals.temp);
+        else if (typeof vals.temp_c === "number") setTempUsage(vals.temp_c);
+      }
+    );
+    return () => {
+      unlistenPromise.then((un) => un()).catch(() => {});
+    };
+  }, [session?.serverId]);
+
+  const serverDetail = useMemo(() => {
+    if (session?.isLocal) return null;
+    if (session?.serverHost) {
+      const user = session.serverUser ? `${session.serverUser}@` : "";
+      const port = session.serverPort && session.serverPort !== 22 ? `:${session.serverPort}` : "";
+      return `${user}${session.serverHost}${port}`;
+    }
+    if (session?.quickAuth?.host) {
+      const user = session.quickAuth.username ? `${session.quickAuth.username}@` : "";
+      const port = session.quickAuth.port && session.quickAuth.port !== 22 ? `:${session.quickAuth.port}` : "";
+      return `${user}${session.quickAuth.host}${port}`;
+    }
+    return null;
+  }, [session?.isLocal, session?.serverHost, session?.serverUser, session?.serverPort, session?.quickAuth]);
 
   // Local tab: another shell opened from the sidebar, the top-bar shell menu or "New tab"
   // becomes a sub-tab here instead of a separate session tab.
@@ -1656,7 +1703,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
   // Connected State with Nested Tabs
   return (
-    <div className={`flex-1 flex flex-col bg-background overflow-hidden animate-in fade-in ${isProd ? 'border-t-2 border-rose-500 shadow-[inset_0_1px_10px_rgba(244,63,94,0.15)]' : ''}`}>
+    <div className={`session-view-surface flex-1 flex flex-col bg-background overflow-hidden animate-in fade-in ${isProd ? 'border-t-2 border-rose-500 shadow-[inset_0_1px_10px_rgba(244,63,94,0.15)]' : ''}`}>
       {/* Auth prompts during an AUTO-RECONNECT. The full-screen view above only
           renders on the first connect (reconnectAttempt===0); once a reconnect
           cycle is running we show the terminal behind a slim banner, so a
@@ -1839,62 +1886,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             narrow viewports (below md) so the terminal tab strip keeps its
             horizontal real estate when space is tight; the full description
             stays in the tooltip either way. */}
-        {/* Quick actions (detected OS, quick commands), in the same row as the
-            tools. On a local tab the shells are in the sidebar, so these get the space. */}
-        {!activeTool && (
-        <div className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 mr-1 text-[10.5px] font-mono text-zinc-400 ${localTabsInSidebar ? 'flex-1' : 'max-w-[45%]'}`}>
-          {/* Detected OS Badge Pill */}
-          {detectedOs && (
-            <div
-              title={`Detected OS: ${detectedOs.distro} ${detectedOs.version} ${detectedOs.kernel ? `| Kernel: ${detectedOs.kernel}` : ""}`}
-              className="h-5 px-2 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1.5 shrink-0 text-[10px] select-none font-sans"
-            >
-              <DistroLogo distroId={detectedOs.distro_id} distroName={detectedOs.distro} osType={detectedOs.os_type} size={13} />
-              <span className="font-semibold text-zinc-200">{detectedOs.distro || detectedOs.os_type}</span>
-              {detectedOs.version && <span className="text-zinc-500 font-normal">{detectedOs.version}</span>}
-            </div>
-          )}
-
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold ml-1 mr-0.5 select-none">Quick:</span>
-            {onOpenSettings && (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                title="Customize Quick Commands by OS/Environment in Settings"
-                className="h-4 w-4 rounded hover:bg-white/10 text-zinc-500 hover:text-primary transition-colors flex items-center justify-center mr-0.5"
-              >
-                <SlidersHorizontal size={10} />
-              </button>
-            )}
-          </div>
-          {quickCommands.map((item) => (
-            <button
-              key={item.id || item.label}
-              onClick={() => {
-                invoke("write_terminal_data", {
-                  terminalId: activeTab,
-                  data: Array.from(new TextEncoder().encode(item.cmd)),
-                }).catch(console.error);
-              }}
-              title={`Run: ${item.cmd.replace('\r', '')}`}
-              className="h-5 px-1.5 rounded bg-white/[0.03] hover:bg-primary/10 border border-white/5 hover:border-primary/25 hover:text-primary transition-all shrink-0 flex items-center text-[10.5px]"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        )}
         <div className="flex items-center gap-1 shrink-0 sm:border-l border-white/5 sm:pl-3 pl-1">
-          {session?.isLocal && (
-            <span className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold tracking-tight mr-1">
-              <TerminalSquare size={13} className="shrink-0" />
-              <span className="hidden sm:inline">{(() => {
-                const shell = terminals.find(t => t.id === activeTab)?.shell ?? session.localShell;
-                return shell ? `Local (${shell})` : "Local Shell";
-              })()}</span>
-            </span>
-          )}
 
           {!session?.isLocal && (
             <button
@@ -2580,6 +2572,131 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
           )}
         </div>
       </div>
+
+      {/* Bottom Status Bar */}
+      {!chromeless && (
+        <footer className="h-7 shrink-0 bg-[#0c0c0f] border-t border-white/5 flex items-center justify-between px-2 sm:px-3 text-[10.5px] font-mono text-zinc-400 select-none z-10 gap-2">
+          {/* Left: Detected OS badge + Quick commands */}
+          <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar">
+            {detectedOs && (
+              <div
+                title={`Detected OS: ${detectedOs.distro} ${detectedOs.version} ${detectedOs.kernel ? `| Kernel: ${detectedOs.kernel}` : ""}`}
+                className="h-5 px-1.5 rounded bg-white/[0.04] border border-white/10 text-zinc-300 flex items-center gap-1 shrink-0 text-[10px] select-none font-sans"
+              >
+                <DistroLogo distroId={detectedOs.distro_id} distroName={detectedOs.distro} osType={detectedOs.os_type} size={11} />
+                <span className="font-semibold text-zinc-300 truncate max-w-[80px] sm:max-w-none">{detectedOs.distro || detectedOs.os_type}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold ml-0.5 mr-0.5 select-none">Quick:</span>
+              {onOpenSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  title="Customize Quick Commands by OS/Environment in Settings"
+                  className="h-4 w-4 rounded hover:bg-white/10 text-zinc-500 hover:text-primary transition-colors flex items-center justify-center mr-0.5"
+                >
+                  <SlidersHorizontal size={10} />
+                </button>
+              )}
+            </div>
+
+            {quickCommands.map((item) => (
+              <button
+                key={item.id || item.label}
+                onClick={() => {
+                  invoke("write_terminal_data", {
+                    terminalId: activeTab,
+                    data: Array.from(new TextEncoder().encode(item.cmd)),
+                  }).catch(console.error);
+                }}
+                title={`Run: ${item.cmd.replace('\r', '')}`}
+                className="h-5 px-1.5 rounded bg-white/[0.03] hover:bg-primary/10 border border-white/5 hover:border-primary/25 hover:text-primary transition-all shrink-0 flex items-center text-[10px]"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: Path (CWD), CPU%, MEM%, Temp (if available), Host/Server details */}
+          <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
+            {activeCwd && (
+              <div
+                title={`Working Directory: ${activeCwd}`}
+                className="flex items-center gap-1 text-zinc-400 bg-white/[0.02] px-1.5 py-0.5 rounded border border-white/5 max-w-[130px] sm:max-w-[220px] truncate"
+              >
+                <Folder size={11} className="text-zinc-500 shrink-0" />
+                <span className="truncate">{activeCwd}</span>
+              </div>
+            )}
+
+            {cpuUsage !== null && (
+              <div
+                title={`CPU Usage: ${cpuUsage.toFixed(1)}%`}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                  cpuUsage > 85 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                  cpuUsage > 60 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                  'text-zinc-400 bg-white/[0.02] border-white/5'
+                }`}
+              >
+                <Cpu size={11} className="shrink-0" />
+                <span>{Math.round(cpuUsage)}%</span>
+              </div>
+            )}
+
+            {memUsage !== null && (
+              <div
+                title={`Memory Usage: ${memUsage.toFixed(1)}%`}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                  memUsage > 85 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                  memUsage > 60 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                  'text-zinc-400 bg-white/[0.02] border-white/5'
+                }`}
+              >
+                <Activity size={11} className="shrink-0" />
+                <span>{Math.round(memUsage)}%</span>
+              </div>
+            )}
+
+            {tempUsage !== null && (
+              <div
+                title={`Temperature: ${tempUsage}°C`}
+                className="flex items-center gap-1 text-zinc-400 bg-white/[0.02] px-1.5 py-0.5 rounded border border-white/5"
+              >
+                <Thermometer size={11} className="shrink-0" />
+                <span>{Math.round(tempUsage)}°C</span>
+              </div>
+            )}
+
+            <div
+              title={session?.isLocal ? "Local Terminal" : `${session?.serverName || ''}${serverDetail ? ` (${serverDetail})` : ''}`}
+              className="flex items-center gap-1 text-zinc-300 bg-white/[0.03] px-2 py-0.5 rounded border border-white/10 shrink-0"
+            >
+              {session?.isLocal ? (
+                <>
+                  <TerminalSquare size={11} className="text-emerald-400 shrink-0" />
+                  <span className="font-semibold text-zinc-300">
+                    {terminals.find((t) => t.id === activeTab)?.shell ?? session.localShell ?? "Local"}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Server size={11} className="text-primary shrink-0" />
+                  <span className="font-semibold text-zinc-200 truncate max-w-[100px] sm:max-w-[150px]">
+                    {session?.serverName}
+                  </span>
+                  {serverDetail && serverDetail !== session?.serverName && (
+                    <span className="text-zinc-500 hidden md:inline truncate max-w-[130px]">
+                      {serverDetail}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </footer>
+      )}
       {pathChoices && (
         <PathChoiceModal
           name={pathChoices.name}

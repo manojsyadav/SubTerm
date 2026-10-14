@@ -20,6 +20,15 @@ This document tracks active development tasks, pending architectural optimizatio
 
 ## 🪟 Windows & Hardware Verification
 
+- 🟡 **P2 / S** — **Window Backdrop (Acrylic / Mica / Tabbed / Solid) & Opacity** *(Ready for validation)*
+  - **Issue Reported:** Shell background remained opaque when adjusting opacity percentage or selecting Acrylic/Mica/Tabbed.
+  - **Fix Implemented:** Updated `index.css`, `DesktopApp.tsx`, and `SessionView.tsx` with `.app-root-surface` and `.session-view-surface` translucency rules so the opaque wrapper divs (`bg-[#0a0a0c]` and `bg-[#09090b]`) allow the native DWM blur / desktop wallpaper tint through.
+  - **Validation Steps:**
+    1. Go to **Settings → Appearance**.
+    2. Adjust **Window opacity** slider down (e.g. 70–80%) or select **Background effect** (`Acrylic (blur)`, `Mica (wallpaper tint)`, or `Tabbed (Mica Alt)`).
+    3. Verify the terminal window reflects transparency / wallpaper blur while terminal text stays crisp and readable.
+    4. Set back to `Solid (opaque)` and 100% opacity to confirm solid background restores cleanly.
+
 - 🔴 **P1 / M** — **[DEFERRED] Untrusted RDP Host Certificate Prompt** *(Deferred for manual hardware testing)*
   - **Validation Steps:**
     1. Connect to any Windows Pro / Server RDP host using a self-signed or untrusted certificate (or quick-connect `rdp://<ip>`).

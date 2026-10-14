@@ -1050,7 +1050,7 @@ function DesktopApp() {
   if (loading) return <div className="h-full bg-black flex items-center justify-center font-mono text-xs text-primary animate-pulse">Loading…</div>;
 
   return (
-    <div className="h-full w-full bg-background flex flex-col overflow-hidden text-zinc-200 select-none">
+    <div className="app-root-surface h-full w-full bg-background flex flex-col overflow-hidden text-zinc-200 select-none">
       {aiEnabled && <McpBridge sessions={sessions} onError={(m) => addLog(m, "error")} />}
       <TitleBar {...titleBarProps} />
       {updateBanner && (
