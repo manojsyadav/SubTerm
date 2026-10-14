@@ -179,9 +179,15 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
           <input type="text" value={settings.primaryColor} onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })} className="w-20 h-6 bg-black border border-white/10 rounded px-1.5 text-[10px] font-mono text-zinc-400 focus:border-primary/50 outline-none" />
         </div>
       </div>
-      <div className="grid grid-cols-6 gap-3">
+      <div className="flex items-center gap-2.5 flex-wrap">
         {accentColors.map((c) => (
-          <button key={c.value} onClick={() => setSettings({ ...settings, primaryColor: c.value })} className={`w-full aspect-square rounded-xl border-2 transition-all ${settings.primaryColor === c.value ? "border-white scale-110 shadow-lg" : "border-transparent hover:scale-105"}`} style={{ backgroundColor: c.value }} title={c.name} />
+          <button
+            key={c.value}
+            onClick={() => setSettings({ ...settings, primaryColor: c.value })}
+            className={`w-9 h-9 rounded-xl border-2 transition-all shrink-0 ${settings.primaryColor === c.value ? "border-white scale-105 shadow-lg ring-2 ring-white/20" : "border-transparent hover:scale-105"}`}
+            style={{ backgroundColor: c.value }}
+            title={c.name}
+          />
         ))}
       </div>
     </SectionCard>
@@ -296,9 +302,15 @@ const PageAppearance = ({ settings, setSettings }: SettingsPageProps) => (
           <input type="text" value={settings.backgroundColor} onChange={(e) => setSettings({ ...settings, backgroundColor: e.target.value })} className="w-20 h-6 bg-black border border-white/10 rounded px-1.5 text-[10px] font-mono text-zinc-400 focus:border-primary/50 outline-none" />
         </div>
       </div>
-      <div className="grid grid-cols-6 gap-3">
+      <div className="flex items-center gap-2.5 flex-wrap">
         {bgColors.map((c) => (
-          <button key={c.value} onClick={() => setSettings({ ...settings, backgroundColor: c.value })} className={`w-full aspect-square rounded-xl border-2 transition-all ${settings.backgroundColor === c.value ? "border-white scale-110 shadow-lg" : "border-transparent hover:scale-105"}`} style={{ backgroundColor: c.value }} title={c.name} />
+          <button
+            key={c.value}
+            onClick={() => setSettings({ ...settings, backgroundColor: c.value })}
+            className={`w-9 h-9 rounded-xl border-2 transition-all shrink-0 ${settings.backgroundColor === c.value ? "border-white scale-105 shadow-lg ring-2 ring-white/20" : "border-transparent hover:scale-105"}`}
+            style={{ backgroundColor: c.value }}
+            title={c.name}
+          />
         ))}
       </div>
     </SectionCard>
