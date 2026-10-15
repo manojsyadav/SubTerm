@@ -336,6 +336,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     return /\.(txt|json|ya?ml|conf|sh|bash|zsh|env|py|js|jsx|ts|tsx|html|css|scss|md|toml|xml|ini|service|sql|rs|go|c|cpp|h|hpp|log|gitignore|dockerfile)$/i.test(name) || !name.includes(".");
   };
 
+  const isImage = (name: string) => {
+    return /\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i.test(name);
+  };
+
   const pathSegments = useMemo(() => {
     if (!currentPath) return [];
     return pathCrumbs(currentPath, provider.pathSep).map((c) => ({
@@ -536,9 +540,10 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: targetDir } })
       );
     } else if (terminalId) {
-      const cdCmd = `cd "${clean}"\n`;
+      const cdCmd = `cd "${clean}"\r`;
       const bytes = Array.from(new TextEncoder().encode(cdCmd));
       invoke("write_terminal_data", { terminalId, data: bytes }).catch(() => {});
+      window.dispatchEvent(new CustomEvent(`subterm-terminal-focus-${terminalId}`));
     }
     notify(`Sent cd "${targetDir}" to Terminal`, "info");
   };
@@ -1247,10 +1252,17 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      // Only fire when this panel owns the focus, so two side-by-side
-      // FilePanel instances don't both trigger on the same press.
+      // Only fire when this panel owns the focus (or nothing specific is focused),
+      // so two side-by-side FilePanel instances don't both trigger on the same press.
       const root = dropTargetRef.current;
-      if (root && document.activeElement && !root.contains(document.activeElement)) return;
+      if (
+        root &&
+        document.activeElement &&
+        document.activeElement !== document.body &&
+        !root.contains(document.activeElement)
+      ) {
+        return;
+      }
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
         e.preventDefault();
@@ -1296,13 +1308,20 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         return;
       }
 
-      if (e.key === " " && selected.size === 1) {
-        const selectedPath = Array.from(selected)[0];
-        const entry = sortedEntries.find((item) => item.path === selectedPath);
-        if (entry && !entry.isDir) {
+      if (e.key === " ") {
+        if (editorEntry) {
           e.preventDefault();
-          setEditorEntry(entry);
+          setEditorEntry(null);
           return;
+        }
+        const targetPath = lastSelectedPathRef.current || (selected.size === 1 ? Array.from(selected)[0] : null);
+        if (targetPath) {
+          const entry = sortedEntries.find((item) => item.path === targetPath);
+          if (entry && !entry.isDir) {
+            e.preventDefault();
+            setEditorEntry(entry);
+            return;
+          }
         }
       }
 
@@ -1313,7 +1332,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedEntries, allSelected, showHiddenFiles, selected]);
+  }, [sortedEntries, allSelected, showHiddenFiles, selected, editorEntry]);
 
   const toggleSort = (col: SortColumn) =>
     setSort((p) => ({ column: col, asc: p.column === col ? !p.asc : true }));
@@ -1526,7 +1545,14 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                         pickSuggestion(suggestions[activeSuggestion]);
                         setIsEditingPath(false);
                       } else {
-                        const target = tempInput.trim();
+                        let target = tempInput.trim();
+                        if (provider.pathSep === "\\") {
+                          if (/^[a-zA-Z]$/.test(target)) {
+                            target = `${target.toUpperCase()}:\\`;
+                          } else if (/^[a-zA-Z]:$/.test(target)) {
+                            target = `${target.toUpperCase()}\\`;
+                          }
+                        }
                         if (target) {
                           setInputFocused(false);
                           setIsEditingPath(false);
@@ -1773,7 +1799,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             />
           </div>
         )}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative gap-1.5">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden relative gap-1.5">
           {/* Filter row — always visible, narrow (24 px). Lets the user trim
           the rendered list by name without touching sort or the path bar.
           Sticky across cd so they can hunt the same name across sibling
@@ -1904,7 +1930,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`flex-1 border rounded-lg bg-[#121214] flex flex-col overflow-auto transition-all duration-200 border-indigo-500/30 shadow-2xl shadow-indigo-950/10 ${dragOver ? "border-indigo-400 bg-indigo-950/10" : ""}`}
+        className={`flex-1 min-h-0 border rounded-lg bg-[#121214] flex flex-col overflow-y-auto transition-all duration-200 border-indigo-500/30 shadow-2xl shadow-indigo-950/10 ${dragOver ? "border-indigo-400 bg-indigo-950/10" : ""}`}
       >
         {/* The select column is conditionally injected — only present when
             there's at least one selected row. With nothing selected the row
@@ -1950,7 +1976,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           )}
         </div>
 
-        <div className="min-w-full p-1 font-mono text-[11px]"
+        <div className="min-w-full p-1 pb-16 font-mono text-[11px]"
              onClick={(e) => {
                // Click landed on the bare list background (not on a row, since
                // rows stopPropagation via their own onClick chain implicitly
@@ -1976,7 +2002,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
                 onClick={(e) => onRowClick(e, entry, sortedEntries)}
                 onDoubleClick={() => {
                   if (entry.isDir) { fetch(entry.path); return; }
-                  if (isTextFile(entry.name)) {
+                  if (isTextFile(entry.name) || isImage(entry.name)) {
                     setEditorEntry(entry);
                     return;
                   }

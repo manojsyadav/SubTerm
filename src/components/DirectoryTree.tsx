@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Folder,
   FolderOpen,
@@ -6,6 +7,7 @@ import {
   ChevronDown,
   RefreshCw,
   Home,
+  HardDrive,
   TerminalSquare,
   Copy,
   FolderTree,
@@ -68,26 +70,6 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const sep = provider.pathSep;
   const currentNorm = normalizePath(currentPath, sep);
 
-  // Determine root path for the provider
-  const getInitialRoots = useCallback(async (): Promise<{ rootPath: string; homePath: string }> => {
-    let home = "";
-    try {
-      home = await provider.homePath();
-      setHomeDir(home);
-    } catch {
-      home = sep;
-    }
-
-    let rootPath: string = sep;
-    if (provider.id === "local" && sep === "\\") {
-      // Windows drive root: e.g. C:\ or D:\
-      const match = (currentPath || home).match(/^([A-Za-z]:[\\/]?)/);
-      rootPath = match ? (match[1].endsWith("\\") ? match[1] : `${match[1]}\\`) : "C:\\";
-    }
-
-    return { rootPath, homePath: home };
-  }, [provider, currentPath, sep]);
-
   // Load children for a folder
   const fetchChildren = useCallback(
     async (dirPath: string): Promise<TreeNode[]> => {
@@ -114,29 +96,89 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const initTree = useCallback(async () => {
     setLoadingRoot(true);
     try {
-      const { rootPath, homePath } = await getInitialRoots();
+      let home = "";
+      try {
+        home = await provider.homePath();
+        setHomeDir(home);
+      } catch {
+        home = sep;
+      }
+
       const roots: TreeNode[] = [];
 
-      // Root node
-      const rootChildren = await fetchChildren(rootPath);
-      roots.push({
-        path: rootPath,
-        name: rootPath === "/" ? "Root (/)" : rootPath,
-        isExpanded: true,
-        isLoading: false,
-        children: rootChildren,
-      });
+      if (provider.id === "local" && sep === "\\") {
+        // Windows local filesystem: query all available drives
+        let drives: string[] = [];
+        try {
+          drives = await invoke<string[]>("local_drives");
+        } catch {
+          drives = ["C:\\"];
+        }
+        if (!drives.length) drives = ["C:\\"];
 
-      // If home directory is distinct from root and not a direct child, also offer home
-      if (homePath && normalizePath(homePath, sep) !== normalizePath(rootPath, sep)) {
-        // We'll mark the root as expanded
+        // If currentPath is on a drive not in list, add it
+        const curMatch = currentPath.match(/^([A-Za-z]:[\\/]?)/);
+        const curDrive = curMatch
+          ? (curMatch[1].toUpperCase().endsWith("\\") ? curMatch[1].toUpperCase() : `${curMatch[1].toUpperCase()}\\`)
+          : null;
+        if (curDrive && !drives.some((d) => d.toUpperCase() === curDrive)) {
+          drives.push(curDrive);
+        }
+
+        const activeDrive = curDrive || drives[0];
+
+        for (const drive of drives) {
+          const isActive = drive.toUpperCase() === activeDrive.toUpperCase();
+          const children = isActive ? await fetchChildren(drive) : null;
+          roots.push({
+            path: drive,
+            name: `Drive (${drive.slice(0, 2).toUpperCase()})`,
+            isExpanded: isActive,
+            isLoading: false,
+            children,
+          });
+        }
+
+        // Add Home Directory shortcut node if home is distinct
+        if (home && !roots.some((r) => normalizePath(r.path, sep) === normalizePath(home, sep))) {
+          const homeChildren = await fetchChildren(home);
+          roots.push({
+            path: home,
+            name: "Home (~)",
+            isExpanded: false,
+            isLoading: false,
+            children: homeChildren,
+          });
+        }
+      } else {
+        // Unix or Remote SFTP
+        const rootPath = "/";
+        const rootChildren = await fetchChildren(rootPath);
+        roots.push({
+          path: rootPath,
+          name: "Root (/)",
+          isExpanded: true,
+          isLoading: false,
+          children: rootChildren,
+        });
+
+        if (home && normalizePath(home, sep) !== "/" && !home.startsWith("//")) {
+          const homeChildren = await fetchChildren(home);
+          roots.push({
+            path: home,
+            name: "Home (~)",
+            isExpanded: false,
+            isLoading: false,
+            children: homeChildren,
+          });
+        }
       }
 
       setRootNodes(roots);
     } finally {
       setLoadingRoot(false);
     }
-  }, [fetchChildren, getInitialRoots, sep]);
+  }, [fetchChildren, provider, currentPath, sep]);
 
   useEffect(() => {
     initTree();
@@ -256,7 +298,11 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           </button>
 
           {/* Folder Icon */}
-          {node.isExpanded ? (
+          {node.name.startsWith("Drive (") ? (
+            <HardDrive size={12} className="text-emerald-400 shrink-0" />
+          ) : node.name === "Home (~)" ? (
+            <Home size={12} className="text-amber-400 shrink-0" />
+          ) : node.isExpanded ? (
             <FolderOpen size={12} className="text-indigo-400 shrink-0" />
           ) : (
             <Folder size={12} className="text-indigo-300/80 shrink-0" />

@@ -3200,8 +3200,40 @@ pub async fn select_local_folder() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub async fn local_list_dir(path: String) -> Result<Vec<LocalFileEntry>, String> {
-    let safe = guard_local_path(&path, false)?;
+pub async fn local_drives() -> Result<Vec<String>, String> {
+    #[cfg(windows)]
+    {
+        let mut drives = Vec::new();
+        for b in b'A'..=b'Z' {
+            let letter = b as char;
+            let path = format!("{}:\\", letter);
+            if std::path::Path::new(&path).exists() {
+                drives.push(path);
+            }
+        }
+        Ok(drives)
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(vec!["/".to_string()])
+    }
+}
+
+#[tauri::command]
+pub async fn local_list_dir(mut path: String) -> Result<Vec<LocalFileEntry>, String> {
+    #[cfg(windows)]
+    {
+        // Normalize single drive letter like "C:" or "D:" or bare "C" / "D" to "C:\" / "D:\"
+        if path.len() == 1 && path.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+            path.push_str(":\\");
+        } else if path.len() == 2 && path.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) && path.ends_with(':') {
+            path.push('\\');
+        }
+    }
+
+    let p = std::path::Path::new(&path);
+    let canonical = p.canonicalize().map_err(|e| format!("Invalid path: {}", e))?;
+    let safe = without_verbatim_prefix(canonical);
     if !safe.is_dir() {
         return Err("Path is not a directory".into());
     }

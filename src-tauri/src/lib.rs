@@ -382,7 +382,7 @@ pub fn run() {
             docker::ssh_docker_compose_view,
             docker::ssh_docker_prune,
             docker::open_container_terminal,
-            commands::sftp::select_local_folder, commands::sftp::local_list_dir,
+            commands::sftp::select_local_folder, commands::sftp::local_list_dir, commands::sftp::local_drives,
             commands::sftp::local_home_dir, commands::sftp::local_desktop_dir, commands::sftp::local_create_dir, commands::sftp::local_remove, commands::sftp::local_rename,
             commands::sftp::android_quick_dirs, commands::sftp::android_default_local_dir,
             commands::sftp::parse_ssh_config,

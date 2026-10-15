@@ -19,11 +19,15 @@ export function stripAnsi(text: string): string {
 // followed by the git segment SubTerm's local bash integration adds (` [repo:main ●2]`).
 const PROMPT_RE = /(?:^|[\r\n])(?:\([^)\r\n]*\)\s*)?[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:([/~][^$#\s)]*)(?: \[[^\]\r\n]*\])?[$#]/g;
 
+// Windows PowerShell prompt: `PS C:\path>` or `PS D:\path [branch]>` or CMD prompt: `C:\path>`
+const WIN_PROMPT_RE = /(?:^|[\r\n])(?:PS\s+)?([A-Za-z]:[\\/][^>\r\n]*?)(?:\s+\[[^\]\r\n]*\])?\s*>/g;
+
 /** The cwd shown by the LAST shell prompt in `chunk` (raw terminal output), or null. */
 export function parsePromptCwd(chunk: string): string | null {
   const text = stripAnsi(chunk);
   let last: string | null = null;
   for (const m of text.matchAll(PROMPT_RE)) last = m[1];
+  for (const m of text.matchAll(WIN_PROMPT_RE)) last = m[1].trim();
   return last;
 }
 
@@ -31,7 +35,13 @@ export function parsePromptCwd(chunk: string): string | null {
 export function parseOsc7(data: string): string | null {
   let p = data.trim();
   if (p.startsWith("file://")) {
-    try { p = decodeURIComponent(new URL(p).pathname); } catch { /* keep raw */ }
+    try {
+      p = decodeURIComponent(new URL(p).pathname);
+      // On Windows, URL.pathname starts with `/C:/...` -> strip leading slash
+      if (/^\/[a-zA-Z]:/.test(p)) {
+        p = p.slice(1);
+      }
+    } catch { /* keep raw */ }
   }
   return p || null;
 }

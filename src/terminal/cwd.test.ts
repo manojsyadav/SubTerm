@@ -31,6 +31,13 @@ describe("parsePromptCwd", () => {
     expect(parsePromptCwd("\n" + chunk)).toBe("/var/log");
   });
 
+  it("reads Windows PowerShell and CMD prompts", () => {
+    expect(parsePromptCwd("PS C:\\Users\\manoj> ")).toBe("C:\\Users\\manoj");
+    expect(parsePromptCwd("PS D:\\REPO\\HomeLab\\SubTerm> ")).toBe("D:\\REPO\\HomeLab\\SubTerm");
+    expect(parsePromptCwd("PS C:\\repo [main]> ")).toBe("C:\\repo");
+    expect(parsePromptCwd("C:\\Windows\\System32> ")).toBe("C:\\Windows\\System32");
+  });
+
   it("ignores output that merely looks path-like", () => {
     expect(parsePromptCwd("modified:   Homepage/homepage.yaml\n")).toBeNull();
     expect(parsePromptCwd("user@host is unreachable")).toBeNull();

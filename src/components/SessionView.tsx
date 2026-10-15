@@ -909,9 +909,10 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
       if (!targetPath) return;
       if (isCompact) setActiveTool(null);
       const cleanPath = targetPath.replace(/"/g, '\\"');
-      const cdCmd = `cd "${cleanPath}"\n`;
+      const cdCmd = `cd "${cleanPath}"\r`;
       const bytes = Array.from(new TextEncoder().encode(cdCmd));
       invoke('write_terminal_data', { terminalId: activeTab, data: bytes }).catch(console.error);
+      window.dispatchEvent(new CustomEvent(`subterm-terminal-focus-${activeTab}`));
     };
     const handleTerminalExec = (e: Event) => {
       const text = (e as CustomEvent<{ text?: string } | undefined>).detail?.text;

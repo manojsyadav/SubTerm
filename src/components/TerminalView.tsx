@@ -796,8 +796,15 @@ const TerminalView = ({
       const a = (e as CustomEvent<string>).detail;
       if (a === 'find' || a === 'export') tabActionRef.current[a]();
     };
+    const onFocus = () => {
+      xtermRef.current?.focus();
+    };
     window.addEventListener(`subterm-terminal-action-${terminalId}`, onAction);
-    return () => window.removeEventListener(`subterm-terminal-action-${terminalId}`, onAction);
+    window.addEventListener(`subterm-terminal-focus-${terminalId}`, onFocus);
+    return () => {
+      window.removeEventListener(`subterm-terminal-action-${terminalId}`, onAction);
+      window.removeEventListener(`subterm-terminal-focus-${terminalId}`, onFocus);
+    };
   }, [terminalId]);
 
   // Command block separation and output capture (OSC 133 + buffer parsing)
