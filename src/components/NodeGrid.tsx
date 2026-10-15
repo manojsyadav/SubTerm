@@ -477,6 +477,18 @@ export const NodeGrid = ({ servers, folders, activeFolderId: activeFolderIdProp,
           >
             <Box size={14} />
           </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(new CustomEvent("subterm-open-browser", {
+                detail: { server: { id: s.id, name: s.name, host: s.host } }
+              }));
+            }}
+            title="Open Web Console (Proxmox / Portainer / Web UI)"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-white/5 transition-all"
+          >
+            <Globe size={14} />
+          </button>
           {onCloneServer && (
             <button
               onClick={(e) => { e.stopPropagation(); onCloneServer(s.id); }}

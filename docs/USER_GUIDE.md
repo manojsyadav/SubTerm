@@ -276,6 +276,26 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Built-in shell integration on local PowerShell, Bash, and WSL sessions injects live repository status into your shell prompt (e.g. `[repo:main ↑1 ●2]`).
    - This status segment can be toggled independently from command block tracking under **Settings > Features > Terminal > Git status in shell prompt**.
 
+### Workflow 8: Embedded Web Browser & Homelab Management Consoles
+
+*Goal*: Manage web management consoles (Proxmox VE, TrueNAS, Portainer, router portals, Grafana) directly beside your terminal and SFTP tabs without SSL authority errors or frame-blocking restrictions.
+
+1. **Opening a Browser View**:
+   - **From Any Server**: On the Servers page, hover any server card and click the **Web** (Globe) icon to open its web console directly (defaults to port `8006` for hypervisors or port `443`/`80`).
+   - **Inside an Active SSH Session**: Click the **Web** button in the tool row (beside SFTP, Ports, and Docker) to dock a web browser panel side-by-side with your active terminal.
+   - **From the Sidebar**: Click the **Web Browser** rail item to open an independent browser session tab.
+2. **Homelab Proxy (Self-Signed SSL & X-Frame Bypass)**:
+   - Web management consoles frequently enforce frame-blocking (`X-Frame-Options: DENY`) and use self-signed TLS certificates.
+   - SubTerm includes an automated background loopback proxy bound to `127.0.0.1` that trusts local self-signed certificates and strips framing restrictions.
+   - The toolbar displays a **Proxy: ON** toggle pill. You can click it at any time to toggle between Homelab Proxy and Direct connection mode.
+3. **Navigation & Presets**:
+   - Use the navigation bar for Back, Forward, Reload, and Home.
+   - Click any preset button to instantly jump to standard homelab ports: **Proxmox (:8006)**, **Portainer (:9443)**, **TrueNAS**, **Grafana (:3000)**, **Cockpit (:9090)**, or **Home Assistant (:8123)**.
+   - Click the Star icon to bookmark custom web consoles into your persistent bookmarks bar.
+4. **Dedicated Window & External Browser**:
+   - Click the **Pop Out** icon in the address bar to pop the web page out into an isolated native SubTerm window.
+   - Click the **System Browser** icon to open the current URL in your OS default browser (Chrome, Edge, Firefox).
+
 ---
 
 ## 3. Configuration & Customization

@@ -15,3 +15,4 @@ pub mod sftp_parallel;
 pub mod sftp_remote_copy;
 pub mod terminal;
 pub mod tunnels;
+pub mod browser;

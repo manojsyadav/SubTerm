@@ -18,6 +18,7 @@ mod mcp;
 mod hlc;
 mod identity;
 mod vault;
+mod browser_proxy;
 #[cfg(windows)]
 mod webview_permissions;
 mod commands;
@@ -417,6 +418,10 @@ pub fn run() {
             commands::monitor_settings::monitor_pause_all,
             commands::monitor_settings::monitor_get_settings,
             commands::monitor_settings::monitor_set_settings,
+            commands::browser::browser_proxy_start,
+            commands::browser::browser_proxy_stop,
+            commands::browser::browser_proxy_status,
+            commands::browser::open_browser_window,
             about::app_info, about::check_for_updates, about::open_external_url
         ])
         .run(tauri::generate_context!())

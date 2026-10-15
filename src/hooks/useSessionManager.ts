@@ -19,8 +19,9 @@ export type Session = {
   /** Open the initial tool across the whole window instead of beside the terminal. */
   toolFull?: boolean;
   isLocal?: boolean;
-  /** Embedded remote desktop tab (RdpSessionView) instead of an SSH session. */
-  protocol?: "rdp";
+  /** Embedded remote desktop tab (RdpSessionView) or browser tab (BrowserSessionView). */
+  protocol?: "rdp" | "browser";
+  browserUrl?: string;
   localShell?: string;
   isProduction?: boolean;
   icon?: string;
@@ -291,5 +292,29 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     openMultipleServers,
     openQuickConnect,
     openLocalTerminal,
+    openBrowser: useCallback(
+      (url?: string, server?: { id?: number; name: string; host?: string }) => {
+        const sessionId = `session-browser-${Date.now()}`;
+        const host = server?.host;
+        const serverName = server?.name || (url ? (() => { try { return new URL(url).hostname; } catch { return "Web Console"; } })() : "Web Console");
+        const initialUrl = url || (host ? `https://${host}:8006` : "https://127.0.0.1:8006");
+
+        options?.onAddLog?.(`Opened Web Console: ${serverName}`, "info");
+        setSessions((prev) => [
+          ...prev,
+          {
+            id: sessionId,
+            serverId: server?.id ?? -2,
+            serverName,
+            serverHost: host,
+            protocol: "browser",
+            browserUrl: initialUrl,
+            icon: "globe",
+          },
+        ]);
+        setActiveView(sessionId);
+      },
+      [options]
+    ),
   };
 }

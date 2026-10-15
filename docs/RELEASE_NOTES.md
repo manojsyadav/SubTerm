@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(browser)` — Embedded Web Browser tabs and homelab management console proxy**:
+  SubTerm now includes a built-in browser tab with an integrated local loopback proxy (`127.0.0.1`) that bypasses `X-Frame-Options` restrictions and accepts self-signed SSL certificates from homelab services (such as Proxmox VE, TrueNAS, Portainer, and router gateways). You can open a browser tab from the sidebar rail, from the **Web** button on any server card, or side-by-side with your terminal in the session tool strip. The browser view includes an address bar with back/forward/refresh navigation, a one-click **Homelab Proxy / Direct** toggle, homelab presets (Proxmox `:8006`, Portainer `:9443`, TrueNAS, Grafana `:3000`, Cockpit `:9090`, Home Assistant `:8123`), custom bookmarking, and actions to pop out to a dedicated SubTerm window or your system's default browser.
+
 - **`feat(terminal)` — Git status in local shell prompts**:
   In a local PowerShell, bash or WSL tab, the prompt shows the repository and branch when the current folder is inside a git repository, for example `PS C:\REPO\subTerm [subTerm:main ↑2 ↓1 ●5]>`. `↑` and `↓` count commits ahead of and behind the upstream branch as of your last fetch (no network is used), `≡` means level with it, `●` counts uncommitted and untracked files, and a detached HEAD shows its short hash. It is green when clean and yellow with changes. Running git for the prompt does not change `$LASTEXITCODE`. Prompts from oh-my-posh, Starship or Git Bash, which show git themselves, are left as they are, as are SSH sessions. It is part of the built-in shell integration, so it turns off with Command blocks.
 

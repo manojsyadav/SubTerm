@@ -38,11 +38,6 @@ This document tracks active development tasks, pending architectural optimizatio
   - Enable connecting custom MCP tool servers (local stdio or SSE/HTTP) so AI assistants and copilot agents can query homelab services, run diagnostic tools, and interact with external systems.
   - Provide a configuration UI in Settings for adding, enabling/disabling, testing, and managing MCP server definitions and environment variables.
 
-- 🟡 **P2 · M** — **Embedded Web Browser Tab**
-  - Leverage Tauri's underlying Chromium webview engine to provide a built-in tabbed browser view inside SubTerm sessions.
-  - Open web management consoles (Proxmox, TrueNAS, Portainer, router portals, Grafana) and local/remote dev servers directly beside terminal & SFTP tabs.
-  - Implement a streamlined browser toolbar with URL navigation, back/forward/refresh, certificate override handling for local self-signed homelab IPs, and quick bookmarks.
-
 - 🟡 **P2 · M** — **Local & Remote File Explorer**
   - Full-featured local and remote file explorer with directory tree navigation, breadcrumbs, search/filtering, multi-file batch operations, file preview, and drag-and-drop transfers.
   - Bi-directional sync between the active terminal directory and the explorer view (reveal CWD in explorer and navigate terminal to selected folder).

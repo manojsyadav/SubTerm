@@ -1,7 +1,11 @@
 fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
+    println!("cargo:rerun-if-changed=tauri.windows.conf.json");
+    println!("cargo:rerun-if-changed=tauri.macos.conf.json");
+    println!("cargo:rerun-if-changed=tauri.linux.conf.json");
     println!("cargo:rerun-if-changed=icons");
     println!("cargo:rerun-if-changed=icons/icon.ico");
+    println!("cargo:rerun-if-changed=../dist/index.html");
 
     // Tauri bundler requires all bundle.resources to exist at config parse time.
     // When running `cargo check` or `cargo test` directly (e.g. in CI or local dev)

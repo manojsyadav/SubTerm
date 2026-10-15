@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio, Pin, Cpu, Thermometer } from "lucide-react";
+import { TerminalSquare, Folder, Network, AlertTriangle, Check, X, ShieldAlert, KeyRound, Play, Library, Info, Container, Plus, SplitSquareHorizontal, Columns, Rows, RotateCw, GitBranch, Sparkles, Copy, Download, FileText, FileCode, Box, Activity, Cog, Server, SlidersHorizontal, Radio, Pin, Cpu, Thermometer, Globe } from "lucide-react";
 import { useBroadcast } from "../ui/broadcast";
 import { localShellEvent, type Session } from "../hooks/useSessionManager";
 import { getTerminalGitBranch, onTerminalGitBranchChange, getTerminalCwd, onTerminalCwdChange } from "../terminal/cwd";
@@ -18,6 +18,7 @@ const TunnelsPanel = lazy(() => import("./TunnelsPanel"));
 const InfoPanel = lazy(() => import("./InfoPanel"));
 const CmdsPanel = lazy(() => import("./CmdsPanel").then((m) => ({ default: m.CmdsPanel })));
 const GitPanel = lazy(() => import("./GitPanel"));
+const BrowserView = lazy(() => import("./BrowserView"));
 const PanelFallback = () => <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">Loading…</div>;
 import { QuickEditorModal } from "./QuickEditorModal";
 import { PathChoiceModal } from "./PathChoiceModal";
@@ -102,7 +103,7 @@ interface SessionDisconnectedPayload {
   user_initiated?: boolean;
 }
 
-type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'git' | 'mirrors' | 'cmds' | 'info';
+type ActiveTool = 'sftp' | 'tunnels' | 'docker' | 'processes' | 'services' | 'git' | 'mirrors' | 'cmds' | 'info' | 'browser';
 
 interface SessionViewProps {
   session: Session;
@@ -697,6 +698,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     info: useFeatureFlag('panelSystem'),
     cmds: useFeatureFlag('panelLibrary'),
     mirrors: true,
+    browser: true,
   };
   const copilotEnabled = useFeatureFlag('aiCopilot');
   // A tool panel is mounted the first time it is opened and then kept mounted (its state and
@@ -1978,6 +1980,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'services',  icon: Cog,      label: 'Services',  hint: 'Services — system services' },
                 { id: 'git',       icon: GitBranch, label: 'Git',      hint: 'Git — source control' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
+                { id: 'browser',   icon: Globe,    label: 'Web',       hint: 'Web — embedded browser & homelab consoles' },
               ]
             : [
                 { id: 'sftp',      icon: Folder,   label: 'SFTP',      hint: 'SFTP — file browser' },
@@ -1988,6 +1991,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                 { id: 'git',       icon: GitBranch, label: 'Git',      hint: 'Git — source control' },
                 { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
                 { id: 'info',      icon: Server,   label: 'System',    hint: 'System — hardware, network & OS' },
+                { id: 'browser',   icon: Globe,    label: 'Web',       hint: 'Web — embedded browser & homelab consoles' },
               ]
           ).filter((t) => toolEnabled[t.id]).map(({ id, icon: Icon, label, hint }) => {
             const on = activeTool === id;
@@ -2637,6 +2641,19 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
               mode="info"
               onOpenContainerTerminal={openContainerTerminal}
             />
+            </Suspense>
+          </div>
+          )}
+
+          {/* Embedded Web Browser Panel */}
+          {openedTools.has('browser') && (
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTool === 'browser' ? '' : 'hidden'}`}>
+            <Suspense fallback={<PanelFallback />}>
+              <BrowserView
+                serverHost={session.serverHost}
+                serverName={session.serverName}
+                onClose={() => setActiveTool(null)}
+              />
             </Suspense>
           </div>
           )}

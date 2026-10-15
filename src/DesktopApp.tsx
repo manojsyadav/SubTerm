@@ -47,6 +47,7 @@ import { LogsView } from "./components/LogsView";
 import { WallView } from "./components/WallView";
 import { publishOpenSessions } from "./fs/sessionRegistry";
 const RdpSessionView = lazy(() => import("./components/RdpSessionView"));
+const BrowserSessionView = lazy(() => import("./components/BrowserSessionView"));
 
 const appWindow = getCurrentWindow();
 
@@ -255,7 +256,17 @@ function DesktopApp() {
     mobileSessionPickerOpen, setMobileSessionPickerOpen,
     getCloseHandler, closeSession,
     openServer, openMultipleServers, openQuickConnect, openLocalTerminal,
+    openBrowser,
   } = sessionManager;
+
+  useEffect(() => {
+    const onOpenBrowser = (e: Event) => {
+      const custom = e as CustomEvent<{ url?: string; server?: { id?: number; name: string; host?: string } }>;
+      openBrowser(custom.detail?.url, custom.detail?.server);
+    };
+    window.addEventListener("subterm-open-browser", onOpenBrowser);
+    return () => window.removeEventListener("subterm-open-browser", onOpenBrowser);
+  }, [openBrowser]);
 
   // Local terminals use the shell chosen in Settings > General (empty = automatic: PowerShell 7,
   // else Windows PowerShell on Windows; $SHELL elsewhere). Read from storage so it is current
@@ -896,6 +907,14 @@ function DesktopApp() {
           embedded
           serverId={sess.serverId}
           serverName={sess.serverName}
+          onClose={getCloseHandler(sess.id)}
+          onStatusChange={(status) => handleSessionStatus(sess.id, status)}
+        />
+      </Suspense>
+    ) : sess.protocol === "browser" ? (
+      <Suspense fallback={null}>
+        <BrowserSessionView
+          session={sess}
           onClose={getCloseHandler(sess.id)}
           onStatusChange={(status) => handleSessionStatus(sess.id, status)}
         />
