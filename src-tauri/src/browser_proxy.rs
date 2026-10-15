@@ -325,9 +325,21 @@ async fn handle_socket(
         }
     }
 
-    if token != *expected_token {
-        write_response(&mut sock, 401, "Unauthorized", &[], b"Invalid proxy token").await;
-        return;
+    let is_initial_proxy = req.uri.starts_with("/proxy");
+
+    if is_initial_proxy {
+        if token != *expected_token {
+            write_response(&mut sock, 401, "Unauthorized", &[], b"Invalid proxy token").await;
+            return;
+        }
+    } else {
+        // Subresource request from the rendered page:
+        // If an explicit bad token was sent, reject; otherwise allow subresources
+        // so loopback assets are not blocked when WebView2 tracking prevention suppresses cookies.
+        if !token.is_empty() && token != *expected_token {
+            write_response(&mut sock, 401, "Unauthorized", &[], b"Invalid proxy token").await;
+            return;
+        }
     }
 
     // Determine upstream target URL:

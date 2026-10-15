@@ -290,10 +290,11 @@ export default function BrowserView({
           </button>
           <button
             onClick={() => openBrowserWindow(currentUrl, serverName || currentUrl)}
-            title="Pop out into a dedicated SubTerm window"
-            className="p-1.5 rounded hover:bg-white/10 text-zinc-300 transition-colors"
+            title="Pop out into a dedicated native window (full Chrome/Edge parity with zero framing or cookie limits)"
+            className="flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-medium transition-colors"
           >
-            <ExternalLink size={15} />
+            <ExternalLink size={13} />
+            <span className="hidden sm:inline">Pop Out</span>
           </button>
           <button
             onClick={() => openExternalUrl(currentUrl)}
@@ -359,7 +360,6 @@ export default function BrowserView({
           src={effectiveSrc}
           title={serverName || "Embedded Browser"}
           className="w-full h-full border-none"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
           onLoad={() => {
             setIsLoading(false);
             setFrameError(null);
