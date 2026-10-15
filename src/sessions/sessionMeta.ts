@@ -6,7 +6,7 @@ import type { Session } from "../hooks/useSessionManager";
 // runtime id, so they survive reconnects and restarts. Stored per workspace,
 // because server ids restart in every workspace's database.
 
-export type SessionKind = "local" | "ssh" | "sftp" | "rdp";
+export type SessionKind = "local" | "ssh" | "sftp" | "rdp" | "browser";
 
 export interface SessionMeta {
   names: Record<string, string>;
@@ -23,6 +23,7 @@ export const metaStorageKey = (profile = "default") => `subterm-session-meta:${p
 export function sessionKind(s: Session): SessionKind {
   if (s.isLocal) return "local";
   if (s.protocol === "rdp") return "rdp";
+  if (s.protocol === "browser") return "browser";
   return s.initialTool === "sftp" && s.toolFull ? "sftp" : "ssh";
 }
 
@@ -36,7 +37,7 @@ export function metaKeyOf(s: Session): string | null {
 /** `ssh:12` -> { kind: "ssh", serverId: 12 }. */
 export function parseMetaKey(key: string): { kind: SessionKind; serverId: number } | null {
   if (key === "local") return { kind: "local", serverId: -1 };
-  const m = /^(ssh|sftp|rdp):(\d+)$/.exec(key);
+  const m = /^(ssh|sftp|rdp|browser):(\d+)$/.exec(key);
   return m ? { kind: m[1] as SessionKind, serverId: Number(m[2]) } : null;
 }
 

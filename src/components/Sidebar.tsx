@@ -223,13 +223,7 @@ export const Sidebar = ({
           {items.map((item) => (
             <button
               key={item.id}
-              onClick={() => {
-                if (item.id === 'browser') {
-                  window.dispatchEvent(new CustomEvent("subterm-open-browser"));
-                  return;
-                }
-                setActiveTab(item.id);
-              }}
+              onClick={() => setActiveTab(item.id)}
               onContextMenu={item.id === 'local' && canPickShell ? (e) => { e.preventDefault(); openShellMenu(e.currentTarget); } : undefined}
               className={`p-2.5 rounded-xl transition-all duration-300 relative group flex items-center justify-center ${
                 activeTab === item.id
@@ -311,13 +305,7 @@ export const Sidebar = ({
         {items.map((item) => (
           <Fragment key={item.id}>
           <button
-            onClick={() => {
-              if (item.id === 'browser') {
-                window.dispatchEvent(new CustomEvent("subterm-open-browser"));
-                return;
-              }
-              setActiveTab(item.id);
-            }}
+            onClick={() => setActiveTab(item.id)}
             onContextMenu={item.id === 'local' && canPickShell ? (e) => { e.preventDefault(); openShellMenu(e.currentTarget); } : undefined}
             aria-haspopup={item.id === 'local' && canPickShell ? 'menu' : undefined}
             className={`p-2.5 rounded-xl transition-all duration-300 relative group flex items-center justify-center ${

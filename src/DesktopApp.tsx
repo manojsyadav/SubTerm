@@ -984,12 +984,12 @@ function DesktopApp() {
     },
   };
   const railList = (itemId: string) => {
-    const kind = itemId === 'nodes' ? 'ssh' : itemId === 'sftp' ? 'sftp' : itemId === 'rdp' ? 'rdp' : null;
+    const kind = itemId === 'nodes' ? 'ssh' : itemId === 'sftp' ? 'sftp' : itemId === 'rdp' ? 'rdp' : itemId === 'browser' ? 'browser' : null;
     if (!kind) return null;
     return (
       <SessionList
         variant="rail"
-        label={`Open ${itemId === 'nodes' ? 'servers' : itemId === 'sftp' ? 'SFTP sessions' : 'remote desktops'}`}
+        label={`Open ${itemId === 'nodes' ? 'servers' : itemId === 'sftp' ? 'SFTP sessions' : itemId === 'rdp' ? 'remote desktops' : 'web consoles'}`}
         sessions={sessions.filter((x) => sessionKind(x) === kind)}
         meta={sessionMeta.meta}
         activeView={activeView}
@@ -1011,7 +1011,7 @@ function DesktopApp() {
   const activeSessionKind = (() => {
     const sess = sessions.find((x) => x.id === activeView);
     if (!sess) return null;
-    return ({ local: 'local', ssh: 'nodes', sftp: 'sftp', rdp: 'rdp' } as const)[sessionKind(sess)];
+    return ({ local: 'local', ssh: 'nodes', sftp: 'sftp', rdp: 'rdp', browser: 'browser' } as const)[sessionKind(sess)];
   })();
 
   // Open a session from its meta key (`ssh:12`, `sftp:12`, `rdp:7`, `local`).
@@ -1023,10 +1023,11 @@ function DesktopApp() {
     if (!server) return;
     if (parsed.kind === 'sftp') openServer(server, 'sftp', { fullWidth: true });
     else if (parsed.kind === 'rdp') openServer(server.protocol === 'rdp' ? server : { ...server, protocol: 'rdp' });
+    else if (parsed.kind === 'browser') openBrowser(undefined, server);
     else openServer(server);
   };
   // Pinned servers of one sidebar list that have no open session, shown dimmed so a click reconnects.
-  const pinnedClosed = (kind: 'ssh' | 'sftp' | 'rdp') => {
+  const pinnedClosed = (kind: 'ssh' | 'sftp' | 'rdp' | 'browser') => {
     const open = new Set(sessions.map((x) => metaKeyOf(x)));
     return sessionMeta.meta.pinned.flatMap((key) => {
       const parsed = parseMetaKey(key);
@@ -1105,7 +1106,18 @@ function DesktopApp() {
         <Sidebar
           activeTab={activeSessionKind ?? activeView}
           renderUnder={sessionPanel ? undefined : railList}
-          setActiveTab={(tab) => { if (tab === 'local') openDefaultLocal(); else if (tab === 'network') setIsNetworkToolsOpen(true); else setActiveView(tab); }}
+          setActiveTab={(tab) => {
+            if (tab === 'local') openDefaultLocal();
+            else if (tab === 'network') setIsNetworkToolsOpen(true);
+            else if (tab === 'browser') {
+              const existing = sessions.find((s) => sessionKind(s) === 'browser');
+              if (existing && activeView !== existing.id) {
+                setActiveView(existing.id);
+              } else {
+                openBrowser();
+              }
+            } else setActiveView(tab);
+          }}
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
           localShells={availableShells}
@@ -1168,16 +1180,18 @@ function DesktopApp() {
                 </div>
               </section>
             )}
-            {(['nodes', 'sftp', 'rdp'] as const).map((itemId) => {
+            {(['nodes', 'sftp', 'rdp', 'browser'] as const).map((itemId) => {
               const kind = itemId === 'nodes' ? 'ssh' : itemId;
               const list = sessions.filter((x) => sessionKind(x) === kind);
               if (list.length === 0 && pinnedClosed(kind).length === 0) return null;
               return (
                 <section key={itemId}>
-                  <h3 className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{itemId === 'nodes' ? 'Servers' : itemId === 'sftp' ? 'SFTP' : 'Remote Desktop'}</h3>
+                  <h3 className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    {itemId === 'nodes' ? 'Servers' : itemId === 'sftp' ? 'SFTP' : itemId === 'rdp' ? 'Remote Desktop' : 'Web Browser'}
+                  </h3>
                   <SessionList
                     variant="panel"
-                    label={`Open ${itemId === 'nodes' ? 'servers' : itemId === 'sftp' ? 'SFTP sessions' : 'remote desktops'}`}
+                    label={`Open ${itemId === 'nodes' ? 'servers' : itemId === 'sftp' ? 'SFTP sessions' : itemId === 'rdp' ? 'remote desktops' : 'browser tabs'}`}
                     sessions={list}
                     meta={sessionMeta.meta}
                     activeView={activeView}

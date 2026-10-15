@@ -31,6 +31,7 @@ struct ProxyState {
     server: Option<(u16, tokio::task::JoinHandle<()>)>,
     token: String,
     port: u16,
+    last_target_origin: String,
 }
 
 fn state() -> &'static Mutex<ProxyState> {
@@ -113,6 +114,7 @@ pub fn stop_proxy() {
         }
         g.port = 0;
         g.token.clear();
+        g.last_target_origin.clear();
     }
 }
 
@@ -233,6 +235,21 @@ fn urlencoding_decode(s: &str) -> Result<String, ()> {
     String::from_utf8(res).map_err(|_| ())
 }
 
+fn urlencoding_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
+}
+
 async fn write_response(
     sock: &mut tokio::net::TcpStream,
     status: u16,
@@ -279,7 +296,7 @@ async fn handle_socket(
     }
 
     let query = parse_query(&req.uri);
-    let token = query.get("token").cloned().unwrap_or_else(|| {
+    let mut token = query.get("token").cloned().unwrap_or_else(|| {
         req.headers
             .get("authorization")
             .and_then(|h| h.strip_prefix("Bearer "))
@@ -287,14 +304,81 @@ async fn handle_socket(
             .to_string()
     });
 
+    if token.is_empty() {
+        if let Some(cookie) = req.headers.get("cookie") {
+            for part in cookie.split(';') {
+                let trimmed = part.trim();
+                if let Some(val) = trimmed.strip_prefix("subterm_token=") {
+                    token = val.to_string();
+                    break;
+                }
+            }
+        }
+    }
+
+    if token.is_empty() {
+        if let Some(referer) = req.headers.get("referer") {
+            let ref_query = parse_query(referer);
+            if let Some(t) = ref_query.get("token") {
+                token = t.clone();
+            }
+        }
+    }
+
     if token != *expected_token {
         write_response(&mut sock, 401, "Unauthorized", &[], b"Invalid proxy token").await;
         return;
     }
 
-    let Some(target_url) = query.get("url") else {
-        write_response(&mut sock, 400, "Bad Request", &[], b"Missing 'url' parameter").await;
-        return;
+    // Determine upstream target URL:
+    // 1. Direct 'url' query parameter (e.g. /proxy?url=https://10.0.0.1/)
+    // 2. Relative subresource resolved against Referer's 'url' parameter
+    // 3. Fallback to last known target origin for this proxy session
+    let target_url = if let Some(u) = query.get("url") {
+        let u_str = u.to_string();
+        if let Ok(parsed) = reqwest::Url::parse(&u_str) {
+            let origin = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+            let origin_with_port = if let Some(port) = parsed.port() {
+                format!("{origin}:{port}")
+            } else {
+                origin
+            };
+            if let Ok(mut g) = state().lock() {
+                g.last_target_origin = origin_with_port;
+            }
+        }
+        u_str
+    } else {
+        let origin = if let Some(referer) = req.headers.get("referer") {
+            let ref_query = parse_query(referer);
+            if let Some(ref_u) = ref_query.get("url") {
+                if let Ok(parsed) = reqwest::Url::parse(ref_u) {
+                    let o = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+                    if let Some(port) = parsed.port() {
+                        format!("{o}:{port}")
+                    } else {
+                        o
+                    }
+                } else {
+                    state().lock().map(|g| g.last_target_origin.clone()).unwrap_or_default()
+                }
+            } else {
+                state().lock().map(|g| g.last_target_origin.clone()).unwrap_or_default()
+            }
+        } else {
+            state().lock().map(|g| g.last_target_origin.clone()).unwrap_or_default()
+        };
+
+        if origin.is_empty() {
+            write_response(&mut sock, 400, "Bad Request", &[], b"Missing target URL or Referer").await;
+            return;
+        }
+
+        if req.uri.starts_with('/') {
+            format!("{origin}{}", req.uri)
+        } else {
+            format!("{origin}/{}", req.uri)
+        }
     };
 
     let target_lower = target_url.to_ascii_lowercase();
@@ -303,7 +387,6 @@ async fn handle_socket(
         return;
     }
 
-    // Build upstream reqwest request
     let method = match req.method.as_str() {
         "POST" => reqwest::Method::POST,
         "PUT" => reqwest::Method::PUT,
@@ -313,9 +396,8 @@ async fn handle_socket(
         _ => reqwest::Method::GET,
     };
 
-    let mut builder = client.request(method, target_url);
+    let mut builder = client.request(method, &target_url);
 
-    // Forward non-host headers
     for (k, v) in &req.headers {
         if k != "host" && k != "content-length" && k != "connection" {
             builder = builder.header(k.as_str(), v.as_str());
@@ -346,11 +428,10 @@ async fn handle_socket(
     let status_text = resp.status().canonical_reason().unwrap_or("OK").to_string();
 
     let mut response_headers: Vec<(String, String)> = Vec::new();
-    let mut content_type = String::new();
+    let current_origin = state().lock().map(|g| g.last_target_origin.clone()).unwrap_or_default();
 
     for (k, v) in resp.headers() {
         let name = k.as_str().to_ascii_lowercase();
-        // Strip headers that prevent framing or embedder isolation
         if name == "x-frame-options"
             || name == "content-security-policy"
             || name == "cross-origin-opener-policy"
@@ -363,37 +444,49 @@ async fn handle_socket(
         }
 
         if let Ok(val) = v.to_str() {
-            if name == "content-type" {
-                content_type = val.to_string();
-            }
-            response_headers.push((k.as_str().to_string(), val.to_string()));
-        }
-    }
-
-    // Now consume body without borrowing conflicts
-    let mut body = resp.bytes().await.unwrap_or_default().to_vec();
-
-    // If HTML response, inject <base href="..."> so relative paths load
-    if content_type.to_ascii_lowercase().contains("text/html") {
-        if let Ok(html) = String::from_utf8(body.clone()) {
-            if !html.to_ascii_lowercase().contains("<base ") {
-                let base_tag = format!("<base href=\"{target_url}\">");
-                let modified = if let Some(pos) = html.to_ascii_lowercase().find("<head>") {
-                    format!("{}{}{}", &html[..pos + 6], base_tag, &html[pos + 6..])
-                } else if let Some(pos) = html.to_ascii_lowercase().find("<head ") {
-                    if let Some(end_head) = html[pos..].find('>') {
-                        let insert_pos = pos + end_head + 1;
-                        format!("{}{}{}", &html[..insert_pos], base_tag, &html[insert_pos..])
+            if name == "set-cookie" {
+                // Strip Domain=... so browser allows cookie for 127.0.0.1
+                let parts: Vec<&str> = val.split(';').map(|p| p.trim()).collect();
+                let filtered: Vec<&str> = parts
+                    .into_iter()
+                    .filter(|p| !p.to_ascii_lowercase().starts_with("domain="))
+                    .map(|p| {
+                        if p.to_ascii_lowercase().starts_with("samesite=") {
+                            "SameSite=Lax"
+                        } else {
+                            p
+                        }
+                    })
+                    .collect();
+                response_headers.push(("Set-Cookie".to_string(), filtered.join("; ")));
+            } else if name == "location" {
+                // Rewrite redirects so they route through the proxy
+                let rewritten = if val.starts_with("http://") || val.starts_with("https://") {
+                    format!("/proxy?url={}&token={}", urlencoding_encode(val), expected_token)
+                } else if !current_origin.is_empty() {
+                    let full = if val.starts_with('/') {
+                        format!("{}{}", current_origin, val)
                     } else {
-                        format!("{}{}", base_tag, html)
-                    }
+                        format!("{}/{}", current_origin, val)
+                    };
+                    format!("/proxy?url={}&token={}", urlencoding_encode(&full), expected_token)
                 } else {
-                    format!("{}{}", base_tag, html)
+                    val.to_string()
                 };
-                body = modified.into_bytes();
+                response_headers.push(("Location".to_string(), rewritten));
+            } else {
+                response_headers.push((k.as_str().to_string(), val.to_string()));
             }
         }
     }
+
+    // Set token cookie so subresources authenticate automatically
+    response_headers.push((
+        "Set-Cookie".to_string(),
+        format!("subterm_token={}; Path=/; SameSite=Lax", *expected_token),
+    ));
+
+    let body = resp.bytes().await.unwrap_or_default().to_vec();
 
     let mut head = format!("HTTP/1.1 {status} {status_text}\r\n");
     for (k, v) in &response_headers {
@@ -402,6 +495,7 @@ async fn handle_socket(
     head.push_str("Access-Control-Allow-Origin: *\r\n");
     head.push_str("Access-Control-Allow-Methods: *\r\n");
     head.push_str("Access-Control-Allow-Headers: *\r\n");
+    head.push_str("Access-Control-Allow-Credentials: true\r\n");
     head.push_str("X-SubTerm-Proxy: 1\r\n");
     head.push_str(&format!("Content-Length: {}\r\n", body.len()));
     head.push_str("Connection: close\r\n\r\n");
