@@ -23,10 +23,14 @@ export const detectIos = (n: Sniff): boolean =>
   /iPhone|iPad|iPod/i.test(n.userAgent ?? "") ||
   ((n.platform === "MacIntel" || /Macintosh/i.test(n.userAgent ?? "")) && (n.maxTouchPoints ?? 0) > 1);
 
+export const detectWindows = (n: Sniff): boolean =>
+  /Win/i.test(n.platform ?? "") || /Windows/i.test(n.userAgent ?? "");
+
 const nav: Sniff = typeof navigator !== "undefined" ? navigator : {};
 
 export const IS_ANDROID: boolean = detectAndroid(nav);
 export const IS_IOS: boolean = detectIos(nav);
+export const IS_WINDOWS: boolean = detectWindows(nav);
 
 /** Phones and tablets: no native folder picker, no "open with default app", no local shell. */
 export const IS_MOBILE_OS: boolean = IS_ANDROID || IS_IOS;

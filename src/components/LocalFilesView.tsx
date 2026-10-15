@@ -21,20 +21,22 @@ export default function LocalFilesView({ onBack, terminalId, sessionId }: LocalF
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <header className="h-10 shrink-0 flex items-center gap-3 px-3 border-b border-white/5 bg-white/5">
-        <button
-          type="button"
-          onClick={onBack}
-          className="h-7 px-2 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-white/10 flex items-center gap-1.5"
-        >
-          <ArrowLeft size={13} /> Servers
-        </button>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-          <HardDrive size={12} className="text-emerald-400" /> This computer
-        </span>
-      </header>
-      <div className="flex-1 min-h-0">
+    <div className="flex-1 min-h-0 flex flex-col h-full">
+      {onBack && (
+        <header className="h-10 shrink-0 flex items-center gap-3 px-3 border-b border-white/5 bg-white/5">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-7 px-2 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-white/10 flex items-center gap-1.5"
+          >
+            <ArrowLeft size={13} /> Servers
+          </button>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+            <HardDrive size={12} className="text-emerald-400" /> This computer
+          </span>
+        </header>
+      )}
+      <div className="flex-1 min-h-0 flex flex-col h-full">
         <FilePanel
           provider={provider}
           onDragMove={() => {}}

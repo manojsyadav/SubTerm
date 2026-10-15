@@ -690,7 +690,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     return () => window.removeEventListener(`subterm-tool-full-${session.id}`, onFull);
   }, [session?.id]);
   const toolEnabled: Record<string, boolean> = {
-    sftp: true,
+    sftp: useFeatureFlag('fileExplorer'),
     tunnels: useFeatureFlag('panelTunnels'),
     docker: useFeatureFlag('panelDocker'),
     processes: useFeatureFlag('panelProcesses'),
@@ -699,7 +699,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     info: useFeatureFlag('panelSystem'),
     cmds: useFeatureFlag('panelLibrary'),
     mirrors: true,
-    browser: true,
+    browser: useFeatureFlag('webBrowser'),
   };
   const copilotEnabled = useFeatureFlag('aiCopilot');
   // A tool panel is mounted the first time it is opened and then kept mounted (its state and
@@ -2499,7 +2499,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
                   <X size={14} />
                 </button>
               </div>
-              <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
                 {session?.isLocal ? (
                   <LocalFilesView
                     terminalId={activeTab}

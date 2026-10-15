@@ -14,6 +14,7 @@ import {
   Minimize2,
 } from "lucide-react";
 import { FileProvider } from "../fs/types";
+import { IS_WINDOWS } from "../util/platform";
 
 export interface DirectoryTreeProps {
   provider: FileProvider;
@@ -67,6 +68,17 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     node: TreeNode;
   } | null>(null);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleOutside = () => setContextMenu(null);
+    window.addEventListener("mousedown", handleOutside);
+    window.addEventListener("contextmenu", handleOutside);
+    return () => {
+      window.removeEventListener("mousedown", handleOutside);
+      window.removeEventListener("contextmenu", handleOutside);
+    };
+  }, [contextMenu]);
+
   const sep = provider.pathSep;
   const currentNorm = normalizePath(currentPath, sep);
 
@@ -106,7 +118,11 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
       const roots: TreeNode[] = [];
 
-      if (provider.id === "local" && sep === "\\") {
+      const isWindows =
+        provider.id === "local" &&
+        (IS_WINDOWS || sep === "\\" || /^[A-Za-z]:/.test(currentPath) || /^[A-Za-z]:/.test(home));
+
+      if (isWindows) {
         // Windows local filesystem: query all available drives
         let drives: string[] = [];
         try {
@@ -393,7 +409,14 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       {/* Context menu */}
       {contextMenu && (
         <>
-          <div className="fixed inset-0 z-[9998]" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu(null);
+            }}
+          />
           <div
             style={{
               top: Math.min(contextMenu.y, window.innerHeight - 150),

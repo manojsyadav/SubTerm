@@ -687,19 +687,18 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     setInputFocused(false);
   };
 
-  // ---- context menu auto-close ------------------------------------------------
-
   useEffect(() => {
     if (!contextMenu) return;
-    const onWindowMouseDown = (ev: MouseEvent) => {
+    const onOutside = (ev: MouseEvent) => {
       const target = ev.target as Node | null;
       if (target && menuRef.current?.contains(target)) return;
       setContextMenu(null);
     };
-    const timer = setTimeout(() => window.addEventListener("mousedown", onWindowMouseDown), 50);
+    window.addEventListener("mousedown", onOutside);
+    window.addEventListener("contextmenu", onOutside);
     return () => {
-      clearTimeout(timer);
-      window.removeEventListener("mousedown", onWindowMouseDown);
+      window.removeEventListener("mousedown", onOutside);
+      window.removeEventListener("contextmenu", onOutside);
     };
   }, [contextMenu]);
 
@@ -2141,9 +2140,18 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         const multi = acting.length > 1;
         const selectedFileCount = acting.filter(e => !e.isDir).length;
         return (
-        <div ref={menuRef}
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="fixed z-[9999] min-w-[180px] bg-[#0c0c0e] border border-white/10 rounded-lg shadow-2xl p-1 backdrop-blur-md font-mono text-[11.5px] text-zinc-200">
+        <>
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu(null);
+            }}
+          />
+          <div ref={menuRef}
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className="fixed z-[9999] min-w-[180px] bg-[#0c0c0e] border border-white/10 rounded-lg shadow-2xl p-1 backdrop-blur-md font-mono text-[11.5px] text-zinc-200">
 
           {/* Primary action: open folder, or transfer/edit file. The exact
               set depends on which side this panel is on. */}
@@ -2336,6 +2344,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             <Trash2 size={11} /><span>Delete{multi ? ` (${acting.length})` : ""}</span>
           </button>
         </div>
+        </>
         );
       })(),
         document.body

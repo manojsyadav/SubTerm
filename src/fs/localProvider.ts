@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { IS_WINDOWS } from "../util/platform";
 import { FileEntry, ListResult, LocalFileProvider } from "./types";
 
 // Local filesystem provider. All paths are OS-native (backslashes on Windows,
@@ -17,15 +18,15 @@ type RawLocalEntry = {
 const isWindowsLike = (p: string) => /^[a-zA-Z]:[\\/]/.test(p) || p.includes("\\");
 
 export function createLocalProvider(): LocalFileProvider {
-  // Sep is computed lazily from the first real path we see (after `homePath`
-  // resolves). Defaulting to `\` on Windows is fine because the renderer is
-  // bundled per-OS anyway, but probing keeps it honest if someone runs the
-  // binary under WSL etc.
-  let cachedSep: "/" | "\\" | null = null;
+  // Sep defaults to the OS-native separator.
+  let cachedSep: "/" | "\\" = IS_WINDOWS ? "\\" : "/";
 
   const inferSep = (sample: string) => {
-    if (cachedSep) return cachedSep;
-    cachedSep = isWindowsLike(sample) ? "\\" : "/";
+    if (isWindowsLike(sample)) {
+      cachedSep = "\\";
+    } else if (sample && sample.startsWith("/")) {
+      cachedSep = "/";
+    }
     return cachedSep;
   };
 
@@ -33,7 +34,7 @@ export function createLocalProvider(): LocalFileProvider {
     id: "local",
     label: "Local",
     get pathSep() {
-      return cachedSep ?? "\\";
+      return cachedSep;
     },
 
     async homePath() {
@@ -79,15 +80,19 @@ export function createLocalProvider(): LocalFileProvider {
     },
 
     parentPath(path: string) {
-      const sep = inferSep(path);
+      if (!path) return path;
       const trimmed = path.replace(/[\\/]+$/, "");
-      const idx = trimmed.lastIndexOf(sep);
-      if (idx <= 0) return trimmed; // root or first segment
-      // Preserve drive root on Windows ("C:\")
-      if (sep === "\\" && idx === 2 && /^[a-zA-Z]:$/.test(trimmed.slice(0, 2))) {
-        return trimmed.slice(0, 3);
+      // If trimmed is already a drive letter like "C:" or "C:\", stay at drive root
+      if (/^[a-zA-Z]:$/.test(trimmed)) {
+        return `${trimmed}\\`;
       }
-      return trimmed.slice(0, idx);
+      const lastSlash = Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/"));
+      if (lastSlash <= 0) return trimmed; // root or first segment
+      // Preserve drive root on Windows ("C:\") when navigating up from first folder
+      if (lastSlash === 2 && /^[a-zA-Z]:$/.test(trimmed.slice(0, 2))) {
+        return `${trimmed.slice(0, 2)}\\`;
+      }
+      return trimmed.slice(0, lastSlash);
     },
 
     async mkdir(path: string) {
