@@ -387,9 +387,21 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         e.preventDefault();
         setFuzzySearchOpen(true);
       }
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        setShowTree((prev) => {
+          const next = !prev;
+          try {
+            localStorage.setItem("subterm-filepanel-show-tree", String(next));
+          } catch {
+            /* quota */
+          }
+          return next;
+        });
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, []);
 
   const [dragOver, setDragOver] = useState(false);
@@ -523,8 +535,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       window.dispatchEvent(
         new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: targetDir } })
       );
-    }
-    if (terminalId) {
+    } else if (terminalId) {
       const cdCmd = `cd "${clean}"\n`;
       const bytes = Array.from(new TextEncoder().encode(cdCmd));
       invoke("write_terminal_data", { terminalId, data: bytes }).catch(() => {});

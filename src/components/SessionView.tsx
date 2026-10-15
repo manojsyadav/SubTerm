@@ -10,6 +10,7 @@ import { getTerminalGitBranch, onTerminalGitBranchChange, getTerminalCwd, onTerm
 import TerminalView from "./TerminalView";
 import { TerminalPanes } from "./TerminalPanes";
 import SftpWorkspace from "./SftpWorkspace";
+import LocalFilesView from "./LocalFilesView";
 import { useFeatureFlag, isFeatureEnabled } from "../featureFlags";
 
 // Tool panels are lazy: their code is only fetched the first time the panel is opened,
@@ -906,7 +907,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
     const handleTerminalCd = (e: Event) => {
       const targetPath = (e as CustomEvent<{ path?: string } | undefined>).detail?.path;
       if (!targetPath) return;
-      setActiveTool(null);
+      if (isCompact) setActiveTool(null);
       const cleanPath = targetPath.replace(/"/g, '\\"');
       const cdCmd = `cd "${cleanPath}"\n`;
       const bytes = Array.from(new TextEncoder().encode(cdCmd));
@@ -1974,6 +1975,7 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
 
           {(session?.isLocal
             ? [
+                { id: 'sftp',      icon: Folder,   label: 'Files',     hint: 'Files — local file explorer' },
                 { id: 'cmds',      icon: Library,  label: 'Snippets',  hint: 'Snippets — commands & notes' },
                 { id: 'docker',    icon: Box,      label: 'Docker',    hint: 'Docker — containers & images' },
                 { id: 'processes', icon: Activity, label: 'Processes', hint: 'Processes — task manager & monitor' },
@@ -2479,33 +2481,44 @@ const SessionViewImpl = ({ session, profile, onClose, addLog, onStatusChange, ch
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-10 px-4 flex items-center justify-between gap-3 border-b border-white/5 bg-white/5">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 shrink-0">SFTP File Browser</span>
-                  <SepToggle
-                    on={separateSftp}
-                    onToggle={toggleSeparateSftp}
-                    status={!separateSftp ? 'off' : sftpConnStatus === 'ready' ? 'ready' : sftpConnStatus === 'failed' ? 'failed' : 'pending'}
-                    title="Run SFTP over its own dedicated SSH connection instead of sharing the terminal's session"
-                    onReconnect={reconnectSftpConn}
-                  />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 shrink-0">
+                    {session?.isLocal ? 'Local Files' : 'SFTP File Browser'}
+                  </span>
+                  {!session?.isLocal && (
+                    <SepToggle
+                      on={separateSftp}
+                      onToggle={toggleSeparateSftp}
+                      status={!separateSftp ? 'off' : sftpConnStatus === 'ready' ? 'ready' : sftpConnStatus === 'failed' ? 'failed' : 'pending'}
+                      title="Run SFTP over its own dedicated SSH connection instead of sharing the terminal's session"
+                      onReconnect={reconnectSftpConn}
+                    />
+                  )}
                 </div>
                 <button onClick={() => setActiveTool(null)} className="text-zinc-500 hover:text-white transition-colors shrink-0">
                   <X size={14} />
                 </button>
               </div>
               <div className="flex-1 overflow-hidden relative">
-                <SftpWorkspace
-                  sessionId={session.id}
-                  disabled={status !== 'connected'}
-                  serverId={session.serverId}
-                  mirrorsConfig={(() => {
-                    try { return JSON.parse(session.mirrors || "[]"); } catch { return []; }
-                  })()}
-                  terminalId={activeTab}
-                  onRevealTerminal={() => setActiveTool(null)}
-                  profile={profile}
-                  wide={toolFull && !isCompact}
-                  onRemotePathChange={setSftpPath}
-                />
+                {session?.isLocal ? (
+                  <LocalFilesView
+                    terminalId={activeTab}
+                    sessionId={session.id}
+                  />
+                ) : (
+                  <SftpWorkspace
+                    sessionId={session.id}
+                    disabled={status !== 'connected'}
+                    serverId={session.serverId}
+                    mirrorsConfig={(() => {
+                      try { return JSON.parse(session.mirrors || "[]"); } catch { return []; }
+                    })()}
+                    terminalId={activeTab}
+                    onRevealTerminal={() => { if (isCompact) setActiveTool(null); }}
+                    profile={profile}
+                    wide={toolFull && !isCompact}
+                    onRemotePathChange={setSftpPath}
+                  />
+                )}
               </div>
             </div>
           )}

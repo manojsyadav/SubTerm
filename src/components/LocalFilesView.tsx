@@ -8,7 +8,13 @@ import { createLocalProvider } from "../fs/localProvider";
 
 const DIR_KEY = "subterm-local-files-dir";
 
-export default function LocalFilesView({ onBack }: { onBack: () => void }) {
+interface LocalFilesViewProps {
+  onBack?: () => void;
+  terminalId?: string;
+  sessionId?: string;
+}
+
+export default function LocalFilesView({ onBack, terminalId, sessionId }: LocalFilesViewProps) {
   const provider = useMemo(() => createLocalProvider(), []);
   const initialPath = useMemo(() => {
     try { return localStorage.getItem(DIR_KEY) || undefined; } catch { return undefined; }
@@ -34,6 +40,8 @@ export default function LocalFilesView({ onBack }: { onBack: () => void }) {
           onDragMove={() => {}}
           initialPath={initialPath}
           onPathChange={(p) => { try { localStorage.setItem(DIR_KEY, p); } catch { /* quota — ignore */ } }}
+          terminalId={terminalId}
+          sessionId={sessionId}
         />
       </div>
     </div>
