@@ -6,6 +6,9 @@
 
 ### 🚀 New Features
 
+- **`feat(fs)` — Collapsible directory tree sidebar, terminal CWD sync, and quick image preview**:
+  Local and SFTP file explorers now feature a collapsible directory tree sidebar (`FolderTree` toolbar button or `Alt+T`), offering rapid tree navigation, root/home quick jumps, drop-target highlighting for file transfers and moves, and right-click shortcuts. File browsing now synchronizes bi-directionally with the active terminal: a **Follow Terminal** compass button keeps the explorer in sync with shell navigation, a clickable shell badge lets you instantly jump the file list to the terminal's working directory, and right-clicking any folder provides an **Open in Terminal (cd)** action to command the active shell directly. In addition, file previewing now supports image formats (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.ico`, `.bmp`) with zoom controls, pan-friendly scaling, natural dimension inspection, and spacebar instant preview.
+
 - **`feat(browser)` — Embedded Web Browser tabs and homelab management console proxy**:
   SubTerm now includes a built-in browser tab with an integrated local loopback proxy (`127.0.0.1`) that bypasses `X-Frame-Options` restrictions and accepts self-signed SSL certificates from homelab services (such as Proxmox VE, TrueNAS, Portainer, and router gateways). You can open a browser tab from the sidebar rail, from the **Web** button on any server card, or side-by-side with your terminal in the session tool strip. The browser view includes an address bar with back/forward/refresh navigation, a one-click **Homelab Proxy / Direct** toggle, homelab presets (Proxmox `:8006`, Portainer `:9443`, TrueNAS, Grafana `:3000`, Cockpit `:9090`, Home Assistant `:8123`), custom bookmarking, and actions to pop out to a dedicated SubTerm window or your system's default browser.
 

@@ -8,7 +8,7 @@ import {
   X, ChevronUp, ChevronDown, Plus, MoreVertical, FolderSearch,
   Download, Upload, ExternalLink, Move, CheckSquare, Square, Search,
   TerminalSquare, FileCode, Archive, Copy, Check, Bookmark, Star,
-  Eye, EyeOff, GitCompare,
+  Eye, EyeOff, GitCompare, FolderTree, Compass,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { toCssPoint } from "../terminal/dropPaths";
@@ -16,6 +16,8 @@ import { useConfirm, useOverwritePrompt, OverwriteChoice, OverwritePromptOptions
 import { IS_MOBILE_OS } from "../util/platform";
 import { QuickEditorModal } from "./QuickEditorModal";
 import { SftpBookmarksPopover, loadSftpBookmarks } from "./SftpBookmarksPopover";
+import { DirectoryTree } from "./DirectoryTree";
+import { getTerminalCwd, onTerminalCwdChange } from "../terminal/cwd";
 import { archiveKind } from "../fs/archive";
 import { useElementWidth } from "../hooks/useViewport";
 import { canMoveInto, rulesFor, takenNames } from "../fs/moveRules";
@@ -205,6 +207,15 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
   });
   type FileTypeFilter = "all" | "dirs" | "code" | "logs" | "archives" | "media";
   const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
+  const [showTree, setShowTree] = useState<boolean>(() => {
+    return localStorage.getItem("subterm-filepanel-show-tree") === "true";
+  });
+  const [terminalCwd, setTerminalCwd] = useState<string | null>(() => {
+    return terminalId ? (getTerminalCwd(terminalId) || null) : null;
+  });
+  const [followTerminal, setFollowTerminal] = useState<boolean>(() => {
+    return localStorage.getItem("subterm-sftp-follow-cwd") === "true";
+  });
 
   const dropTargetRef = useRef<HTMLDivElement | null>(null);
   const listWidth = useElementWidth(dropTargetRef);
@@ -489,6 +500,37 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
       window.removeEventListener(`submarine-navigate-path-${sessionId}`, handleNavigate);
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!terminalId) return;
+    const initial = getTerminalCwd(terminalId);
+    if (initial) setTerminalCwd(initial);
+
+    const unlisten = onTerminalCwdChange((termId, cwd) => {
+      if (termId === terminalId && cwd) {
+        setTerminalCwd(cwd);
+        if (followTerminal && cwd !== currentPathRef.current) {
+          fetch(cwd);
+        }
+      }
+    });
+    return unlisten;
+  }, [terminalId, followTerminal]);
+
+  const sendTerminalCd = (targetDir: string) => {
+    const clean = targetDir.replace(/"/g, '\\"');
+    if (sessionId) {
+      window.dispatchEvent(
+        new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: targetDir } })
+      );
+    }
+    if (terminalId) {
+      const cdCmd = `cd "${clean}"\n`;
+      const bytes = Array.from(new TextEncoder().encode(cdCmd));
+      invoke("write_terminal_data", { terminalId, data: bytes }).catch(() => {});
+    }
+    notify(`Sent cd "${targetDir}" to Terminal`, "info");
+  };
 
   // Initial load: try the caller-supplied `initialPath` first (the
   // per-server-saved directory), and fall back to the provider's home if it
@@ -1233,6 +1275,26 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
         }
       }
 
+      if (e.altKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        setShowTree((prev) => {
+          const next = !prev;
+          localStorage.setItem("subterm-filepanel-show-tree", next ? "true" : "false");
+          return next;
+        });
+        return;
+      }
+
+      if (e.key === " " && selected.size === 1) {
+        const selectedPath = Array.from(selected)[0];
+        const entry = sortedEntries.find((item) => item.path === selectedPath);
+        if (entry && !entry.isDir) {
+          e.preventDefault();
+          setEditorEntry(entry);
+          return;
+        }
+      }
+
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "a") return;
       e.preventDefault();
       toggleSelectAll();
@@ -1240,7 +1302,7 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedEntries.length, allSelected, showHiddenFiles, selected]);
+  }, [sortedEntries, allSelected, showHiddenFiles, selected]);
 
   const toggleSort = (col: SortColumn) =>
     setSort((p) => ({ column: col, asc: p.column === col ? !p.asc : true }));
@@ -1520,28 +1582,59 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
               />
             </div>
           )}
+          {/* Send CD to Terminal */}
+          <button
+            onClick={() => sendTerminalCd(currentPath)}
+            title="Open in Terminal (cd to current directory)"
+            className="p-1 rounded bg-white/[0.04] border border-white/10 text-amber-400 hover:bg-white/10 shrink-0"
+          >
+            <TerminalSquare size={11} />
+          </button>
+
+          {/* Follow Terminal CWD */}
+          {(terminalId || isRemote) && (
+            <button
+              onClick={() => {
+                setFollowTerminal((prev) => {
+                  const next = !prev;
+                  localStorage.setItem("subterm-sftp-follow-cwd", next ? "true" : "false");
+                  if (next && terminalCwd && terminalCwd !== currentPath) {
+                    fetch(terminalCwd);
+                  }
+                  return next;
+                });
+              }}
+              title={followTerminal ? "Auto-following Terminal CWD (Click to disable)" : "Auto-follow Terminal CWD (Click to enable)"}
+              className={`p-1 rounded border shrink-0 transition-colors ${
+                followTerminal
+                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                  : "bg-white/[0.04] text-zinc-400 hover:text-white border-white/10"
+              }`}
+            >
+              <Compass size={11} className={followTerminal ? "animate-spin" : ""} />
+            </button>
+          )}
+
+          {/* Jump to Shell CWD Badge */}
+          {terminalCwd && terminalCwd !== currentPath && !followTerminal && (
+            <button
+              onClick={() => fetch(terminalCwd)}
+              title={`Terminal is in ${terminalCwd}. Click to jump.`}
+              className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 flex items-center gap-1 shrink-0 font-mono transition-colors"
+            >
+              <TerminalSquare size={10} />
+              <span className="truncate max-w-[90px]">Shell: {terminalCwd.split(/[\\/]/).filter(Boolean).pop() || terminalCwd}</span>
+            </button>
+          )}
+
           {isRemote && (
-            <>
-              <button
-                onClick={() => {
-                  window.dispatchEvent(
-                    new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: currentPath } })
-                  );
-                  notify(`Sent cd "${currentPath}" to Terminal`, "info");
-                }}
-                title="Open in Terminal (cd to current directory)"
-                className="p-1 rounded bg-white/[0.04] border border-white/10 text-amber-400 hover:bg-white/10 shrink-0"
-              >
-                <TerminalSquare size={11} />
-              </button>
-              <button
-                onClick={() => setFuzzySearchOpen(true)}
-                title="Quick Search Files (Ctrl+P)"
-                className="p-1 rounded bg-white/[0.04] border border-white/10 text-indigo-400 hover:bg-white/10 shrink-0"
-              >
-                <Search size={11} />
-              </button>
-            </>
+            <button
+              onClick={() => setFuzzySearchOpen(true)}
+              title="Quick Search Files (Ctrl+P)"
+              className="p-1 rounded bg-white/[0.04] border border-white/10 text-indigo-400 hover:bg-white/10 shrink-0"
+            >
+              <Search size={11} />
+            </button>
           )}
         </div>
         <div className="h-5 w-px bg-white/10 shrink-0" />
@@ -1634,10 +1727,43 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           >
             {allSelected ? <CheckSquare size={11} /> : <Square size={11} />}
           </button>
+          <button
+            onClick={() => {
+              setShowTree((prev) => {
+                const next = !prev;
+                localStorage.setItem("subterm-filepanel-show-tree", next ? "true" : "false");
+                return next;
+              });
+            }}
+            title={showTree ? "Hide Directory Tree (Alt+T)" : "Show Directory Tree (Alt+T)"}
+            className={`p-1 rounded border border-white/10 hover:bg-white/10 transition-colors ${
+              showTree
+                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                : "bg-white/[0.04] text-zinc-400 hover:text-white"
+            }`}
+          >
+            <FolderTree size={11} />
+          </button>
         </div>
       </div>
 
-      {/* Filter row — always visible, narrow (24 px). Lets the user trim
+      {/* Body container: optional collapsible Directory Tree sidebar + File list area */}
+      <div className="flex-1 flex overflow-hidden min-h-0 w-full gap-1.5 mt-1 relative">
+        {showTree && (
+          <div className="w-56 shrink-0 h-full rounded-lg overflow-hidden border border-white/5 shadow-lg bg-[#0e0e12]/60">
+            <DirectoryTree
+              provider={provider}
+              currentPath={currentPath}
+              onSelectPath={(p) => fetch(p)}
+              showHidden={showHiddenFiles}
+              sessionId={sessionId}
+              terminalId={terminalId}
+              onCdTerminal={sendTerminalCd}
+            />
+          </div>
+        )}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative gap-1.5">
+          {/* Filter row — always visible, narrow (24 px). Lets the user trim
           the rendered list by name without touching sort or the path bar.
           Sticky across cd so they can hunt the same name across sibling
           dirs; the X clears, Esc on the input clears too. */}
@@ -1965,6 +2091,8 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           )}
         </div>
       </div>
+        </div>
+      </div>
 
       {/* Context menu (portal) — bulk-aware. When the right-click anchor is
           part of a multi-selection, actions like Download / Move / Delete
@@ -2022,11 +2150,19 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
             )
           )}
 
-          {/* Edit in SubTerm */}
+          {/* Quick Preview */}
           {!multi && !contextMenu.entry.isDir && (
             <button onClick={() => { setContextMenu(null); setEditorEntry(contextMenu.entry); }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
-              <FileCode size={11} className="text-cyan-400" /><span>Edit in SubTerm</span>
+              <Eye size={11} className="text-cyan-400" /><span>Quick Preview (Space)</span>
+            </button>
+          )}
+
+          {/* Edit in SubTerm */}
+          {!multi && !contextMenu.entry.isDir && isTextFile(contextMenu.entry.name) && (
+            <button onClick={() => { setContextMenu(null); setEditorEntry(contextMenu.entry); }}
+              className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
+              <FileCode size={11} className="text-indigo-400" /><span>Edit in SubTerm</span>
             </button>
           )}
 
@@ -2039,12 +2175,11 @@ const FilePanel = forwardRef<FilePanelHandle, FilePanelProps>(({
           )}
 
           {/* Deep link: Open in Terminal (cd) */}
-          {isRemote && !multi && (
+          {!multi && (
             <button onClick={() => {
                 setContextMenu(null);
-                const target = contextMenu.entry.isDir ? contextMenu.entry.path : currentPath;
-                window.dispatchEvent(new CustomEvent(`submarine-terminal-cd-${sessionId}`, { detail: { path: target } }));
-                notify(`Sent cd "${target}" to Terminal`, "info");
+                const target = contextMenu.entry.isDir ? contextMenu.entry.path : provider.parentPath(contextMenu.entry.path);
+                sendTerminalCd(target);
               }}
               className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-white/10 text-left hover:text-white">
               <TerminalSquare size={11} className="text-amber-400" /><span>Open in Terminal (cd)</span>

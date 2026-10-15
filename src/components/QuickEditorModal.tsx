@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { 
   X, Save, FileCode, Check, RefreshCw, SplitSquareHorizontal, 
-  Copy, MessageSquareOff, Eye, Pencil, Search, ChevronUp, ChevronDown
+  Copy, MessageSquareOff, Eye, Pencil, Search, ChevronUp, ChevronDown,
+  ZoomIn, ZoomOut, RotateCcw,
 } from "lucide-react";
 import { FileEntry, FileProvider } from "../fs/types";
 import { computeDiff } from "../fs/diff";
@@ -13,6 +14,18 @@ import { readEditorPrefs } from "../editor/editorPrefs";
 
 const MarkdownView = lazy(() => import("../editor/markdown").then((m) => ({ default: m.MarkdownView })));
 const isMarkdown = (name: string) => /\.(md|markdown|mdown|mkd)$/i.test(name);
+const isImage = (name: string) => /\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i.test(name);
+
+function getImageMime(name: string): string {
+  if (/\.svg$/i.test(name)) return "image/svg+xml";
+  if (/\.png$/i.test(name)) return "image/png";
+  if (/\.jpe?g$/i.test(name)) return "image/jpeg";
+  if (/\.gif$/i.test(name)) return "image/gif";
+  if (/\.webp$/i.test(name)) return "image/webp";
+  if (/\.ico$/i.test(name)) return "image/x-icon";
+  if (/\.bmp$/i.test(name)) return "image/bmp";
+  return "image/png";
+}
 
 // Lazy so the CodeMirror bundle is only downloaded/evaluated when highlighting is enabled and a file is opened.
 const CodeEditor = lazy(() => import("../editor/CodeEditor").then((m) => ({ default: m.CodeEditor })));
@@ -58,6 +71,11 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
     return !p;
   });
 
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageMeta, setImageMeta] = useState<{ width: number; height: number } | null>(null);
+  const isImg = entry ? isImage(entry.name) : false;
+
   const isDirty = content !== originalContent;
 
   const [showSearch, setShowSearch] = useState(false);
@@ -96,9 +114,35 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
     setError(null);
     setShowDiff(false);
     setMode("view");
+    setImageBase64(null);
+    setImageZoom(1);
+    setImageMeta(null);
 
     (async () => {
       try {
+        if (isImage(entry.name)) {
+          let b64 = "";
+          if (provider.id === "remote") {
+            if (!sessionId) throw new Error("Remote session ID missing");
+            b64 = await invoke<string>("sftp_read_file_base64", {
+              sessionId,
+              remotePath: entry.path,
+              maxBytes: 10 * 1024 * 1024,
+            });
+          } else {
+            b64 = await invoke<string>("local_read_file_base64", {
+              localPath: entry.path,
+              maxBytes: 10 * 1024 * 1024,
+            });
+          }
+          if (mounted) {
+            const mime = getImageMime(entry.name);
+            setImageBase64(`data:${mime};base64,${b64}`);
+            setLoaded(true);
+          }
+          return;
+        }
+
         let text = "";
         if (provider.id === "remote") {
           if (!sessionId) throw new Error("Remote session ID missing");
@@ -223,103 +267,141 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Hide comments (view only) */}
-            {hideCommentsAvailable && !showDiff && supportsCommentHiding(detectLanguage(entry.name, entry.path)) && (
-              <button
-                onClick={toggleHideComments}
-                disabled={loading}
-                className={`h-7 px-2.5 rounded-lg border text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
-                  hideComments
-                    ? "bg-indigo-600/20 border-indigo-500/50 text-indigo-300"
-                    : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
-                }`}
-                title="Hide comment lines (view only — the saved file is unchanged)"
-              >
-                <MessageSquareOff size={13} />
-                <span className="hidden sm:inline">{hideComments ? "Comments hidden" : "Hide comments"}</span>
-              </button>
-            )}
+            {isImg ? (
+              <div className="flex items-center gap-2">
+                {imageMeta && (
+                  <span className="text-[11px] font-mono text-zinc-400 bg-white/[0.04] border border-white/10 px-2 py-0.5 rounded">
+                    {imageMeta.width} × {imageMeta.height} px
+                  </span>
+                )}
+                <div className="flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setImageZoom((z) => Math.max(0.2, Number((z - 0.25).toFixed(2))))}
+                    title="Zoom Out"
+                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+                  >
+                    <ZoomOut size={13} />
+                  </button>
+                  <span className="text-[10px] font-mono text-zinc-300 w-10 text-center">
+                    {Math.round(imageZoom * 100)}%
+                  </span>
+                  <button
+                    onClick={() => setImageZoom((z) => Math.min(5, Number((z + 0.25).toFixed(2))))}
+                    title="Zoom In"
+                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+                  >
+                    <ZoomIn size={13} />
+                  </button>
+                  <button
+                    onClick={() => setImageZoom(1)}
+                    title="Reset Zoom"
+                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10"
+                  >
+                    <RotateCcw size={12} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Hide comments (view only) */}
+                {hideCommentsAvailable && !showDiff && supportsCommentHiding(detectLanguage(entry.name, entry.path)) && (
+                  <button
+                    onClick={toggleHideComments}
+                    disabled={loading}
+                    className={`h-7 px-2.5 rounded-lg border text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+                      hideComments
+                        ? "bg-indigo-600/20 border-indigo-500/50 text-indigo-300"
+                        : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                    }`}
+                    title="Hide comment lines (view only — the saved file is unchanged)"
+                  >
+                    <MessageSquareOff size={13} />
+                    <span className="hidden sm:inline">{hideComments ? "Comments hidden" : "Hide comments"}</span>
+                  </button>
+                )}
 
-            {/* View / Edit */}
-            <div role="group" aria-label="Mode" className="h-7 flex rounded-lg border border-white/10 bg-white/[0.04] overflow-hidden text-xs font-mono">
-              {([["view", Eye, isMarkdown(entry.name) ? "Preview" : "View"], ["edit", Pencil, "Edit"]] as const).map(([m, Icon, label]) => (
+                {/* View / Edit */}
+                <div role="group" aria-label="Mode" className="h-7 flex rounded-lg border border-white/10 bg-white/[0.04] overflow-hidden text-xs font-mono">
+                  {([["view", Eye, isMarkdown(entry.name) ? "Preview" : "View"], ["edit", Pencil, "Edit"]] as const).map(([m, Icon, label]) => (
+                    <button
+                      key={m}
+                      onClick={() => { setMode(m); setShowDiff(false); }}
+                      disabled={loading || (m === "edit" && !loaded)}
+                      aria-pressed={mode === m}
+                      title={m === "view" ? "Read-only view" : "Edit the file"}
+                      className={`px-2.5 flex items-center gap-1.5 transition-colors ${mode === m ? "bg-indigo-600/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/10"}`}
+                    >
+                      <Icon size={13} />
+                      <span className="hidden sm:inline">{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Diff Toggle */}
+                {(mode === "edit" || isDirty) && (
                 <button
-                  key={m}
-                  onClick={() => { setMode(m); setShowDiff(false); }}
-                  disabled={loading || (m === "edit" && !loaded)}
-                  aria-pressed={mode === m}
-                  title={m === "view" ? "Read-only view" : "Edit the file"}
-                  className={`px-2.5 flex items-center gap-1.5 transition-colors ${mode === m ? "bg-indigo-600/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/10"}`}
+                  onClick={() => setShowDiff((p) => !p)}
+                  disabled={loading}
+                  className={`h-7 px-2.5 rounded-lg border text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+                    showDiff
+                      ? "bg-indigo-600/20 border-indigo-500/50 text-indigo-300"
+                      : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                  }`}
+                  title="Compare changes with original"
                 >
-                  <Icon size={13} />
-                  <span className="hidden sm:inline">{label}</span>
+                  <SplitSquareHorizontal size={13} />
+                  <span className="hidden sm:inline">{showDiff ? "Editor" : "Diff"}</span>
                 </button>
-              ))}
-            </div>
+                )}
 
-            {/* Diff Toggle */}
-            {(mode === "edit" || isDirty) && (
-            <button
-              onClick={() => setShowDiff((p) => !p)}
-              disabled={loading}
-              className={`h-7 px-2.5 rounded-lg border text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
-                showDiff
-                  ? "bg-indigo-600/20 border-indigo-500/50 text-indigo-300"
-                  : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
-              }`}
-              title="Compare changes with original"
-            >
-              <SplitSquareHorizontal size={13} />
-              <span className="hidden sm:inline">{showDiff ? "Editor" : "Diff"}</span>
-            </button>
-            )}
+                {/* Find in viewer */}
+                {mode === "view" && (
+                  <button
+                    onClick={() => setShowSearch((s) => !s)}
+                    className={`h-7 px-2 rounded-lg border text-xs flex items-center gap-1 transition-all ${
+                      showSearch
+                        ? "bg-primary/20 border-primary/40 text-primary font-semibold"
+                        : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                    }`}
+                    title="Find in viewer (Ctrl+F)"
+                    aria-label="Find in viewer"
+                  >
+                    <Search size={13} />
+                  </button>
+                )}
 
-            {/* Find in viewer */}
-            {mode === "view" && (
-              <button
-                onClick={() => setShowSearch((s) => !s)}
-                className={`h-7 px-2 rounded-lg border text-xs flex items-center gap-1 transition-all ${
-                  showSearch
-                    ? "bg-primary/20 border-primary/40 text-primary font-semibold"
-                    : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
-                }`}
-                title="Find in viewer (Ctrl+F)"
-                aria-label="Find in viewer"
-              >
-                <Search size={13} />
-              </button>
-            )}
+                {/* Copy Button */}
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(content);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  }}
+                  className="h-7 px-2 rounded-lg bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10 text-xs flex items-center gap-1 transition-all"
+                  title="Copy to clipboard"
+                >
+                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                </button>
 
-            {/* Copy Button */}
-            <button
-              onClick={async () => {
-                await navigator.clipboard.writeText(content);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
-              className="h-7 px-2 rounded-lg bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-zinc-200 hover:bg-white/10 text-xs flex items-center gap-1 transition-all"
-              title="Copy to clipboard"
-            >
-              {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-            </button>
-
-            {/* Save Button */}
-            {(mode === "edit" || isDirty) && (
-            <button
-              onClick={handleSave}
-              disabled={saving || loading || !isDirty}
-              className="h-7 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-mono text-xs font-bold flex items-center gap-1.5 shadow transition-all"
-              title="Save file (Ctrl+S)"
-            >
-              {saving ? (
-                <RefreshCw size={13} className="animate-spin" />
-              ) : saveSuccess ? (
-                <Check size={13} className="text-white" />
-              ) : (
-                <Save size={13} />
-              )}
-              <span>{saveSuccess ? "Saved" : "Save"}</span>
-            </button>
+                {/* Save Button */}
+                {(mode === "edit" || isDirty) && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving || loading || !isDirty}
+                  className="h-7 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-mono text-xs font-bold flex items-center gap-1.5 shadow transition-all"
+                  title="Save file (Ctrl+S)"
+                >
+                  {saving ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : saveSuccess ? (
+                    <Check size={13} className="text-white" />
+                  ) : (
+                    <Save size={13} />
+                  )}
+                  <span>{saveSuccess ? "Saved" : "Save"}</span>
+                </button>
+                )}
+              </>
             )}
 
             <div className="h-4 w-px bg-white/10 mx-1" />
@@ -449,6 +531,37 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
                 </div>
               ))}
             </div>
+          ) : isImg ? (
+            <div className="flex-1 flex flex-col items-center justify-center overflow-auto p-4 bg-[#070709] relative select-none">
+              <div
+                className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{
+                  backgroundImage: `radial-gradient(circle, #fff 10%, transparent 11%), radial-gradient(circle, #fff 10%, transparent 11%)`,
+                  backgroundSize: "16px 16px",
+                  backgroundPosition: "0 0, 8px 8px",
+                }}
+              />
+              {imageBase64 ? (
+                <img
+                  src={imageBase64}
+                  alt={entry.name}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setImageMeta({ width: img.naturalWidth, height: img.naturalHeight });
+                  }}
+                  style={{
+                    transform: `scale(${imageZoom})`,
+                    transformOrigin: "center center",
+                    transition: "transform 0.15s ease-out",
+                    maxWidth: "90%",
+                    maxHeight: "90%",
+                  }}
+                  className="shadow-2xl rounded object-contain border border-white/10"
+                />
+              ) : (
+                <div className="text-zinc-500 font-mono text-xs">Failed to render image preview</div>
+              )}
+            </div>
           ) : mode === "view" && isMarkdown(entry.name) ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading…</div>}>
               <MarkdownView source={content} />
@@ -478,15 +591,27 @@ export const QuickEditorModal: React.FC<QuickEditorModalProps> = ({
         {/* Footer Status Bar */}
         <div className="h-7 px-4 bg-[#09090c] border-t border-white/10 flex items-center justify-between text-[10px] font-mono text-zinc-500 shrink-0">
           <div className="flex items-center gap-3">
-            <span>Lines: {lines.length}</span>
-            {hideCommentsAvailable && hideComments && (
-              <span className="text-indigo-300">{hiddenCommentLineCount(content, detectLanguage(entry.name, entry.path))} comment lines hidden</span>
+            {isImg ? (
+              <>
+                <span className="text-zinc-300 font-semibold">{entry.name}</span>
+                {imageMeta && <span>{imageMeta.width} × {imageMeta.height} px</span>}
+                <span>Zoom: {Math.round(imageZoom * 100)}%</span>
+                <span>Size: {entry.size ? `${(entry.size / 1024).toFixed(1)} KB` : "0 KB"}</span>
+                <span>Provider: {provider.label}</span>
+              </>
+            ) : (
+              <>
+                <span>Lines: {lines.length}</span>
+                {hideCommentsAvailable && hideComments && (
+                  <span className="text-indigo-300">{hiddenCommentLineCount(content, detectLanguage(entry.name, entry.path))} comment lines hidden</span>
+                )}
+                <span>Length: {content.length} chars</span>
+                <span>Provider: {provider.label}</span>
+              </>
             )}
-            <span>Length: {content.length} chars</span>
-            <span>Provider: {provider.label}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-zinc-400">{mode === "view" ? "Read-only · Edit to change" : "Ctrl+S to Save"}</span>
+            <span className="text-zinc-400">{isImg ? "Image Preview" : mode === "view" ? "Read-only · Edit to change" : "Ctrl+S to Save"}</span>
             <span className="text-zinc-400">Esc to Close</span>
           </div>
         </div>

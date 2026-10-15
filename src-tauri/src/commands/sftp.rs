@@ -1996,6 +1996,50 @@ pub async fn sftp_read_file_text(
 }
 
 #[tauri::command]
+pub async fn sftp_read_file_base64(
+    state: tauri::State<'_, SshState>,
+    session_id: String,
+    remote_path: String,
+    max_bytes: Option<usize>,
+) -> Result<String, String> {
+    let limit = max_bytes.unwrap_or(10 * 1024 * 1024);
+
+    // 1. Try SFTP read with a 5-second timeout
+    let sftp_attempt: Result<Vec<u8>, String> = async {
+        let sftp = get_sftp_session(&state, &session_id).await?;
+        let data = tokio::time::timeout(std::time::Duration::from_secs(5), sftp.read(&remote_path))
+            .await
+            .map_err(|_| "SFTP read timed out".to_string())?
+            .map_err(|e| format!("Failed to read remote file: {}", e))?;
+        if data.len() > limit {
+            return Err(format!("File is too large ({} bytes, limit is {} bytes)", data.len(), limit));
+        }
+        Ok(data)
+    }.await;
+
+    if let Ok(data) = sftp_attempt {
+        use base64::Engine;
+        return Ok(base64::engine::general_purpose::STANDARD.encode(data));
+    }
+
+    // 2. Fallback to SSH command execution (base64)
+    let escaped = remote_path.replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
+    let cmd = format!(
+        "FILE=\"{}\"; if [ ! -e \"$FILE\" ] && [ -e \"$HOME/$FILE\" ]; then FILE=\"$HOME/$FILE\"; fi; if [ -e \"$FILE\" ]; then base64 -w 0 \"$FILE\" 2>/dev/null; else echo \"__SUBTERM_NOT_FOUND__\"; fi",
+        escaped
+    );
+    let output = exec_ssh_cmd(&state, &session_id, &cmd).await?;
+    if output.contains("__SUBTERM_NOT_FOUND__") {
+        return Err(format!("File '{}' not found on remote server", remote_path));
+    }
+    let cleaned = output.trim().replace('\r', "").replace('\n', "");
+    if cleaned.is_empty() {
+        return Ok(String::new());
+    }
+    Ok(cleaned)
+}
+
+#[tauri::command]
 pub async fn sftp_write_file_text(
     state: tauri::State<'_, SshState>,
     session_id: String,
@@ -2122,6 +2166,22 @@ pub async fn local_read_file_text(
     }
     let data = std::fs::read(&safe).map_err(|e| e.to_string())?;
     String::from_utf8(data).map_err(|_| "File contains binary data and cannot be opened as text.".to_string())
+}
+
+#[tauri::command]
+pub async fn local_read_file_base64(
+    local_path: String,
+    max_bytes: Option<usize>,
+) -> Result<String, String> {
+    let safe = guard_local_path(&local_path, false)?;
+    let limit = max_bytes.unwrap_or(10 * 1024 * 1024);
+    let meta = std::fs::metadata(&safe).map_err(|e| e.to_string())?;
+    if meta.len() as usize > limit {
+        return Err(format!("File is too large ({} bytes, limit is {} bytes)", meta.len(), limit));
+    }
+    let data = std::fs::read(&safe).map_err(|e| e.to_string())?;
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(data))
 }
 
 #[tauri::command]

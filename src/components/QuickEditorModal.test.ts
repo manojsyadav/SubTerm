@@ -10,6 +10,7 @@ const writes: string[] = [];
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string, a: { localPath: string }) => {
     if (cmd === "local_write_file_text") { writes.push(a.localPath); return Promise.resolve(); }
+    if (cmd === "local_read_file_base64") return Promise.resolve("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
     if (a.localPath === "/r/huge.log") return Promise.reject("File is too large (6120000 bytes, limit is 2097152 bytes)");
     return Promise.resolve(files[a.localPath]);
   }),
@@ -33,7 +34,8 @@ async function open(path: string) {
   // number of ticks was not enough when the whole suite runs in parallel.
   const ready = () =>
     (btn(host, "Edit")?.disabled === false && (!/\.md$/i.test(path) || !!host.querySelector("h1"))) ||
-    /too large/.test(host.textContent ?? "");
+    /too large/.test(host.textContent ?? "") ||
+    !!host.querySelector("img");
   for (let i = 0; i < 200 && !ready(); i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return host;
@@ -95,5 +97,15 @@ describe("QuickEditorModal viewer mode", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(host.querySelector("input[placeholder='Find in document…']")).toBeNull();
+  });
+
+  it("renders image preview with zoom controls and no edit/save buttons for image files", async () => {
+    const host = await open("/r/logo.png");
+    const img = host.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(img?.src).toContain("data:image/png;base64,");
+    expect(btn(host, "Edit")).toBeUndefined();
+    expect(btn(host, "Save")).toBeUndefined();
+    expect(host.textContent).toContain("100%");
   });
 });

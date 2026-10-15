@@ -163,6 +163,16 @@ The home dashboard's search bar filters by server name or host as you type. It a
      - **Logs & Text**: Displays log outputs, documentation, and configuration files (`.log`, `.txt`, `.md`, `.json`, `.yaml`, `.ini`, etc.).
      - **Archives**: Displays compressed packages (`.zip`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.7z`, `.rar`).
      - **Media & Images**: Displays graphic assets and video (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.mp4`).
+9. **Collapsible Directory Tree Sidebar (`Alt+T`)**:
+   - Click the tree icon in the SFTP/Explorer toolbar or press `Alt+T` to toggle the left directory tree sidebar.
+   - Provides rapid hierarchical folder navigation with lazy subfolder expansion, home/root shortcuts, drop-target folder highlighting for transfers and moves, and right-click context commands.
+10. **Bi-Directional Terminal CWD Sync**:
+   - **Follow Terminal**: Click the **Compass** toggle button in the toolbar to make the explorer automatically synchronize and navigate whenever your active terminal's working directory changes.
+   - **Jump to Shell CWD**: When the terminal is elsewhere, a clickable **Shell: <path>** badge appears in the toolbar; click it to immediately jump the file explorer to your shell's current directory.
+   - **Open Folder in Terminal (`cd`)**: Right-click any folder row in the file list or the directory tree and choose **Open in Terminal (cd)** to type and execute `cd "<path>"` directly in your active shell.
+11. **Instant Image Preview & Quick Look (`Space`)**:
+   - Select any file and press `Space` (or double-click) to open the Quick Viewer.
+   - For images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.ico`, `.bmp`), SubTerm displays a full graphic preview modal complete with zoom-in, zoom-out, fit-to-screen controls, pixel dimensions, and transparency checkerboard rendering without downloading the file to disk manually.
 
 ### Workflow 3: Configuring Port Forwarding (Tunnels)
 
