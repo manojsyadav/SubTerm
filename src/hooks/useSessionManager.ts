@@ -294,10 +294,11 @@ export function useSessionManager(options?: UseSessionManagerOptions) {
     openLocalTerminal,
     openBrowser: useCallback(
       (url?: string, server?: { id?: number; name: string; host?: string }) => {
+        const defaultUrl = localStorage.getItem("subterm-browser-default-url") || "https://duckduckgo.com";
         const sessionId = `session-browser-${Date.now()}`;
         const host = server?.host;
-        const serverName = server?.name || (url ? (() => { try { return new URL(url).hostname; } catch { return "Web Console"; } })() : "Web Console");
-        const initialUrl = url || (host ? `https://${host}:8006` : "https://127.0.0.1:8006");
+        const initialUrl = url || (host ? `https://${host}:8006` : defaultUrl);
+        const serverName = server?.name || (initialUrl ? (() => { try { return new URL(initialUrl).hostname; } catch { return "Web Console"; } })() : "Web Console");
 
         options?.onAddLog?.(`Opened Web Console: ${serverName}`, "info");
         setSessions((prev) => [

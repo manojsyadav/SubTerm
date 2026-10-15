@@ -42,20 +42,25 @@ interface Props {
 }
 
 export default function BrowserView({
-  initialUrl = "https://127.0.0.1:8006",
+  initialUrl,
   serverHost,
   serverName,
   onClose: _onClose,
   onStatusChange,
 }: Props) {
+  const configuredDefaultUrl = localStorage.getItem("subterm-browser-default-url") || "https://duckduckgo.com";
   // If serverHost is provided and initialUrl is default, adapt to serverHost
-  const defaultTarget = serverHost
+  const defaultTarget = initialUrl
+    ? initialUrl
+    : serverHost
     ? `https://${serverHost}:8006`
-    : initialUrl;
+    : configuredDefaultUrl;
 
   const [currentUrl, setCurrentUrl] = useState(defaultTarget);
   const [inputUrl, setInputUrl] = useState(defaultTarget);
-  const [useProxy, setUseProxy] = useState(true);
+  const [useProxy, setUseProxy] = useState(() => {
+    return localStorage.getItem("subterm-browser-proxy-enabled") !== "false";
+  });
   const [proxy, setProxy] = useState<ProxyInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<string[]>([defaultTarget]);

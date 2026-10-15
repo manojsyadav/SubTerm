@@ -283,7 +283,13 @@ function DesktopApp() {
     const s = sessions.find((x) => x.id === activeView);
     if (!s || s.quickAuth) return;
     try {
-      const last = s.isLocal ? { kind: 'local', shell: s.localShell } : s.serverId > 0 ? { kind: 'server', id: s.serverId } : null;
+      const last = s.isLocal
+        ? { kind: 'local', shell: s.localShell }
+        : s.browserUrl
+        ? { kind: 'browser', url: s.browserUrl }
+        : s.serverId > 0
+        ? { kind: 'server', id: s.serverId }
+        : null;
       if (last) localStorage.setItem('subterm-last-session', JSON.stringify(last));
     } catch { /* storage unavailable */ }
   }, [activeView, sessions]);
@@ -312,12 +318,21 @@ function DesktopApp() {
       const mode = localStorage.getItem('subterm-startup-view') || 'servers';
       if (mode === 'local' && !IS_MOBILE_OS) {
         openDefaultLocal();
+      } else if (mode === 'browser' && isFeatureEnabled('webBrowser')) {
+        openBrowser();
+      } else if (mode === 'sftp' && isFeatureEnabled('fileExplorer')) {
+        setActiveView('sftp');
       } else if (mode === 'last') {
         try {
           const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as
-            | { kind: 'server'; id: number } | { kind: 'local'; shell?: string } | null;
+            | { kind: 'server'; id: number }
+            | { kind: 'local'; shell?: string }
+            | { kind: 'browser'; url?: string }
+            | null;
           if (last?.kind === 'local' && !IS_MOBILE_OS) {
             openLocalTerminal(last.shell);
+          } else if (last?.kind === 'browser' && isFeatureEnabled('webBrowser')) {
+            openBrowser(last.url);
           } else if (last?.kind === 'server') {
             const srv = list.find((s) => s.id === last.id);
             if (srv) openServer(srv);
@@ -402,10 +417,15 @@ function DesktopApp() {
     const mode = localStorage.getItem('subterm-startup-view') || 'servers';
     if (mode === 'local') {
       openDefaultLocal();
+    } else if (mode === 'browser' && isFeatureEnabled('webBrowser')) {
+      openBrowser();
+    } else if (mode === 'sftp' && isFeatureEnabled('fileExplorer')) {
+      setActiveView('sftp');
     } else if (mode === 'last') {
       try {
-        const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as { kind: string; shell?: string } | null;
+        const last = JSON.parse(localStorage.getItem('subterm-last-session') || 'null') as { kind: string; shell?: string; url?: string } | null;
         if (last?.kind === 'local') openLocalTerminal(last.shell);
+        else if (last?.kind === 'browser' && isFeatureEnabled('webBrowser')) openBrowser(last.url);
       } catch { /* stay on the server list */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1120,6 +1140,8 @@ function DesktopApp() {
           }}
           showNetworkTools={networkToolsEnabled}
           showRdp={isFeatureEnabled('rdpServers')}
+          showBrowser={isFeatureEnabled('webBrowser')}
+          showFileExplorer={isFeatureEnabled('fileExplorer')}
           localShells={availableShells}
           localTabs={sessionPanel ? [] : localTabs}
           activeLocalTab={localSession && activeView === localSession.id ? sessionActiveTerm[localSession.id] ?? null : null}

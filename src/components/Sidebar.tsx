@@ -31,6 +31,10 @@ interface SidebarProps {
   enableMonitoring?: boolean;
   /** RDP page is hidden when the RDP feature toggle is off. */
   showRdp?: boolean;
+  /** Web Browser rail item is hidden when its feature toggle is off. */
+  showBrowser?: boolean;
+  /** SFTP / file explorer rail item is hidden when its feature toggle is off. */
+  showFileExplorer?: boolean;
   /** Network Tools opens a dialog rather than a page, and is hidden when its feature is off. */
   showNetworkTools?: boolean;
   /** Installed local shells, offered on right-click of Local (desktop rail). */
@@ -69,6 +73,8 @@ export const Sidebar = ({
   onSwitchProfile,
   enableMonitoring = true,
   showRdp = true,
+  showBrowser = true,
+  showFileExplorer = true,
   showNetworkTools = true,
   localShells = [],
   onOpenLocalShell,
@@ -199,9 +205,9 @@ export const Sidebar = ({
   const items = [
     { id: 'local', icon: Terminal, label: 'Local' },
     { id: 'nodes', icon: Server, label: 'Servers' },
-    { id: 'sftp', icon: FolderOpen, label: 'SFTP' },
+    ...(showFileExplorer ? [{ id: 'sftp', icon: FolderOpen, label: 'SFTP' }] : []),
     ...(showRdp ? [{ id: 'rdp', icon: Monitor, label: 'RDP' }] : []),
-    { id: 'browser', icon: Globe, label: 'Web Browser' },
+    ...(showBrowser ? [{ id: 'browser', icon: Globe, label: 'Web Browser' }] : []),
     { id: 'vault', icon: KeyRound, label: 'Credentials' },
     { id: 'library', icon: Braces, label: 'Snippets' },
     ...(showNetworkTools ? [{ id: 'network', icon: Network, label: 'Network Tools' }] : []),

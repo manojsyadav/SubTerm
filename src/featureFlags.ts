@@ -161,6 +161,18 @@ export const FEATURES = [
     desc: "Git tab in the session toolbar: stage, commit, push and history. Git only runs while the tab is open.",
   },
   {
+    key: "webBrowser",
+    group: "Panels",
+    label: "Web Browser",
+    desc: "Built-in web browser tab and Homelab Proxy in the sidebar and session tools. When off, browser tabs cannot be opened and proxy server is not started.",
+  },
+  {
+    key: "fileExplorer",
+    group: "Panels",
+    label: "File Explorer (SFTP / Local)",
+    desc: "File browser, local files view, directory tree and SFTP file operations. When off, file explorer tabs and tool buttons are hidden to conserve memory and CPU.",
+  },
+  {
     key: "aiCopilot",
     group: "AI",
     label: "AI assistant",

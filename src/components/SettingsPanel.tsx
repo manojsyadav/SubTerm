@@ -411,6 +411,21 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
   const updateTrigger = (id: string, patch: Partial<TerminalTrigger>) => {
     updateTriggers(triggers.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
+  const [browserDefaultUrl, setBrowserDefaultUrl] = useState(() => {
+    try { return localStorage.getItem("subterm-browser-default-url") || "https://duckduckgo.com"; } catch { return "https://duckduckgo.com"; }
+  });
+  const [browserProxyEnabled, setBrowserProxyEnabled] = useState(() => {
+    try { return localStorage.getItem("subterm-browser-proxy-enabled") !== "false"; } catch { return true; }
+  });
+  const [explorerShowTree, setExplorerShowTree] = useState(() => {
+    try { return localStorage.getItem("subterm-filepanel-show-tree") === "true"; } catch { return false; }
+  });
+  const [explorerShowHidden, setExplorerShowHidden] = useState(() => {
+    try { return localStorage.getItem("subterm-sftp-show-hidden") !== "false"; } catch { return true; }
+  });
+  const [explorerFollowCwd, setExplorerFollowCwd] = useState(() => {
+    try { return localStorage.getItem("subterm-sftp-follow-cwd") === "true"; } catch { return false; }
+  });
   const [copiedThemeToast, setCopiedThemeToast] = useState(false);
 
   const currentThemeId = settings.terminalTheme || 'subterm-dark';
@@ -740,6 +755,8 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
                 <option value="servers">Server List</option>
                 <option value="last">Reopen Last Session</option>
                 {!IS_MOBILE_OS && <option value="local">New Local Terminal</option>}
+                <option value="browser">Web Browser</option>
+                <option value="sftp">File Explorer</option>
               </select>
             </Row>
             {!IS_MOBILE_OS && autostart !== null && (
@@ -840,6 +857,62 @@ const PageTerminal = ({ settings, setSettings, part, onOpenMonitor }: SettingsPa
           </SectionCard>
       <SectionCard id="rdp" title="Remote Desktop (RDP)" subtitle="Where RDP servers open when you click them.">
         <SettingsRdpMode />
+      </SectionCard>
+
+      <SectionCard id="web-and-files" title="Web Browser & File Explorer" subtitle="Preferences for built-in web browser tabs, proxy, and directory explorer.">
+        <Row id="browser-default-url" label="Default Web Browser URL" desc="Initial page loaded when opening a new Web Browser tab or window.">
+          <input
+            type="text"
+            value={browserDefaultUrl}
+            onChange={(e) => {
+              const val = e.target.value;
+              setBrowserDefaultUrl(val);
+              try { localStorage.setItem("subterm-browser-default-url", val); } catch {}
+            }}
+            placeholder="https://duckduckgo.com"
+            className="bg-black/60 border border-white/10 text-white rounded-lg px-2.5 py-1 text-xs outline-none focus:border-primary/50 w-64 font-mono"
+          />
+        </Row>
+        <Row id="browser-proxy-enabled" label="Auto-proxy private & homelab addresses" desc="Route internal domains (*.home.lab, 10.x, 192.168.x) through local proxy to bypass mixed-content and CORS blocks.">
+          <Toggle
+            checked={browserProxyEnabled}
+            onChange={() => {
+              const next = !browserProxyEnabled;
+              setBrowserProxyEnabled(next);
+              try { localStorage.setItem("subterm-browser-proxy-enabled", String(next)); } catch {}
+            }}
+          />
+        </Row>
+        <Row id="explorer-show-tree" label="Show Directory Tree sidebar by default" desc="Keep folder tree visible on the left of file explorer panels. Can also be toggled with Alt+T.">
+          <Toggle
+            checked={explorerShowTree}
+            onChange={() => {
+              const next = !explorerShowTree;
+              setExplorerShowTree(next);
+              try { localStorage.setItem("subterm-filepanel-show-tree", String(next)); } catch {}
+            }}
+          />
+        </Row>
+        <Row id="explorer-show-hidden" label="Show hidden files (.dotfiles) by default" desc="Display hidden files and folders in file lists. Can also be toggled with Ctrl+H.">
+          <Toggle
+            checked={explorerShowHidden}
+            onChange={() => {
+              const next = !explorerShowHidden;
+              setExplorerShowHidden(next);
+              try { localStorage.setItem("subterm-sftp-show-hidden", String(next)); } catch {}
+            }}
+          />
+        </Row>
+        <Row id="explorer-follow-cwd" label="Terminal CWD Sync" desc="Automatically synchronize the file explorer when you cd or run commands in the terminal.">
+          <Toggle
+            checked={explorerFollowCwd}
+            onChange={() => {
+              const next = !explorerFollowCwd;
+              setExplorerFollowCwd(next);
+              try { localStorage.setItem("subterm-sftp-follow-cwd", String(next)); } catch {}
+            }}
+          />
+        </Row>
       </SectionCard>
 
         </>
@@ -1314,7 +1387,13 @@ export const SETTINGS_INDEX: { id: string; page: CategoryId; label: string; keyw
   { id: "updates", page: "general", label: "Updates", keywords: "update version release new github check upgrade" },
   { id: "update-check", page: "general", label: "Check for updates when SubTerm starts", keywords: "update version release github automatic" },
   { id: "update-now", page: "general", label: "Check for updates now", keywords: "update version release github check" },
-  { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal" },
+  { id: "startup-view", page: "general", label: "On Startup", keywords: "launch open start server list last session local terminal web browser sftp file explorer" },
+  { id: "web-and-files", page: "general", label: "Web Browser & File Explorer", keywords: "browser web proxy url sftp file explorer tree dotfiles cwd sync" },
+  { id: "browser-default-url", page: "general", label: "Default start page", keywords: "browser default url home page web" },
+  { id: "browser-proxy-enabled", page: "general", label: "Auto-proxy private & homelab addresses", keywords: "browser proxy homelab private address direct bypass" },
+  { id: "explorer-show-tree", page: "general", label: "Show Directory Tree sidebar by default", keywords: "file explorer directory tree folders sidebar" },
+  { id: "explorer-show-hidden", page: "general", label: "Show hidden files (.dotfiles) by default", keywords: "file explorer hidden files dotfiles dot" },
+  { id: "explorer-follow-cwd", page: "general", label: "Terminal CWD Sync", keywords: "file explorer terminal follow cwd directory sync" },
   { id: "rdp", page: "general", label: "Remote Desktop (RDP)", keywords: "rdp remote desktop windows mstsc" },
   { id: "accent", page: "appearance", label: "Primary Accent Color", keywords: "accent colour color highlight" },
   { id: "ui-zoom", page: "appearance", label: "Interface Zoom", keywords: "zoom scale size dpi large small interface ui" },
