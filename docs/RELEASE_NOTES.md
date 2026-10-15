@@ -24,17 +24,22 @@
 - **`feat(terminal)` — Pinning for local shell sub-tabs**:
   Terminal sub-tabs in local sessions can now be pinned via the right-click menu (**Pin tab** / **Unpin tab**). Pinned tabs display a distinct pin icon, remain positioned at the front of the tab strip, and suppress the hover close button to guard against accidental dismissals. When using **Close other tabs** or **Close tabs below / right**, pinned tabs are automatically preserved.
 
-- **`feat(git)` — Branch on Git button, AI commit generation, and multi-lane commit graph**:
-  The Git tool now provides deeper repository insight and intelligence:
-  - **Branch Pill**: When the active terminal's folder is inside a git repository, the tool row's **Git** button directly shows the current branch name (e.g. `Git (main)`).
-  - **AI Commit Messages**: An **AI Generate** button in the Git panel uses your configured AI provider (local or online) to analyze staged diffs (or working tree changes) and stream a concise Conventional Commits message.
-  - **Multi-Lane Graph**: The commit history now renders a visual multi-lane SVG graph topology, clearly tracing branch forks, merges, and commit routes in color-coded lanes.
+- **`feat(git)` — Branch switcher, direct action triggers, categorized file changes, and interactive commit inspection**:
+  The Git tool now provides an end-to-end version control experience:
+  - **Branch Switcher & Counters**: A clickable branch pill in the header and a dedicated collapsible **Branches** section list all local branches, highlighting the current branch with a `HEAD` badge, accent styling, and real-time ahead/behind counters (`2↑ 1↓`). Clicking any branch immediately switches to it, and a **+ New Branch…** button allows creating branches on the fly.
+  - **Categorized Changes**: Working tree files are cleanly divided into **Staged Changes**, **Changes** (modified/deleted tracked files), and **Untracked Files** (new unversioned files), complete with status badges (`M`, `A`, `D`, `U`), file stage/unstage buttons (`+`/`-`), single-file discard, and bulk stage/discard actions.
+  - **Direct Action Triggers**: The header toolbar provides immediate one-click buttons for **Fetch** (all remotes), **Pull**, and **Push**, alongside the existing `...` overflow menu for stashes and bulk resets.
+  - **Commit Options**: Supports manual commit messages with `Ctrl+Enter` and AI-generated Conventional Commits messages via the **AI Generate** button.
+  - **Interactive Commit Graph**: The commit graph visualizes branch lanes alongside short commit hash IDs, committer names, relative dates, and subjects. Clicking any commit expands an inspector displaying full commit metadata and the exact list of changed files with change badges.
 
 - **`feat(terminal)` — Independent Git status switch for shell prompts**:
   The git repository status segment in local shell prompts now has its own independent toggle under **Settings > Features > Terminal > Git status in shell prompt**. You can leave command blocks and execution tracking active without running git in the background on every prompt.
 
-- **`fix(fs)` — Windows local file explorer drive switching, CWD auto-sync, and Quick Look image preview**:
-  Fixed an issue on Windows where attempting to list filesystem root drives (`C:\` or `D:\`) failed with a root filesystem error. All available drive letters (`Drive (C:)`, `Drive (D:)`) and the user's `Home (~)` directory are now cleanly enumerated in the collapsible directory tree and path bar. Bi-directional terminal CWD sync (compass button and shell jump badges) now parses Windows PowerShell and CMD prompts as well as Windows-native OSC 7 URL paths. The **Open in Terminal (cd)** action now submits with a carriage return and automatically switches keyboard focus to the active shell. Single-clicking any file and pressing the `Spacebar` (or double-clicking an image file) opens the Quick Look preview modal with zoom controls and file dimensions while cleanly hiding editing and saving controls for binary images.
+- **`fix(fs)` — Windows directory tree, path navigation, list scrolling, and context menu dismissal**:
+  Fixed an issue on Windows where the collapsible directory tree displayed a single Linux `Root (/)` instead of actual drive letters (`Drive (C:)`, `Drive (D:)`, etc.). The folder **Up** (`^`) button now parses Windows backslash paths correctly and halts at drive roots. File list containers now properly engage vertical scrolling (`overflow-y-auto`) when browsing directories with many files, eliminating bottom clipping. Right-click context menus in both the directory tree and file list now reliably dismiss when clicking or right-clicking anywhere outside.
+
+- **`feat(settings)` — Resource toggles and customizable preferences for Web Browser & File Explorer**:
+  You can now completely disable the **Web Browser** and **File Explorer** under **Settings > Features > Panels**. When disabled, their sidebar buttons are removed and their view components and background tasks are unmounted, conserving CPU and memory. A new configuration card under **Settings > General > Web Browser & File Explorer** allows customizing the default browser start URL, auto-proxying private/homelab addresses, showing the directory tree sidebar by default, displaying hidden dotfiles by default, and enabling/disabling terminal CWD auto-sync. In addition, **Settings > General > Startup > On Startup** now includes options to launch SubTerm directly into the Web Browser or File Explorer.
 
 - **`fix(ai)` — Focused pane targeting for AI Assistant**:
   Clicking the AI assistant button or pressing `Ctrl+I` in a split-session layout now opens the assistant strictly in the active, focused pane instead of launching across all panes simultaneously.

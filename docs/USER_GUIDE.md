@@ -17,16 +17,27 @@ The left sidebar (bottom bar on narrow windows) has one entry per activity:
 - **Local**: asks which shell to open (**Default shell** first, then every installed shell); each one opens as a sub-tab of the single **Local** tab, and on desktop the open shells are listed under **Local** in the sidebar (click to switch, hover **x** to close, **+** for another, right-click to change its color, rename, duplicate, split, move, export its text, find, or close it or the others). Without a shell list it opens the default shell. The default is *Automatic* (PowerShell 7, else Windows PowerShell on Windows; `$SHELL` on macOS/Linux); change it under **Settings > General > Default local shell** (PowerShell, Windows PowerShell, CMD, Git Bash, WSL). Inside a git repository, PowerShell, bash and WSL prompts show `[repo:branch ↑ahead ↓behind ●changes]` (`≡` when level with the upstream as of the last fetch).
 - **Servers**: your saved servers and folders (the home page). The search box doubles as quick connect: type `10.0.0.5`, `root@10.0.0.5` or `host.example.com:2222` and press **Enter**. If a saved server matches (and it is the only match) it opens; if nothing matches, the Quick Connect dialog opens with the host, user and port filled in and the cursor in the password field. A bare word such as `web` is only ever a search. The lightning button inside the search box opens the empty Quick Connect dialog. **Add server** (with **Import SSH config** under its arrow) sits at the right end of the same row; **Connect All** appears below it when there are two or more servers.
 - **SFTP**: a searchable list of your SSH servers. Click one to open its file browser across the whole window, with this computer's files on one side and the server's on the other (drag to transfer). Close the file browser (the **x** in its header) to return to the terminal; the terminal keeps running behind it.
+- **Web Browser**: opens an embedded web browser with homelab proxy support for managing web interfaces (Proxmox, TrueNAS, Portainer, router consoles). Can be disabled in Settings > Features > Panels.
 - **RDP**: a searchable list of your Remote Desktop servers with a **New RDP server** button. Connect opens it inside SubTerm or in the system client, as set under **Settings > General > Remote Desktop**. Hidden when the RDP feature is turned off.
 - **Credentials** (formerly *Logins*): saved passwords and SSH keys.
 - **Snippets** (formerly *Library*): saved commands and notes.
 - **Network Tools**: opens the network diagnostics dialog (TCP port probe, latency ping, service audit). Hidden when the Network Tools feature is off.
 - **Monitor**: resource dashboard, when monitoring is on.
 
-There is no tab strip: open sessions are listed in the sidebar under **Servers**, **SFTP** and **RDP** (local shells under **Local**), each with a status dot. Click one to switch to it, **Ctrl+click** to split it beside the session on screen, hover **x** to close it, and right-click for the session menu (see 9 below). **Settings > Appearance > Accessibility > Open sessions list** chooses short labels under the icons (default) or a wide panel beside the sidebar with full names (desktop). Phones use the session picker in the top bar.
+There is no tab strip: open sessions are listed in the sidebar under **Servers**, **SFTP**, **Web Browser**, and **RDP** (local shells under **Local**), each with a status dot. Click one to switch to it, **Ctrl+click** to split it beside the session on screen (including cross-service splits like an SSH terminal alongside a Web Browser or SFTP), hover **x** to close it, and right-click for the session menu. **Settings > Appearance > Accessibility > Open sessions list** chooses short labels under the icons (default) or a wide panel beside the sidebar with full names (desktop). Phones use the session picker in the top bar.
 
 ### 1.3 Finding a Server
 The home dashboard's search bar filters by server name or host as you type. It also accepts shell-style glob wildcards: `*` matches any run of characters and `?` matches exactly one — e.g. `web-*`, `prod-db?`, `*-staging`.
+
+### 1.4 Web Browser & File Explorer Preferences
+Customize browser and file manager behaviors under **Settings > General > Web Browser & File Explorer**:
+- **Default start page**: URL to open automatically when creating a new Web Browser tab.
+- **Auto-proxy private & homelab addresses**: Automatically routes LAN subnets and homelab domains through the built-in proxy to bypass iframe embedding blocks and self-signed certificate issues.
+- **Show Directory Tree sidebar by default**: Keeps the folder tree visible on launch.
+- **Show hidden files (.dotfiles) by default**: Lists dotfiles without manual toggling.
+- **Terminal CWD Sync**: Bi-directionally synchronizes directory navigation with active terminal prompts.
+- **Startup View**: Under **Settings > General > Startup > On Startup**, choose to launch SubTerm directly into **Web Browser** or **File Explorer**.
+- **Resource Management**: Under **Settings > Features > Panels**, toggle **Web Browser** and **File Explorer** off completely to avoid loading webview assets and reduce memory/CPU overhead.
 
 ---
 
@@ -203,17 +214,25 @@ The home dashboard's search bar filters by server name or host as you type. It a
    - Click the **Logs** button to view real-time log output.
    - Click the **Terminal** icon to attach an interactive `docker exec -it` shell directly inside the container.
 
-### Workflow 4b: Committing with the Git Tab
+### Workflow 4b: Committing and Branching with the Git Tab
 
-*Goal*: Stage, commit and push changes in a repository on the server or on this computer.
+*Goal*: Inspect branches, stage/unstage changes, generate commit messages, review history graphs, and push/pull changes.
 
-1. Click **Git** in the tool row. When inside a repository, the Git button itself displays your active branch pill (e.g. `Git (main)`). The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
-2. Hover a file under **Changes** and click **+** to stage it (**−** under **Staged Changes** unstages). The **+** on the section header stages everything.
-3. Click **AI Generate** above the message box to automatically write a Conventional Commits message summarizing your staged diff using the configured AI provider, or type your own message. Press **Ctrl+Enter** or click **Commit**. If nothing is staged, all changes are committed.
-4. The **Graph** section below renders a multi-lane SVG commit graph showing branch forks, merges, and commit routes in color-coded lanes.
-5. With a clean tree, the button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push). Pull, Push, Fetch and Stash are under **…**.
-6. Git runs without a terminal, so it can't ask for a password. Use an SSH key, a credential helper, or agent forwarding for pushes.
-7. **Pinning Tabs**: In local sessions, right-click any terminal tab and select **Pin tab**. Pinned tabs remain at the beginning of the tab strip, display a pin icon, and are protected when running "Close other tabs".
+1. **Open Git Panel**: Click **Git** in the tool row. When inside a repository, the Git button itself displays your active branch pill (e.g. `Git (main)`). The panel uses the terminal's current folder; if it says "Not a git repository", type the repository path at the top and press Enter.
+2. **Branch Management**:
+   - The top header displays a clickable branch switcher showing the active branch with real-time ahead/behind counts (`2↑ 1↓`).
+   - Click the branch pill or expand the **Branches** section to view all local branches, search/filter branches, switch branches with one click, or create a new branch (`+ New Branch…`).
+3. **Action Triggers**: Quick toolbar buttons allow immediate **Fetch**, **Pull**, and **Push** operations without digging into menus. The `…` overflow menu offers Stash, Pop Stash, and bulk reset operations.
+4. **Categorized Changes**:
+   - **Staged Changes**: Files prepared for the next commit (click `−` to unstage individual files or all files).
+   - **Changes**: Tracked modified/deleted files (click `+` to stage, or `RotateCcw` to discard modifications).
+   - **Untracked Files**: New, unversioned files (click `+` to stage, or `RotateCcw` to delete untracked files).
+5. **Commit with AI or Manual**: Type a message (press `Ctrl+Enter` to commit) or click **AI Generate** to stream a Conventional Commits message summarizing your staged diff using your configured AI provider.
+6. **Commit Graph & Changed Files Inspector**:
+   - The **Graph** section renders a multi-lane SVG graph topology, displaying short commit hash IDs, committer names, relative timestamps, and subjects.
+   - Click on any commit in the graph to expand its details and immediately inspect all files changed in that commit with colored change badges (`M`, `A`, `D`).
+7. **Publish & Sync**: With a clean tree, the primary button becomes **Publish Branch** (pushes a new branch to `origin`) or **Sync Changes** (pull, then push).
+8. **Authentication**: Git runs without a terminal, so it cannot prompt for passwords. Use an SSH key, a credential helper, or agent forwarding for remote operations.
 
 ### Workflow 5: Parameterized Snippets & Runbook Automation
 
