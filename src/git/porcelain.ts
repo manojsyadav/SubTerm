@@ -21,6 +21,7 @@ export interface GitCommit {
   author: string;
   refs: string[];
   parents?: string[];
+  date?: string;
 }
 
 /** Parse `git status --porcelain=v1 -b -z`. */
@@ -55,18 +56,65 @@ export function parseStatusZ(out: string): GitStatus {
   return st;
 }
 
-export const LOG_FORMAT = "%h%x1f%s%x1f%an%x1f%D%x1f%p";
+export const LOG_FORMAT = "%h%x1f%s%x1f%an%x1f%D%x1f%p%x1f%cr";
 
 /** Parse `git log --format=<LOG_FORMAT>`. */
 export function parseLog(out: string): GitCommit[] {
   return out.split("\n").filter((l) => l.includes("\x1f")).map((l) => {
-    const [hash, subject, author, refs, parents] = l.split("\x1f");
+    const [hash, subject, author, refs, parents, date] = l.split("\x1f");
     return {
       hash,
       subject,
       author,
       refs: refs ? refs.split(", ").filter(Boolean) : [],
       parents: parents ? parents.trim().split(/\s+/).filter(Boolean) : [],
+      date: date || undefined,
     };
   });
 }
+
+export interface GitBranch {
+  name: string;
+  isCurrent: boolean;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  hash: string;
+  subject: string;
+}
+
+export function parseBranches(out: string): GitBranch[] {
+  return out.split("\n").filter((l) => l.trim().length > 0).map((l) => {
+    const [name, head, upstream, track, hash, subject] = l.split("\t");
+    let ahead = 0;
+    let behind = 0;
+    if (track) {
+      ahead = Number(track.match(/ahead (\d+)/)?.[1] ?? 0);
+      behind = Number(track.match(/behind (\d+)/)?.[1] ?? 0);
+    }
+    return {
+      name: (name || "").trim(),
+      isCurrent: (head || "").trim() === "*",
+      upstream: (upstream || "").trim() || null,
+      ahead,
+      behind,
+      hash: (hash || "").trim(),
+      subject: (subject || "").trim(),
+    };
+  });
+}
+
+export interface CommitFileChange {
+  code: string;
+  path: string;
+}
+
+export function parseDiffTree(out: string): CommitFileChange[] {
+  return out.split("\n").filter((l) => l.trim().length > 0).map((l) => {
+    const parts = l.split("\t");
+    const code = (parts[0] || "").trim();
+    const path = parts.slice(1).join("\t").trim();
+    return { code, path };
+  });
+}
+

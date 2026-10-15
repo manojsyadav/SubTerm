@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStatusZ, parseLog } from "./porcelain";
+import { parseStatusZ, parseLog, parseBranches, parseDiffTree } from "./porcelain";
 
 describe("parseStatusZ", () => {
   it("reads branch, tracking and both file lists", () => {
@@ -36,8 +36,36 @@ describe("parseLog", () => {
   it("splits fields, refs and parents", () => {
     const out = "abc1234\x1ffeat: x\x1fManoj\x1fHEAD -> main, origin/main\x1fd00d000 111aaaa\nd00d000\x1ffix: y\x1fManoj\x1f\x1f\n";
     expect(parseLog(out)).toEqual([
-      { hash: "abc1234", subject: "feat: x", author: "Manoj", refs: ["HEAD -> main", "origin/main"], parents: ["d00d000", "111aaaa"] },
-      { hash: "d00d000", subject: "fix: y", author: "Manoj", refs: [], parents: [] },
+      { hash: "abc1234", subject: "feat: x", author: "Manoj", refs: ["HEAD -> main", "origin/main"], parents: ["d00d000", "111aaaa"], date: undefined },
+      { hash: "d00d000", subject: "fix: y", author: "Manoj", refs: [], parents: [], date: undefined },
     ]);
   });
 });
+
+describe("parseBranches", () => {
+  it("reads branches, current head, ahead/behind and subjects", () => {
+    const out = [
+      "main\t*\torigin/main\t[ahead 2, behind 1]\t9a84493\tfeat: main work",
+      "feature/ai\t \torigin/feature/ai\t[ahead 3]\t1234567\tfeat: new ai",
+      "local-only\t \t\t\t89abcdef\twip: local branch",
+    ].join("\n");
+    const branches = parseBranches(out);
+    expect(branches).toEqual([
+      { name: "main", isCurrent: true, upstream: "origin/main", ahead: 2, behind: 1, hash: "9a84493", subject: "feat: main work" },
+      { name: "feature/ai", isCurrent: false, upstream: "origin/feature/ai", ahead: 3, behind: 0, hash: "1234567", subject: "feat: new ai" },
+      { name: "local-only", isCurrent: false, upstream: null, ahead: 0, behind: 0, hash: "89abcdef", subject: "wip: local branch" },
+    ]);
+  });
+});
+
+describe("parseDiffTree", () => {
+  it("parses code and path", () => {
+    const out = "M\tsrc/components/GitPanel.tsx\nA\tdocs/NEW.md\nD\told.ts\n";
+    expect(parseDiffTree(out)).toEqual([
+      { code: "M", path: "src/components/GitPanel.tsx" },
+      { code: "A", path: "docs/NEW.md" },
+      { code: "D", path: "old.ts" },
+    ]);
+  });
+});
+

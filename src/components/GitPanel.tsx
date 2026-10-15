@@ -1,9 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, RefreshCw, MoreHorizontal, Plus, Minus, UploadCloud, ArrowDownUp, ChevronDown, ChevronRight, FolderGit2, Sparkles, RotateCcw } from "lucide-react";
+import {
+  Check,
+  RefreshCw,
+  MoreHorizontal,
+  Plus,
+  Minus,
+  UploadCloud,
+  ArrowDownUp,
+  ChevronDown,
+  ChevronRight,
+  FolderGit2,
+  Sparkles,
+  RotateCcw,
+  GitBranch as GitBranchIcon,
+  ArrowDown,
+  ArrowUp,
+  Search,
+} from "lucide-react";
 import type { ExecResult } from "../ai/agentLoop";
 import { getTerminalCwd, onTerminalCwdChange, setTerminalGitBranch, shellQuote } from "../terminal/cwd";
-import { parseStatusZ, parseLog, LOG_FORMAT, type GitStatus, type GitCommit, type GitFile } from "../git/porcelain";
+import {
+  parseStatusZ,
+  parseLog,
+  parseBranches,
+  parseDiffTree,
+  LOG_FORMAT,
+  type GitStatus,
+  type GitCommit,
+  type GitFile,
+  type GitBranch,
+  type CommitFileChange,
+} from "../git/porcelain";
 import { buildCommitGraph, ROW_HEIGHT, LANE_WIDTH, LANE_OFFSET } from "../git/graph";
 import { listProviders, getLastProvider, chat, type ChatMsg } from "../ai/providers";
 
@@ -27,15 +55,30 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
   const [dir, setDir] = useState(() => getTerminalCwd(terminalId) ?? "");
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [log, setLog] = useState<GitCommit[]>([]);
+  const [branches, setBranches] = useState<GitBranch[]>([]);
+  const [branchMenu, setBranchMenu] = useState(false);
+  const [branchFilter, setBranchFilter] = useState("");
+  const [selectedCommit, setSelectedCommit] = useState<string | null>(null);
+  const [commitFiles, setCommitFiles] = useState<Record<string, CommitFileChange[]>>({});
+  const [loadingCommitHash, setLoadingCommitHash] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [menu, setMenu] = useState(false);
-  const [open, setOpen] = useState({ staged: true, changes: true, graph: true });
+  const [open, setOpen] = useState({
+    staged: true,
+    changes: true,
+    untracked: true,
+    branches: false,
+    graph: true,
+  });
   const [aiGenerating, setAiGenerating] = useState(false);
 
   const graphNodes = useMemo(() => buildCommitGraph(log), [log]);
   const maxLanes = useMemo(() => Math.max(1, ...graphNodes.map((n) => n.maxLanes)), [graphNodes]);
+
+  const modifiedFiles = useMemo(() => status?.changes.filter((f) => f.code !== "U") ?? [], [status]);
+  const untrackedFiles = useMemo(() => status?.changes.filter((f) => f.code === "U") ?? [], [status]);
 
   useEffect(() => {
     const cwd = getTerminalCwd(terminalId);
@@ -66,13 +109,15 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
   const refresh = useCallback(async () => {
     if (disabled) return;
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, b] = await Promise.all([
         exec([["status", "--porcelain=v1", "-b", "-z"]]),
         exec([["log", "-n", "50", `--format=${LOG_FORMAT}`]]),
+        exec([["branch", "--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(upstream:track)%09%(objectname:short)%09%(subject)"]]),
       ]);
       if (s.exitCode !== 0) {
         setStatus(null);
         setLog([]);
+        setBranches([]);
         setError(s.stderr.trim() || "Not a git repository");
         setTerminalGitBranch(terminalId, "");
         return;
@@ -81,6 +126,20 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
       setStatus(parsedStatus);
       setTerminalGitBranch(terminalId, parsedStatus.branch || "");
       setLog(l.exitCode === 0 ? parseLog(l.stdout) : []);
+
+      let parsedBranches = b.exitCode === 0 ? parseBranches(b.stdout) : [];
+      if (parsedBranches.length === 0 && parsedStatus.branch) {
+        parsedBranches = [{
+          name: parsedStatus.branch,
+          isCurrent: true,
+          upstream: parsedStatus.upstream,
+          ahead: parsedStatus.ahead,
+          behind: parsedStatus.behind,
+          hash: "",
+          subject: "",
+        }];
+      }
+      setBranches(parsedBranches);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -149,6 +208,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
   const run = async (cmds: string[][], timeoutSecs?: number) => {
     setBusy(true);
     setMenu(false);
+    setBranchMenu(false);
     try {
       // Stop at the first failure (PowerShell 5.1 has no `&&`).
       for (const c of cmds) {
@@ -163,6 +223,41 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
     } finally {
       setBusy(false);
       await refresh();
+    }
+  };
+
+  const checkoutBranch = async (branchName: string) => {
+    setBranchMenu(false);
+    if (status?.branch === branchName) return;
+    await run([["checkout", branchName]]);
+  };
+
+  const createNewBranch = async () => {
+    setBranchMenu(false);
+    const name = window.prompt("New branch name:")?.trim();
+    if (name) {
+      await run([["checkout", "-b", name]]);
+    }
+  };
+
+  const toggleCommit = async (hash: string) => {
+    if (selectedCommit === hash) {
+      setSelectedCommit(null);
+      return;
+    }
+    setSelectedCommit(hash);
+    if (!commitFiles[hash]) {
+      setLoadingCommitHash(hash);
+      try {
+        const res = await exec([["diff-tree", "--no-commit-id", "--name-status", "-r", "--root", hash]]);
+        if (res.exitCode === 0) {
+          setCommitFiles((prev) => ({ ...prev, [hash]: parseDiffTree(res.stdout) }));
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingCommitHash(null);
+      }
     }
   };
 
@@ -186,7 +281,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
       } finally {
         setBusy(false);
         await refresh();
-        }
+      }
       return;
     }
     if (await run([...cmds, ["commit", "-m", msg.trim()]])) setMsg("");
@@ -273,6 +368,12 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
     </div>
   );
 
+  const filteredBranches = useMemo(() => {
+    if (!branchFilter.trim()) return branches;
+    const q = branchFilter.toLowerCase();
+    return branches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [branches, branchFilter]);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden text-[11.5px] relative">
       <div className="px-3 py-2 flex items-center gap-1.5 border-b border-white/5 shrink-0">
@@ -283,9 +384,113 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
           onKeyDown={(e) => { if (e.key === "Enter") refresh(); }}
           placeholder={isLocal ? "Repository folder" : "Repository folder (default: home)"}
           aria-label="Repository folder"
-          className="flex-1 min-w-0 bg-transparent font-mono text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none"
+          className="flex-1 min-w-[100px] bg-transparent font-mono text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none"
         />
-        {status?.branch && <span className="px-1.5 rounded bg-primary/15 text-primary font-mono text-[10.5px] truncate max-w-[40%]">{status.branch}</span>}
+
+        {/* Current Branch Badge & Switcher Trigger */}
+        {status?.branch && (
+          <div className="relative">
+            <button
+              onClick={() => setBranchMenu((m) => !m)}
+              title="Switch Branch"
+              aria-label="Switch Branch"
+              className="h-6 px-2 rounded bg-primary/15 hover:bg-primary/25 text-primary font-mono text-[10.5px] flex items-center gap-1.5 transition-colors"
+            >
+              <GitBranchIcon size={11} className="shrink-0" />
+              <span className="truncate max-w-[110px] font-semibold">{status.branch}</span>
+              {(status.ahead > 0 || status.behind > 0) && (
+                <span className="text-[9px] font-bold">
+                  {status.ahead > 0 && <span className="text-amber-300">{status.ahead}↑</span>}
+                  {status.behind > 0 && <span className="text-sky-300">{status.behind}↓</span>}
+                </span>
+              )}
+              <ChevronDown size={10} className="shrink-0 opacity-60" />
+            </button>
+
+            {branchMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setBranchMenu(false)} />
+                <div className="absolute right-0 top-7 z-50 w-64 max-h-72 flex flex-col bg-[#15151a] border border-white/10 rounded-lg shadow-2xl overflow-hidden">
+                  <div className="p-2 border-b border-white/5 flex items-center gap-1.5 bg-black/20">
+                    <Search size={12} className="text-zinc-500 shrink-0" />
+                    <input
+                      value={branchFilter}
+                      onChange={(e) => setBranchFilter(e.target.value)}
+                      placeholder="Filter branches…"
+                      className="flex-1 bg-transparent text-[11px] text-zinc-200 placeholder-zinc-500 focus:outline-none"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex-1 overflow-y-auto py-1 no-scrollbar max-h-48">
+                    {filteredBranches.map((b) => (
+                      <button
+                        key={b.name}
+                        onClick={() => checkoutBranch(b.name)}
+                        className={`w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between transition-colors ${
+                          b.isCurrent
+                            ? "bg-primary/20 text-white font-bold"
+                            : "text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate flex-1 mr-2">
+                          <GitBranchIcon size={11} className={b.isCurrent ? "text-primary" : "text-zinc-500"} />
+                          <span className="truncate">{b.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[9.5px] font-mono shrink-0">
+                          {b.ahead > 0 && <span className="text-amber-300">{b.ahead}↑</span>}
+                          {b.behind > 0 && <span className="text-sky-300">{b.behind}↓</span>}
+                          {b.isCurrent && <span className="px-1 rounded bg-primary text-black text-[9px] font-bold">HEAD</span>}
+                        </div>
+                      </button>
+                    ))}
+                    {filteredBranches.length === 0 && (
+                      <div className="px-3 py-2 text-zinc-500 text-[10.5px]">No branches match &quot;{branchFilter}&quot;</div>
+                    )}
+                  </div>
+                  <div className="p-1.5 border-t border-white/5 bg-black/30">
+                    <button
+                      onClick={createNewBranch}
+                      className="w-full h-6 px-2 rounded bg-white/5 hover:bg-white/10 text-zinc-200 text-[10.5px] font-medium flex items-center justify-center gap-1 transition-colors"
+                    >
+                      <Plus size={11} />
+                      <span>New Branch…</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Action Triggers: Fetch, Pull, Push */}
+        <button
+          onClick={() => run([["fetch", "--all", "--prune"]], 120)}
+          disabled={!status || busy}
+          title="Fetch All Remotes"
+          aria-label="Fetch"
+          className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-colors"
+        >
+          <RefreshCw size={12} className={busy ? "animate-spin" : ""} />
+        </button>
+        <button
+          onClick={() => run([["pull"]], 120)}
+          disabled={!status || busy}
+          title="Pull Changes"
+          aria-label="Pull"
+          className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-colors"
+        >
+          <ArrowDown size={13} />
+        </button>
+        <button
+          onClick={() => run([["push"]], 120)}
+          disabled={!status || busy}
+          title="Push Changes"
+          aria-label="Push"
+          className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-colors"
+        >
+          <ArrowUp size={13} />
+        </button>
+
         <button onClick={() => commit()} disabled={!hasChanges || !msg.trim() || busy} title="Commit" aria-label="Commit" className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30">
           <Check size={14} />
         </button>
@@ -353,76 +558,220 @@ export const GitPanel: React.FC<GitPanelProps> = ({ sessionId, terminalId, isLoc
               {error && <pre className="whitespace-pre-wrap text-[10.5px] text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded p-2 max-h-32 overflow-auto">{error}</pre>}
             </div>
 
-            {status.staged.length > 0 && section("staged", "Staged Changes", status.staged.length, status.staged.map((f) => fileRow(f, true)),
-              <button onClick={() => run([["reset", "-q"]])} disabled={busy} title="Unstage All Changes" aria-label="Unstage All Changes" className="p-0.5 rounded hover:bg-white/10 hover:text-white"><Minus size={12} /></button>)}
-            {section("changes", "Changes", status.changes.length, status.changes.length
-              ? status.changes.map((f) => fileRow(f, false))
-              : <p className="px-6 py-1 text-zinc-500">No changes.</p>,
-              status.changes.length > 0 && (
+            {/* Branches Section */}
+            {section("branches", "Branches", branches.length, (
+              <div className="py-1">
+                {branches.map((b) => (
+                  <div
+                    key={b.name}
+                    className={`flex items-center justify-between px-3 py-1 hover:bg-white/[0.05] ${
+                      b.isCurrent ? "bg-primary/10" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate flex-1 mr-2">
+                      <GitBranchIcon size={12} className={b.isCurrent ? "text-primary" : "text-zinc-500"} />
+                      <span className={`truncate font-mono text-[11px] ${b.isCurrent ? "text-primary font-bold" : "text-zinc-200"}`}>
+                        {b.name}
+                      </span>
+                      {b.isCurrent && (
+                        <span className="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[9px] font-bold">
+                          HEAD
+                        </span>
+                      )}
+                      {(b.ahead > 0 || b.behind > 0) && (
+                        <span className="text-[9.5px] font-mono">
+                          {b.ahead > 0 && <span className="text-amber-300 mr-1">{b.ahead}↑</span>}
+                          {b.behind > 0 && <span className="text-sky-300">{b.behind}↓</span>}
+                        </span>
+                      )}
+                    </div>
+                    {!b.isCurrent && (
+                      <button
+                        onClick={() => checkoutBranch(b.name)}
+                        disabled={busy}
+                        title={`Switch to branch ${b.name}`}
+                        className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-[10px] font-medium transition-colors"
+                      >
+                        Switch
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ), (
+              <button
+                onClick={createNewBranch}
+                disabled={busy}
+                title="New Branch"
+                aria-label="New Branch"
+                className="p-0.5 rounded hover:bg-white/10 hover:text-white"
+              >
+                <Plus size={12} />
+              </button>
+            ))}
+
+            {/* Staged Changes Section */}
+            {status.staged.length > 0 && section(
+              "staged",
+              "Staged Changes",
+              status.staged.length,
+              status.staged.map((f) => fileRow(f, true)),
+              <button onClick={() => run([["reset", "-q"]])} disabled={busy} title="Unstage All Changes" aria-label="Unstage All Changes" className="p-0.5 rounded hover:bg-white/10 hover:text-white"><Minus size={12} /></button>
+            )}
+
+            {/* Tracked Changes (Modified / Deleted) Section */}
+            {section(
+              "changes",
+              "Changes",
+              modifiedFiles.length,
+              modifiedFiles.length
+                ? modifiedFiles.map((f) => fileRow(f, false))
+                : <p className="px-6 py-1 text-zinc-500">No changes.</p>,
+              modifiedFiles.length > 0 && (
                 <div className="flex items-center gap-0.5">
                   <button onClick={discardAll} disabled={busy} title="Discard All Changes" aria-label="Discard All Changes" className="p-0.5 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"><RotateCcw size={12} /></button>
-                  <button onClick={() => run([["add", "-A"]])} disabled={busy} title="Stage All Changes" aria-label="Stage All Changes" className="p-0.5 rounded hover:bg-white/10 hover:text-white"><Plus size={12} /></button>
+                  <button onClick={() => run([["add", "-u"]])} disabled={busy} title="Stage All Tracked Changes" aria-label="Stage All Changes" className="p-0.5 rounded hover:bg-white/10 hover:text-white"><Plus size={12} /></button>
                 </div>
-              ))}
+              )
+            )}
 
+            {/* Untracked Files Section */}
+            {untrackedFiles.length > 0 && section(
+              "untracked",
+              "Untracked Files",
+              untrackedFiles.length,
+              untrackedFiles.map((f) => fileRow(f, false)),
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => {
+                    if (window.confirm("Delete ALL untracked files? This cannot be undone.")) {
+                      run([["clean", "-fd"]]);
+                    }
+                  }}
+                  disabled={busy}
+                  title="Discard All Untracked Files"
+                  aria-label="Discard All Untracked"
+                  className="p-0.5 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+                >
+                  <RotateCcw size={12} />
+                </button>
+                <button
+                  onClick={() => run([["add", "-A"]])}
+                  disabled={busy}
+                  title="Stage All Untracked Files"
+                  aria-label="Stage All Untracked"
+                  className="p-0.5 rounded hover:bg-white/10 hover:text-white"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            )}
+
+            {/* Commit Graph Section with inspection on click */}
             {section("graph", "Graph", null, (
               <div className="pb-2">
                 {log.length === 0 && <p className="px-6 py-1 text-zinc-500">No commits yet.</p>}
                 {log.map((c, i) => {
                   const node = graphNodes[i];
                   const svgWidth = Math.max(20, LANE_OFFSET * 2 + (maxLanes - 1) * LANE_WIDTH);
+                  const isSelected = selectedCommit === c.hash;
+                  const changedFiles = commitFiles[c.hash];
+                  const isLoadingFiles = loadingCommitHash === c.hash;
+
                   return (
-                    <div key={c.hash} className="flex items-center gap-2 px-3 h-[22px] hover:bg-white/[0.05]" title={`${c.hash} · ${c.author}\n${c.subject}`}>
-                      <svg width={svgWidth} height={ROW_HEIGHT} className="shrink-0 overflow-visible">
-                        {node?.lines.map((l, lineIdx) => {
-                          if (l.isCurve) {
+                    <div key={c.hash} className="flex flex-col border-b border-white/[0.03]">
+                      <div
+                        onClick={() => toggleCommit(c.hash)}
+                        className={`flex items-center gap-2 px-3 h-[24px] cursor-pointer transition-colors ${
+                          isSelected ? "bg-primary/15 text-white" : "hover:bg-white/[0.05]"
+                        }`}
+                        title={`${c.hash} · ${c.author}\n${c.subject}\nClick to view changed files`}
+                      >
+                        <svg width={svgWidth} height={ROW_HEIGHT} className="shrink-0 overflow-visible">
+                          {node?.lines.map((l, lineIdx) => {
+                            if (l.isCurve) {
+                              return (
+                                <path
+                                  key={lineIdx}
+                                  d={`M ${l.x1} ${l.y1} C ${l.x1} ${l.y1 + 7}, ${l.x2} ${l.y2 - 7}, ${l.x2} ${l.y2}`}
+                                  stroke={l.color}
+                                  strokeWidth={1.5}
+                                  fill="none"
+                                  strokeLinecap="round"
+                                />
+                              );
+                            }
                             return (
-                              <path
+                              <line
                                 key={lineIdx}
-                                d={`M ${l.x1} ${l.y1} C ${l.x1} ${l.y1 + 7}, ${l.x2} ${l.y2 - 7}, ${l.x2} ${l.y2}`}
+                                x1={l.x1}
+                                y1={l.y1}
+                                x2={l.x2}
+                                y2={l.y2}
                                 stroke={l.color}
                                 strokeWidth={1.5}
-                                fill="none"
                                 strokeLinecap="round"
                               />
                             );
-                          }
-                          return (
-                            <line
-                              key={lineIdx}
-                              x1={l.x1}
-                              y1={l.y1}
-                              x2={l.x2}
-                              y2={l.y2}
-                              stroke={l.color}
-                              strokeWidth={1.5}
-                              strokeLinecap="round"
-                            />
-                          );
-                        })}
-                        {node && (
-                          <>
-                            <circle
-                              cx={node.x}
-                              cy={node.y}
-                              r={3.5}
-                              fill={node.color}
-                              stroke="#0e0e13"
-                              strokeWidth={1.5}
-                            />
-                            {i === 0 && (
-                              <circle cx={node.x} cy={node.y} r={1.5} fill="#ffffff" />
+                          })}
+                          {node && (
+                            <>
+                              <circle
+                                cx={node.x}
+                                cy={node.y}
+                                r={3.5}
+                                fill={node.color}
+                                stroke="#0e0e13"
+                                strokeWidth={1.5}
+                              />
+                              {i === 0 && (
+                                <circle cx={node.x} cy={node.y} r={1.5} fill="#ffffff" />
+                              )}
+                            </>
+                          )}
+                        </svg>
+                        <span className="font-mono text-[10px] text-zinc-500 hover:text-primary shrink-0 select-all">{c.hash}</span>
+                        <span className={`truncate flex-1 ${i === 0 ? "font-bold text-zinc-100" : "text-zinc-300"}`}>{c.subject}</span>
+                        <span className="text-zinc-500 text-[10px] truncate shrink-0 max-w-[20%]">{c.author}</span>
+                        {c.date && <span className="text-zinc-600 text-[9.5px] truncate shrink-0">{c.date}</span>}
+                        {c.refs.map((r) => (
+                          <span key={r} className="px-1.5 rounded-full border border-primary/40 bg-primary/10 text-primary text-[9.5px] truncate max-w-[30%] shrink-0">
+                            {r.replace(/^HEAD -> /, "")}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Expanded Commit Details & Changed Files on click */}
+                      {isSelected && (
+                        <div className="bg-black/40 px-6 py-2 border-t border-white/[0.04] text-[11px] flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between text-[10px] text-zinc-400 pb-1 border-b border-white/5">
+                            <span className="font-mono text-zinc-300">Commit: {c.hash}</span>
+                            <span>{c.author} {c.date ? `· ${c.date}` : ""}</span>
+                          </div>
+                          <p className="text-zinc-200 font-medium whitespace-pre-wrap">{c.subject}</p>
+                          <div className="mt-1 flex flex-col gap-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 flex items-center justify-between">
+                              <span>Changed Files</span>
+                              <span>{changedFiles ? changedFiles.length : (isLoadingFiles ? "…" : 0)}</span>
+                            </div>
+                            {isLoadingFiles && (
+                              <p className="text-zinc-500 text-[10.5px] py-1">Loading changed files…</p>
                             )}
-                          </>
-                        )}
-                      </svg>
-                      <span className={`truncate ${i === 0 ? "font-bold text-zinc-100" : "text-zinc-300"}`}>{c.subject}</span>
-                      <span className="text-zinc-500 text-[10px] truncate shrink-0 max-w-[30%]">{c.author}</span>
-                      {c.refs.map((r) => (
-                        <span key={r} className="px-1.5 rounded-full border border-primary/40 bg-primary/10 text-primary text-[9.5px] truncate max-w-[40%] shrink-0">
-                          {r.replace(/^HEAD -> /, "")}
-                        </span>
-                      ))}
+                            {changedFiles?.map((cf) => {
+                              const color = cf.code === "D" ? "text-rose-400 bg-rose-500/10" : cf.code === "A" ? "text-emerald-400 bg-emerald-500/10" : "text-amber-400 bg-amber-500/10";
+                              return (
+                                <div key={cf.path} className="flex items-center gap-2 py-0.5 text-zinc-300 font-mono text-[10.5px]">
+                                  <span className={`w-4 text-center rounded text-[9.5px] font-bold ${color}`}>{cf.code}</span>
+                                  <span className="truncate flex-1 text-zinc-300" title={cf.path}>{cf.path}</span>
+                                </div>
+                              );
+                            })}
+                            {changedFiles && changedFiles.length === 0 && (
+                              <p className="text-zinc-500 text-[10.5px]">No file changes recorded for this commit.</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

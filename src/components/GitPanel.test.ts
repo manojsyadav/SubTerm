@@ -235,5 +235,138 @@ describe("GitPanel", () => {
       sessionId: null,
     }));
   });
+
+  it("renders toolbar action triggers and executes fetch, pull, and push", async () => {
+    invokeMock.mockImplementation(async (_cmd: string, args: unknown) => {
+      const command = (args as { command?: string })?.command || "";
+      if (command.includes("status") && command.includes("porcelain")) {
+        return { exitCode: 0, stdout: sampleStatusOutput, stderr: "" };
+      }
+      if (command.includes("log -n 50")) {
+        return { exitCode: 0, stdout: sampleLogOutput, stderr: "" };
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    });
+
+    await act(async () => {
+      root.render(createElement(GitPanel, {
+        sessionId: "sess-1",
+        terminalId: "term-1",
+        visible: true,
+      }));
+    });
+
+    // Test Pull button
+    const pullBtn = host.querySelector('button[aria-label="Pull"]') as HTMLButtonElement;
+    expect(pullBtn).toBeDefined();
+    await act(async () => {
+      pullBtn.click();
+    });
+    expect(invokeMock).toHaveBeenCalledWith("ai_exec", expect.objectContaining({
+      command: expect.stringContaining("git 'pull'"),
+    }));
+
+    // Test Push button
+    const pushBtn = host.querySelector('button[aria-label="Push"]') as HTMLButtonElement;
+    expect(pushBtn).toBeDefined();
+    await act(async () => {
+      pushBtn.click();
+    });
+    expect(invokeMock).toHaveBeenCalledWith("ai_exec", expect.objectContaining({
+      command: expect.stringContaining("git 'push'"),
+    }));
+  });
+
+  it("lists branches and allows switching branch", async () => {
+    const branchesOutput = [
+      "feat/x\t*\torigin/feat/x\t[ahead 1, behind 0]\tabc1234\tfeat: new",
+      "main\t \torigin/main\t\t9a84493\tfeat: main work",
+    ].join("\n");
+
+    invokeMock.mockImplementation(async (_cmd: string, args: unknown) => {
+      const command = (args as { command?: string })?.command || "";
+      if (command.includes("status") && command.includes("porcelain")) {
+        return { exitCode: 0, stdout: sampleStatusOutput, stderr: "" };
+      }
+      if (command.includes("log -n 50")) {
+        return { exitCode: 0, stdout: sampleLogOutput, stderr: "" };
+      }
+      if (command.includes("branch")) {
+        return { exitCode: 0, stdout: branchesOutput, stderr: "" };
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    });
+
+    await act(async () => {
+      root.render(createElement(GitPanel, {
+        sessionId: "sess-1",
+        terminalId: "term-1",
+        visible: true,
+      }));
+    });
+
+    // Open branch switcher dropdown
+    const branchBtn = host.querySelector('button[aria-label="Switch Branch"]') as HTMLButtonElement;
+    expect(branchBtn).toBeDefined();
+    await act(async () => {
+      branchBtn.click();
+    });
+
+    expect(host.textContent).toContain("feat/x");
+    expect(host.textContent).toContain("main");
+
+    // Click on main branch to checkout
+    const mainBranchBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("main"));
+    expect(mainBranchBtn).toBeDefined();
+    await act(async () => {
+      mainBranchBtn?.click();
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("ai_exec", expect.objectContaining({
+      command: expect.stringContaining("git 'checkout' 'main'"),
+    }));
+  });
+
+  it("expands commit row and displays changed files on click", async () => {
+    const diffTreeOutput = "M\tsrc/components/GitPanel.tsx\nA\tdocs/NEW.md\n";
+
+    invokeMock.mockImplementation(async (_cmd: string, args: unknown) => {
+      const command = (args as { command?: string })?.command || "";
+      if (command.includes("status") && command.includes("porcelain")) {
+        return { exitCode: 0, stdout: sampleStatusOutput, stderr: "" };
+      }
+      if (command.includes("log")) {
+        return { exitCode: 0, stdout: sampleLogOutput, stderr: "" };
+      }
+      if (command.includes("diff-tree")) {
+        return { exitCode: 0, stdout: diffTreeOutput, stderr: "" };
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    });
+
+    await act(async () => {
+      root.render(createElement(GitPanel, {
+        sessionId: "sess-1",
+        terminalId: "term-1",
+        visible: true,
+      }));
+    });
+
+    // Click commit in graph to expand
+    const commitRow = host.querySelector('div[title*="abc1234"]') as HTMLDivElement;
+    expect(commitRow).toBeDefined();
+
+    await act(async () => {
+      commitRow.click();
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("ai_exec", expect.objectContaining({
+      command: expect.stringContaining("diff-tree"),
+    }));
+
+    expect(host.textContent).toContain("GitPanel.tsx");
+    expect(host.textContent).toContain("NEW.md");
+  });
 });
+
 
