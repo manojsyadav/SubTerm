@@ -33,6 +33,9 @@
 - **`feat(terminal)` — Independent Git status switch for shell prompts**:
   The git repository status segment in local shell prompts now has its own independent toggle under **Settings > Features > Terminal > Git status in shell prompt**. You can leave command blocks and execution tracking active without running git in the background on every prompt.
 
+- **`fix(fs)` — Windows local file explorer drive switching, CWD auto-sync, and Quick Look image preview**:
+  Fixed an issue on Windows where attempting to list filesystem root drives (`C:\` or `D:\`) failed with a root filesystem error. All available drive letters (`Drive (C:)`, `Drive (D:)`) and the user's `Home (~)` directory are now cleanly enumerated in the collapsible directory tree and path bar. Bi-directional terminal CWD sync (compass button and shell jump badges) now parses Windows PowerShell and CMD prompts as well as Windows-native OSC 7 URL paths. The **Open in Terminal (cd)** action now submits with a carriage return and automatically switches keyboard focus to the active shell. Single-clicking any file and pressing the `Spacebar` (or double-clicking an image file) opens the Quick Look preview modal with zoom controls and file dimensions while cleanly hiding editing and saving controls for binary images.
+
 - **`fix(ai)` — Focused pane targeting for AI Assistant**:
   Clicking the AI assistant button or pressing `Ctrl+I` in a split-session layout now opens the assistant strictly in the active, focused pane instead of launching across all panes simultaneously.
 
